@@ -1,0 +1,50 @@
+name: HDL Daily YouTube Teaser
+
+on:
+  schedule:
+    # 09:15 UTC daily — after the article-engine cron (keeps API calls spread out)
+    - cron: "15 9 * * *"
+  workflow_dispatch: {} # lets you trigger a manual test run from the GitHub app/site
+
+concurrency:
+  group: hdl-daily-video
+  cancel-in-progress: false
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate + upload today's video
+        run: npm run generate
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          # Optional: set to "true" to upload as Private instead of Public while you're testing
+          DRY_RUN_PRIVATE: ${{ vars.DRY_RUN_PRIVATE }}
+
+      - name: Upload run artifacts (for debugging, kept 3 days)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-run-${{ github.run_number }}
+          path: |
+            build/
+          retention-days: 3
+          if-no-files-found: ignore
