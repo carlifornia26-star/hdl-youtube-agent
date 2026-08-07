@@ -1,0 +1,14 @@
+{
+  "name": "hdl-youtube-video-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Daily automated teaser-video pipeline for HDL Group books: script + stock footage + AI voiceover + captions, uploaded to YouTube with multi-language metadata.",
+  "scripts": {
+    "generate": "node scripts/generate-video.js"
+  },
+  "dependencies": {
+    "googleapis": "^140.0.0",
+    "node-fetch": "^3.3.2"
+  }
+}
