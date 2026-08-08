@@ -33,7 +33,7 @@ Strict rules:
 - End with a call to action to read the full book on the High Definition Learning Group website.
 - Output ONLY a JSON array of exactly 9 objects, each { "line": "<one narration sentence, 15-25 words>" }. No commentary, no markdown fences.`;
 
-  const result = await run("@cf/meta/llama-3.3-70b-instruct", {
+  const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
     messages: [{ role: "user", content: prompt }],
     max_tokens: 900,
   });
