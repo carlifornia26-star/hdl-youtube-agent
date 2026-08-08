@@ -53,29 +53,61 @@ Strict rules:
 - Build curiosity: pose the problem the book addresses, why it matters right now, and what kind of reader it's for — without giving away the answers.
 - Explicitly mention once, naturally, that the book is available in English only.
 - End with a call to action to read the full book on the High Definition Learning Group website.
-- Output ONLY a JSON array of exactly 9 objects, each { "line": "<one narration sentence, 15-25 words>" }. No commentary, no markdown fences.`;
+- Do not use quotation marks of any kind inside a line's text — rephrase instead of quoting anything.
+- Produce exactly 9 scenes, each with one narration sentence of 15-25 words.`;
 
   const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
     messages: [{ role: "user", content: prompt }],
     max_tokens: 900,
+    // JSON Schema mode: Cloudflare validates/parses the output server-side, so we get
+    // back a real object instead of free text that can contain JSON-breaking characters
+    // (e.g. an unescaped quote inside a sentence) that trips a manual JSON.parse.
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        type: "object",
+        properties: {
+          scenes: {
+            type: "array",
+            minItems: 9,
+            maxItems: 9,
+            items: {
+              type: "object",
+              properties: { line: { type: "string" } },
+              required: ["line"],
+            },
+          },
+        },
+        required: ["scenes"],
+      },
+    },
   });
 
-  // Workers AI usually returns { response: "<text>" }, but depending on model/account
-  // config it can come back OpenAI-style ({ choices: [{ message: { content } }] }) or
-  // similar. Extract text defensively instead of assuming result.response is a string.
-  let text = result?.response;
-  if (typeof text !== "string") {
-    text = result?.choices?.[0]?.message?.content
-      ?? result?.choices?.[0]?.text
-      ?? (Array.isArray(result?.response) ? result.response.join("") : undefined);
-  }
-  if (typeof text !== "string") {
-    console.error("Unexpected Workers AI result shape:", JSON.stringify(result));
-    throw new Error("Script generation: could not find text in Workers AI response — see logged result shape above");
+  // In JSON Schema mode, result.response is already a parsed object: { scenes: [...] }.
+  // Fall back to treating it as a JSON string (older behavior / other model configs) for safety.
+  let scenes;
+  if (result?.response && typeof result.response === "object" && Array.isArray(result.response.scenes)) {
+    scenes = result.response.scenes;
+  } else {
+    let text = result?.response;
+    if (typeof text !== "string") {
+      text = result?.choices?.[0]?.message?.content ?? result?.choices?.[0]?.text;
+    }
+    if (typeof text !== "string") {
+      console.error("Unexpected Workers AI result shape:", JSON.stringify(result));
+      throw new Error("Script generation: could not find scenes in Workers AI response — see logged result shape above");
+    }
+    const raw = text.trim().replace(/^```json|```$/g, "").trim();
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (err) {
+      console.error("Script generation: failed to parse model output as JSON. Raw text was:\n", raw);
+      throw err;
+    }
+    scenes = Array.isArray(parsed) ? parsed : parsed?.scenes;
   }
 
-  const raw = text.trim().replace(/^```json|```$/g, "").trim();
-  const scenes = JSON.parse(raw);
   if (!Array.isArray(scenes) || scenes.length === 0) throw new Error("Script generation returned no scenes");
   return scenes.map((s) => ({ line: s.line }));
 }
@@ -122,4 +154,4 @@ export async function synthesizeVoice(text) {
     }
     return Buffer.from(b64, "base64");
   });
-  }
+    }
