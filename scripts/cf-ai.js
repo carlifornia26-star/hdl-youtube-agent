@@ -2,23 +2,45 @@ import fetch from "node-fetch";
 
 const BASE = (accountId) => `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run`;
 
-async function run(model, body) {
-  const accountId = process.env.CF_ACCOUNT_ID;
-  const token = process.env.CF_API_TOKEN;
-  const res = await fetch(`${BASE(accountId)}/${model}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    throw new Error(`Workers AI ${model} failed: ${res.status} ${await res.text()}`);
+// Workers AI occasionally returns transient 500s (e.g. internal error code 3043) that
+// succeed on retry — this is a known, documented-nowhere flakiness on Cloudflare's side,
+// not something a request change fixes. Retry a few times with backoff before giving up.
+async function withRetry(label, fn, attempts = 3) {
+  let lastErr;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const isLast = i === attempts;
+      console.error(`${label}: attempt ${i}/${attempts} failed${isLast ? "" : ", retrying"}: ${err.message}`);
+      if (!isLast) {
+        await new Promise((r) => setTimeout(r, 1000 * i)); // 1s, 2s, ...
+      }
+    }
   }
-  const json = await res.json();
-  if (!json.success) throw new Error(`Workers AI ${model} error: ${JSON.stringify(json.errors)}`);
-  return json.result;
+  throw lastErr;
+}
+
+async function run(model, body) {
+  return withRetry(`Workers AI ${model}`, async () => {
+    const accountId = process.env.CF_ACCOUNT_ID;
+    const token = process.env.CF_API_TOKEN;
+    const res = await fetch(`${BASE(accountId)}/${model}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      throw new Error(`Workers AI ${model} failed: ${res.status} ${await res.text()}`);
+    }
+    const json = await res.json();
+    if (!json.success) throw new Error(`Workers AI ${model} error: ${JSON.stringify(json.errors)}`);
+    return json.result;
+  });
 }
 
 // Produces a teaser script: an array of { line, seconds } scenes, ~9-10 scenes to fill ~10 minutes
@@ -74,18 +96,22 @@ export async function translateMeta(title, description, targetLang) {
 }
 
 // Text-to-speech via Workers AI MeloTTS. Returns raw audio bytes (mp3/wav depending on model version).
+// Wrapped in the same retry logic as run() since MeloTTS returns raw bytes, not the
+// {success, result} JSON envelope, so it can't reuse run() directly.
 export async function synthesizeVoice(text) {
-  const accountId = process.env.CF_ACCOUNT_ID;
-  const token = process.env.CF_API_TOKEN;
-  const res = await fetch(`${BASE(accountId)}/@cf/myshell-ai/melotts`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ prompt: text, lang: "en" }),
+  return withRetry("Workers AI @cf/myshell-ai/melotts", async () => {
+    const accountId = process.env.CF_ACCOUNT_ID;
+    const token = process.env.CF_API_TOKEN;
+    const res = await fetch(`${BASE(accountId)}/@cf/myshell-ai/melotts`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ prompt: text, lang: "en" }),
+    });
+    if (!res.ok) throw new Error(`TTS failed: ${res.status} ${await res.text()}`);
+    const buf = Buffer.from(await res.arrayBuffer());
+    return buf;
   });
-  if (!res.ok) throw new Error(`TTS failed: ${res.status} ${await res.text()}`);
-  const buf = Buffer.from(await res.arrayBuffer());
-  return buf;
-      }
+    }
