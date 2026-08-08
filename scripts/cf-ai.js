@@ -95,9 +95,11 @@ export async function translateMeta(title, description, targetLang) {
   return { title: tTitle?.trim() || title, description: tDesc?.trim() || description };
 }
 
-// Text-to-speech via Workers AI MeloTTS. Returns raw audio bytes (mp3/wav depending on model version).
-// Wrapped in the same retry logic as run() since MeloTTS returns raw bytes, not the
-// {success, result} JSON envelope, so it can't reuse run() directly.
+// Text-to-speech via Workers AI MeloTTS. Returns raw audio bytes (mp3).
+// NOTE: the REST endpoint returns a JSON envelope — { result: { audio: "<base64 mp3>" }, success, ... } —
+// not raw binary, even though other Workers AI endpoints (e.g. image models) work the same way.
+// Reading the HTTP body directly as bytes (res.arrayBuffer()) saves the JSON text itself as the
+// "audio" file, which ffmpeg then fails to parse ("Header missing", "0 channels", "Duration: N/A").
 export async function synthesizeVoice(text) {
   return withRetry("Workers AI @cf/myshell-ai/melotts", async () => {
     const accountId = process.env.CF_ACCOUNT_ID;
@@ -111,7 +113,13 @@ export async function synthesizeVoice(text) {
       body: JSON.stringify({ prompt: text, lang: "en" }),
     });
     if (!res.ok) throw new Error(`TTS failed: ${res.status} ${await res.text()}`);
-    const buf = Buffer.from(await res.arrayBuffer());
-    return buf;
-  });
+    const json = await res.json();
+    if (!json.success) throw new Error(`TTS error: ${JSON.stringify(json.errors)}`);
+    const b64 = json.result?.audio;
+    if (typeof b64 !== "string" || b64.length === 0) {
+      console.error("Unexpected MeloTTS result shape:", JSON.stringify(json));
+      throw new Error("TTS: no base64 audio found in Workers AI response — see logged result shape above");
     }
+    return Buffer.from(b64, "base64");
+  });
+  }
