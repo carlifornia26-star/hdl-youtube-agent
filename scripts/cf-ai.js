@@ -37,7 +37,22 @@ Strict rules:
     messages: [{ role: "user", content: prompt }],
     max_tokens: 900,
   });
-  const raw = (result.response || "").trim().replace(/^```json|```$/g, "").trim();
+
+  // Workers AI usually returns { response: "<text>" }, but depending on model/account
+  // config it can come back OpenAI-style ({ choices: [{ message: { content } }] }) or
+  // similar. Extract text defensively instead of assuming result.response is a string.
+  let text = result?.response;
+  if (typeof text !== "string") {
+    text = result?.choices?.[0]?.message?.content
+      ?? result?.choices?.[0]?.text
+      ?? (Array.isArray(result?.response) ? result.response.join("") : undefined);
+  }
+  if (typeof text !== "string") {
+    console.error("Unexpected Workers AI result shape:", JSON.stringify(result));
+    throw new Error("Script generation: could not find text in Workers AI response — see logged result shape above");
+  }
+
+  const raw = text.trim().replace(/^```json|```$/g, "").trim();
   const scenes = JSON.parse(raw);
   if (!Array.isArray(scenes) || scenes.length === 0) throw new Error("Script generation returned no scenes");
   return scenes.map((s) => ({ line: s.line }));
@@ -73,4 +88,4 @@ export async function synthesizeVoice(text) {
   if (!res.ok) throw new Error(`TTS failed: ${res.status} ${await res.text()}`);
   const buf = Buffer.from(await res.arrayBuffer());
   return buf;
-    }
+      }
