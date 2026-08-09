@@ -11,26 +11,40 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
   const youtube = client();
   const isPrivate = process.env.DRY_RUN_PRIVATE === "true";
 
-  const res = await youtube.videos.insert({
-    part: ["snippet", "status", "localizations"],
-    requestBody: {
-      snippet: {
-        title,
-        description,
-        tags,
-        categoryId: "27", // Education
-        defaultLanguage: "en",
-      },
-      status: {
-        privacyStatus: isPrivate ? "private" : "public",
-        selfDeclaredMadeForKids: false,
-      },
-      localizations,
-    },
-    media: { body: fs.createReadStream(videoPath) },
-  });
+  // Drop any localization entries with an empty/blank title — an empty or malformed
+  // localization entry is enough to make YouTube reject the whole request with the
+  // generic "invalidVideoMetadata" error (no indication of which field caused it).
+  const cleanLocalizations = Object.fromEntries(
+    Object.entries(localizations || {}).filter(([, v]) => v?.title?.trim())
+  );
 
-  return res.data; // includes .id
+  const requestBody = {
+    snippet: {
+      title,
+      description,
+      tags,
+      categoryId: "27", // Education
+      defaultLanguage: "en",
+    },
+    status: {
+      privacyStatus: isPrivate ? "private" : "public",
+      selfDeclaredMadeForKids: false,
+    },
+    localizations: cleanLocalizations,
+  };
+
+  try {
+    const res = await youtube.videos.insert({
+      part: ["snippet", "status", "localizations"],
+      requestBody,
+      media: { body: fs.createReadStream(videoPath) },
+    });
+
+    return res.data; // includes .id
+  } catch (err) {
+    console.error("uploadVideo failed. requestBody was:\n", JSON.stringify(requestBody, null, 2));
+    throw err;
+  }
 }
 
 export async function uploadThumbnail({ videoId, imagePath }) {
@@ -50,4 +64,4 @@ export async function uploadCaptionTrack({ videoId, language, srtPath, name }) {
     },
     media: { body: fs.createReadStream(srtPath) },
   });
-                         }
+      }
