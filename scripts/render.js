@@ -2,7 +2,15 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
 
-const run = promisify(execFile);
+const execFileAsync = promisify(execFile);
+// ffmpeg's own console output (progress lines, and especially warnings) can run to several MB
+// on a 10-minute, 20+ scene video. Node's execFile defaults to a 1MB stdout+stderr buffer and
+// throws ERR_CHILD_PROCESS_STDIO_MAXBUFFER if that's exceeded — raise it well above anything
+// this pipeline should realistically produce, even in a noisy/warning-heavy run.
+const MAX_BUFFER = 64 * 1024 * 1024; // 64MB
+function run(cmd, args) {
+  return execFileAsync(cmd, args, { maxBuffer: MAX_BUFFER });
+}
 
 export async function probeDuration(filePath) {
   const { stdout } = await run("ffprobe", [
@@ -29,6 +37,16 @@ async function hasAudioStream(filePath) {
   }
 }
 
+// Every scene is forced to the same frame rate / audio sample rate / channel layout below,
+// regardless of what the source Pexels clip natively has. Different stock clips come in with
+// different fps and audio formats; without normalizing each scene to identical parameters,
+// concatScenes' "-c copy" (pure stream copy, no re-encoding) can't reconcile the mismatched
+// timestamps between segments, producing a "Non-monotonic DTS" warning on nearly every packet
+// (thousands of lines, which is also what blew past execFile's stdout/stderr buffer above).
+const OUTPUT_FPS = 25;
+const OUTPUT_SAMPLE_RATE = 44100;
+const OUTPUT_CHANNELS = 2;
+
 // Loops/trims the stock clip to a caller-supplied duration and burns the caption line in.
 // No narration track: keeps the stock clip's own ambient audio instead of muting it. If the
 // clip has no audio stream (some Pexels clips don't), a silent track is generated instead —
@@ -42,7 +60,7 @@ export async function buildScene({ clipPath, duration, text, outPath }) {
 
   const inputs = clipHasAudio
     ? ["-stream_loop", "-1", "-i", clipPath]
-    : ["-stream_loop", "-1", "-i", clipPath, "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"];
+    : ["-stream_loop", "-1", "-i", clipPath, "-f", "lavfi", "-i", `anullsrc=channel_layout=stereo:sample_rate=${OUTPUT_SAMPLE_RATE}`];
   const audioMap = clipHasAudio ? ["-map", "0:a"] : ["-map", "1:a"];
 
   await run("ffmpeg", [
@@ -55,6 +73,10 @@ export async function buildScene({ clipPath, duration, text, outPath }) {
     "-map", "[v]",
     ...audioMap,
     "-t", String(duration),
+    "-r", String(OUTPUT_FPS),
+    "-fps_mode", "cfr",
+    "-ar", String(OUTPUT_SAMPLE_RATE),
+    "-ac", String(OUTPUT_CHANNELS),
     "-c:v", "libx264",
     "-preset", "veryfast",
     "-c:a", "aac",
@@ -107,4 +129,4 @@ export function buildSrt(scenesWithDurations, translatedLines) {
     const ms = String(Math.floor((sec % 1) * 1000)).padStart(3, "0");
     return `${h}:${m}:${s},${ms}`;
   }
-      }
+  }
