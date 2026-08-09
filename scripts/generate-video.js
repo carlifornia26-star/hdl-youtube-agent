@@ -13,6 +13,16 @@ const PADDING_SECONDS = 1.5; // per-scene buffer so a line isn't yanked away the
 const MIN_SCENE_SECONDS = 5;
 const MAX_SCENE_SECONDS = 45;
 
+// Cloudflare's m2m100 model uses its own short codes (zh, es, fr...) for translation —
+// those must stay untouched in VIDEO_LANGS. YouTube's localizations map, however, requires
+// proper BCP-47 tags and rejects a couple of the short codes outright (most notably plain
+// "zh", which YouTube wants as zh-Hans or zh-Hant) — an unrecognized code anywhere in the
+// localizations map fails the ENTIRE upload with a generic, useless "invalidVideoMetadata"
+// error. This maps Cloudflare's code -> the YouTube-safe equivalent only where they differ.
+const YT_LOCALE_MAP = {
+  zh: "zh-Hans",
+};
+
 // No narrator voice: scene length is derived from how long the line takes to read on screen,
 // then every scene is scaled by the same factor so the whole video lands close to 10 minutes
 // regardless of how many scenes the script ended up with. The stock clip's own ambient audio
@@ -66,11 +76,14 @@ async function main() {
     `#HDLGroup #${book.slug.replace(/-/g, "")}`;
 
   // 5) Translated titles/descriptions -> YouTube localizations map
+  // Translate with Cloudflare's own code (`lang`), but key the localizations object with
+  // the YouTube-safe code (`ytLang`) so a mismatch like "zh" vs "zh-Hans" can't happen.
   const localizations = {};
   for (const lang of VIDEO_LANGS) {
+    const ytLang = YT_LOCALE_MAP[lang] ?? lang;
     try {
       const t = await translateMeta(enTitle, enDescription, lang);
-      localizations[lang] = { title: t.title, description: t.description };
+      localizations[ytLang] = { title: t.title, description: t.description };
     } catch (e) {
       console.warn(`Translation failed for ${lang}, skipping:`, e.message);
     }
@@ -100,7 +113,8 @@ async function main() {
   await uploadCaptionTrack({ videoId: uploaded.id, language: "en", srtPath: enSrtPath, name: "English" });
 
   for (const lang of VIDEO_LANGS) {
-    if (!localizations[lang]) continue;
+    const ytLang = YT_LOCALE_MAP[lang] ?? lang;
+    if (!localizations[ytLang]) continue;
     try {
       // Translate each scene line individually for caption timing accuracy
       const lines = [];
@@ -111,7 +125,7 @@ async function main() {
       const srt = buildSrt(built, lines);
       const srtPath = path.join(BUILD_DIR, `captions_${lang}.srt`);
       await fs.writeFile(srtPath, srt);
-      await uploadCaptionTrack({ videoId: uploaded.id, language: lang, srtPath, name: lang });
+      await uploadCaptionTrack({ videoId: uploaded.id, language: ytLang, srtPath, name: lang });
     } catch (e) {
       console.warn(`Caption upload failed for ${lang}, skipping:`, e.message);
     }
