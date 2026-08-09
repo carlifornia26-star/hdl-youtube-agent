@@ -47,10 +47,14 @@ async function run(model, body) {
 // is text-on-screen over silent/ambient stock clips, so scene count is left flexible (18-26) and
 // the actual on-screen duration per scene is computed from word count in generate-video.js, then
 // scaled so the whole video lands close to 10 minutes regardless of how many scenes this returns.
+// Each scene's line is now burned in as MrBeast-style flowing word-chunk captions (render.js)
+// rather than one sentence held static on screen, so lines can safely carry more words per scene
+// than before without feeling like a wall of text — this is what actually fills the 10 minutes
+// with more on-screen words instead of the same short line just sitting there longer.
 export async function generateScript(book) {
   const prompt = `You are writing a 10-minute YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group.
 
-This video has NO narrator voice — viewers read the text on screen over silent/ambient background footage. Write accordingly: each scene's line is the only thing communicating that moment, so it must stand alone and read clearly at a glance.
+This video has NO narrator voice — viewers read the text on screen, a few words at a time in a fast-paced flowing caption style, over silent/ambient background footage. Write accordingly: each scene's line is the only thing communicating that moment, so it must stand alone and build momentum even broken into short bursts.
 
 Strict rules:
 - This is a TEASER, not a summary. Never reveal specific chapters, frameworks, numbered steps, or concrete conclusions from the book.
@@ -58,11 +62,11 @@ Strict rules:
 - Explicitly mention once, naturally, that the book is available in English only.
 - End with a call to action to read the full book on the High Definition Learning Group website.
 - Do not use quotation marks of any kind inside a line's text — rephrase instead of quoting anything.
-- Produce between 18 and 26 scenes. Each scene's line is 1-2 short sentences, easy to read on screen in a few seconds.`;
+- Produce between 18 and 26 scenes. Each scene's line is 2-4 sentences (roughly 30-50 words) of punchy, momentum-building copy — short declarative sentences work better than long ones, since the line displays as a rapid sequence of 2-3 word bursts rather than one static sentence.`;
 
   const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
     messages: [{ role: "user", content: prompt }],
-    max_tokens: 1400,
+    max_tokens: 2600, // raised from 1400 — scene lines are now ~3x longer (30-50 words vs 1-2 short sentences)
     // JSON Schema mode: Cloudflare validates/parses the output server-side, so we get
     // back a real object instead of free text that can contain JSON-breaking characters
     // (e.g. an unescaped quote inside a sentence) that trips a manual JSON.parse.
