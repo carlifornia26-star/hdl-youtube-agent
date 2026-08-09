@@ -43,10 +43,14 @@ async function run(model, body) {
   });
 }
 
-// Produces a teaser script: an array of { line, seconds } scenes, ~9-10 scenes to fill ~10 minutes
-// at typical narration pace. Strict "teaser, not full content" prompt — mirrors the article engine's rule.
+// Produces a teaser script: an array of { line } scenes. No narration track anymore — the video
+// is text-on-screen over silent/ambient stock clips, so scene count is left flexible (18-26) and
+// the actual on-screen duration per scene is computed from word count in generate-video.js, then
+// scaled so the whole video lands close to 10 minutes regardless of how many scenes this returns.
 export async function generateScript(book) {
-  const prompt = `You are writing a ${book.title.length > 0 ? "" : ""}10-minute YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group.
+  const prompt = `You are writing a 10-minute YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group.
+
+This video has NO narrator voice — viewers read the text on screen over silent/ambient background footage. Write accordingly: each scene's line is the only thing communicating that moment, so it must stand alone and read clearly at a glance.
 
 Strict rules:
 - This is a TEASER, not a summary. Never reveal specific chapters, frameworks, numbered steps, or concrete conclusions from the book.
@@ -54,11 +58,11 @@ Strict rules:
 - Explicitly mention once, naturally, that the book is available in English only.
 - End with a call to action to read the full book on the High Definition Learning Group website.
 - Do not use quotation marks of any kind inside a line's text — rephrase instead of quoting anything.
-- Produce exactly 9 scenes, each with one narration sentence of 15-25 words.`;
+- Produce between 18 and 26 scenes. Each scene's line is 1-2 short sentences, easy to read on screen in a few seconds.`;
 
   const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
     messages: [{ role: "user", content: prompt }],
-    max_tokens: 900,
+    max_tokens: 1400,
     // JSON Schema mode: Cloudflare validates/parses the output server-side, so we get
     // back a real object instead of free text that can contain JSON-breaking characters
     // (e.g. an unescaped quote inside a sentence) that trips a manual JSON.parse.
@@ -69,8 +73,8 @@ Strict rules:
         properties: {
           scenes: {
             type: "array",
-            minItems: 9,
-            maxItems: 9,
+            minItems: 18,
+            maxItems: 26,
             items: {
               type: "object",
               properties: { line: { type: "string" } },
@@ -125,33 +129,4 @@ export async function translateMeta(title, description, targetLang) {
   });
   const [tTitle, tDesc] = (result.translated_text || "").split("\n---\n");
   return { title: tTitle?.trim() || title, description: tDesc?.trim() || description };
-}
-
-// Text-to-speech via Workers AI MeloTTS. Returns raw audio bytes (mp3).
-// NOTE: the REST endpoint returns a JSON envelope — { result: { audio: "<base64 mp3>" }, success, ... } —
-// not raw binary, even though other Workers AI endpoints (e.g. image models) work the same way.
-// Reading the HTTP body directly as bytes (res.arrayBuffer()) saves the JSON text itself as the
-// "audio" file, which ffmpeg then fails to parse ("Header missing", "0 channels", "Duration: N/A").
-export async function synthesizeVoice(text) {
-  return withRetry("Workers AI @cf/myshell-ai/melotts", async () => {
-    const accountId = process.env.CF_ACCOUNT_ID;
-    const token = process.env.CF_API_TOKEN;
-    const res = await fetch(`${BASE(accountId)}/@cf/myshell-ai/melotts`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ prompt: text, lang: "en" }),
-    });
-    if (!res.ok) throw new Error(`TTS failed: ${res.status} ${await res.text()}`);
-    const json = await res.json();
-    if (!json.success) throw new Error(`TTS error: ${JSON.stringify(json.errors)}`);
-    const b64 = json.result?.audio;
-    if (typeof b64 !== "string" || b64.length === 0) {
-      console.error("Unexpected MeloTTS result shape:", JSON.stringify(json));
-      throw new Error("TTS: no base64 audio found in Workers AI response — see logged result shape above");
-    }
-    return Buffer.from(b64, "base64");
-  });
-    }
+      }
