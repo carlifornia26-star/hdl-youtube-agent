@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { eximport { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
 
@@ -102,7 +102,10 @@ export async function generateThumbnail({ clipPath, title, outPath }) {
     "-i", clipPath,
     "-vf",
     `scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,` +
-      `drawtext=text='${safeTitle}':fontcolor=white:fontsize=54:fontweight=bold:box=1:boxcolor=black@0.6:boxborderw=20:` +
+      // "fontweight" is not a real drawtext option — ffmpeg has no such flag, bold text needs
+      // an actual bold font file via fontfile=. Removed rather than added, to avoid depending
+      // on a specific font path existing on the GitHub Actions runner.
+      `drawtext=text='${safeTitle}':fontcolor=white:fontsize=54:box=1:boxcolor=black@0.6:boxborderw=20:` +
       `x=(w-text_w)/2:y=(h-text_h)/2`,
     "-frames:v", "1",
     outPath,
@@ -129,4 +132,4 @@ export function buildSrt(scenesWithDurations, translatedLines) {
     const ms = String(Math.floor((sec % 1) * 1000)).padStart(3, "0");
     return `${h}:${m}:${s},${ms}`;
   }
-  }
+}￼Enter
