@@ -121,12 +121,36 @@ Strict rules:
 // Workers AI neuron budget you're already spending on articles — see SETUP.md.
 export const VIDEO_LANGS = ["es", "fr", "pt", "de", "hi", "ar", "id", "sw", "ja", "ru", "ko", "zh", "it", "tr", "vi"];
 
+// YouTube caps snippet.title (and each localization's title) at 100 characters.
+const YT_TITLE_MAX = 100;
+
 export async function translateMeta(title, description, targetLang) {
-  const result = await run("@cf/meta/m2m100-1.2b", {
-    text: `${title}\n---\n${description}`,
+  // Title and description are translated as two SEPARATE calls, not joined with a
+  // separator and split back apart afterward. A joined "title\n---\ndescription" string
+  // is unreliable: the translation model doesn't always preserve "---", so the split can
+  // fail and dump the whole translated blob (title + description) into the title field —
+  // which then blows past YouTube's 100-char title limit and fails the whole upload with
+  // a generic "invalidVideoMetadata" error, with no indication of which field caused it.
+  const titleResult = await run("@cf/meta/m2m100-1.2b", {
+    text: title,
     source_lang: "english",
     target_lang: targetLang,
   });
-  const [tTitle, tDesc] = (result.translated_text || "").split("\n---\n");
-  return { title: tTitle?.trim() || title, description: tDesc?.trim() || description };
-      }
+  const tTitle = (titleResult.translated_text || "").trim();
+
+  let tDesc = "";
+  if (description) {
+    const descResult = await run("@cf/meta/m2m100-1.2b", {
+      text: description,
+      source_lang: "english",
+      target_lang: targetLang,
+    });
+    tDesc = (descResult.translated_text || "").trim();
+  }
+
+  return {
+    // Hard truncate as a safety net even if a future translation somehow still comes back long.
+    title: (tTitle || title).slice(0, YT_TITLE_MAX),
+    description: tDesc || description,
+  };
+  }
