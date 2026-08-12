@@ -36,6 +36,9 @@ jobs:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          FISH_API_KEY: ${{ secrets.FISH_API_KEY }}
+          # Optional — omit to use Fish Audio's default voice
+          FISH_VOICE_ID: ${{ secrets.FISH_VOICE_ID }}
           # Optional: set to "true" to upload as Private instead of Public while you're testing
           DRY_RUN_PRIVATE: ${{ vars.DRY_RUN_PRIVATE }}
 
