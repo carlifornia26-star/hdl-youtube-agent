@@ -3,15 +3,16 @@ import path from "node:path";
 import { pickTodaysBook } from "./catalog.js";
 import { generateScript, translateMeta, VIDEO_LANGS } from "./cf-ai.js";
 import { fetchStockClip } from "./assets.js";
-import { buildScene, concatScenes, buildSrt, generateThumbnail } from "./render.js";
+import { synthesizeVoice } from "./voice.js";
+import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration } from "./render.js";
 import { uploadVideo, uploadCaptionTrack, uploadThumbnail } from "./youtube.js";
 
 const BUILD_DIR = path.resolve("build");
-const TARGET_TOTAL_SECONDS = 600; // 10 minutes
-const READING_WORDS_PER_SECOND = 2.3; // ~140wpm on-screen reading pace, a bit slower than speech
-const PADDING_SECONDS = 1.5; // per-scene buffer so a line isn't yanked away the instant it's readable
-const MIN_SCENE_SECONDS = 5;
+const PADDING_SECONDS = 0.8; // per-scene buffer after the voice line finishes, before the next scene cuts in
+const MIN_SCENE_SECONDS = 4;
 const MAX_SCENE_SECONDS = 45;
+const SHORT_MIN_SECONDS = 40; // Short target window — comfortably inside YouTube's Shorts duration
+const SHORT_MAX_SECONDS = 65; // limit under either the old 60s rule or the current 3-minute one
 
 // Cloudflare's m2m100 model uses its own short codes (zh, es, fr...) for translation —
 // those must stay untouched in VIDEO_LANGS. YouTube's localizations map, however, requires
@@ -23,20 +24,6 @@ const YT_LOCALE_MAP = {
   zh: "zh-Hans",
 };
 
-// No narrator voice: scene length is derived from how long the line takes to read on screen,
-// then every scene is scaled by the same factor so the whole video lands close to 10 minutes
-// regardless of how many scenes the script ended up with. The stock clip's own ambient audio
-// plays (unmuted) instead of a voice track.
-function computeSceneDurations(scenes) {
-  const raw = scenes.map((s) => {
-    const words = s.line.trim().split(/\s+/).filter(Boolean).length;
-    return words / READING_WORDS_PER_SECOND + PADDING_SECONDS;
-  });
-  const rawTotal = raw.reduce((a, b) => a + b, 0);
-  const scale = TARGET_TOTAL_SECONDS / rawTotal;
-  return raw.map((d) => Math.min(MAX_SCENE_SECONDS, Math.max(MIN_SCENE_SECONDS, d * scale)));
-}
-
 async function main() {
   await fs.mkdir(BUILD_DIR, { recursive: true });
 
@@ -45,25 +32,45 @@ async function main() {
 
   // 1) Script (teaser-only, scene count set by the model within the schema's range)
   const scenes = await generateScript(book);
-  const durations = computeSceneDurations(scenes);
-  console.log(`Generated ${scenes.length} scenes, total runtime ~${Math.round(durations.reduce((a, b) => a + b, 0) / 60)} min`);
+  console.log(`Generated ${scenes.length} scenes`);
 
-  // 2) Per-scene: stock clip, burned caption, clip's own audio (no narration) -> scene_N.mp4
+  // 2) Per-scene: stock clip + Fish Audio narration + burned caption -> scene_N.mp4.
+  // Scene duration comes from the ACTUAL narration length (probed after synthesis), not an
+  // estimate — captions and the video cut are timed to the real voice track.
+  // If TTS fails for a scene (rate limit, transient API error) after retries, that one scene
+  // falls back to captions-only over the stock clip's ambient sound rather than failing the
+  // entire day's video.
   const built = [];
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
-    const duration = durations[i];
     const clipPath = path.join(BUILD_DIR, `clip_${i}.mp4`);
+    const voicePath = path.join(BUILD_DIR, `voice_${i}.mp3`);
     const outPath = path.join(BUILD_DIR, `scene_${i}.mp4`);
 
     const keyword = book.stockKeywords[i % book.stockKeywords.length];
-    await fetchStockClip(keyword, clipPath);
+    await fetchStockClip(keyword, clipPath, i);
 
-    const built_scene = await buildScene({ clipPath, duration, text: scene.line, outPath });
-    built.push({ ...scene, duration, outPath: built_scene.outPath });
+    let usableVoicePath = null;
+    let duration = MIN_SCENE_SECONDS;
+    try {
+      await synthesizeVoice(scene.line, voicePath);
+      const voiceDuration = await probeDuration(voicePath);
+      duration = Math.min(MAX_SCENE_SECONDS, Math.max(MIN_SCENE_SECONDS, voiceDuration + PADDING_SECONDS));
+      usableVoicePath = voicePath;
+    } catch (e) {
+      console.warn(`Voice synthesis failed for scene ${i}, falling back to captions-only:`, e.message);
+      // Rough fallback so the scene still gets a reasonable amount of screen time to be read.
+      const words = scene.line.trim().split(/\s+/).filter(Boolean).length;
+      duration = Math.min(MAX_SCENE_SECONDS, Math.max(MIN_SCENE_SECONDS, words / 2.3 + PADDING_SECONDS));
+    }
+
+    const built_scene = await buildScene({ clipPath, duration, text: scene.line, outPath, voicePath: usableVoicePath });
+    built.push({ ...scene, duration, outPath: built_scene.outPath, clipPath, voicePath: usableVoicePath });
   }
 
-  // 3) Concat scenes — each scene keeps its own stock-clip audio, no separate mix step needed
+  console.log(`Total runtime ~${Math.round(built.reduce((a, b) => a + b.duration, 0) / 60)} min`);
+
+  // 3) Concat scenes — each scene already has its narration mixed in, no separate mix step needed
   const listFile = path.join(BUILD_DIR, "concat.txt");
   const finalPath = path.join(BUILD_DIR, "final.mp4");
   await concatScenes(built.map((b) => b.outPath), listFile, finalPath);
@@ -105,8 +112,68 @@ async function main() {
   await generateThumbnail({ clipPath: midClip, title: book.title, outPath: thumbPath });
   await uploadThumbnail({ videoId: uploaded.id, imagePath: thumbPath });
 
+  // 6c) YouTube Short — the opening few scenes (the strongest hook, since this is a teaser),
+  // re-rendered vertical (9:16) instead of a new upload. Reuses the SAME stock clips and the
+  // SAME Fish Audio narration already generated for the main video — no extra Pexels or Fish
+  // Audio calls, just a second ffmpeg pass on files already on disk. Stops accumulating scenes
+  // once it's inside the SHORT_MIN/MAX window, skipping any scene whose voice synthesis failed
+  // (no voice = no narration, and the Short is too short to carry a captions-only gap well).
+  try {
+    const shortScenes = [];
+    let shortTotal = 0;
+    for (const scene of built) {
+      if (!scene.voicePath) continue;
+      if (shortTotal >= SHORT_MIN_SECONDS && shortTotal + scene.duration > SHORT_MAX_SECONDS) break;
+      shortScenes.push(scene);
+      shortTotal += scene.duration;
+      if (shortTotal >= SHORT_MIN_SECONDS) break;
+    }
+
+    if (shortScenes.length === 0) {
+      console.warn("No scenes with usable voice available for a Short — skipping Short upload.");
+    } else {
+      const shortBuilt = [];
+      for (let i = 0; i < shortScenes.length; i++) {
+        const s = shortScenes[i];
+        const outPath = path.join(BUILD_DIR, `short_scene_${i}.mp4`);
+        const built_scene = await buildScene({
+          clipPath: s.clipPath,
+          duration: s.duration,
+          text: s.line,
+          outPath,
+          voicePath: s.voicePath,
+          orientation: "vertical",
+        });
+        shortBuilt.push(built_scene.outPath);
+      }
+
+      const shortListFile = path.join(BUILD_DIR, "concat_short.txt");
+      const shortFinalPath = path.join(BUILD_DIR, "short.mp4");
+      await concatScenes(shortBuilt, shortListFile, shortFinalPath);
+
+      const shortTitle = `${book.title} #Shorts`.slice(0, 100); // YouTube's 100-char title cap
+      const shortDescription =
+        `${book.title} — ${book.angle}.\n` +
+        `Watch the full video: https://youtube.com/watch?v=${uploaded.id}\n` +
+        `Read the full book: ${book.pageUrl}\n\n` +
+        `#Shorts #HDLGroup #${book.slug.replace(/-/g, "")}`;
+
+      const uploadedShort = await uploadVideo({
+        videoPath: shortFinalPath,
+        title: shortTitle,
+        description: shortDescription,
+        tags: [book.title, "HDL Group", book.angle, "Shorts"],
+        localizations: {}, // English only for now — see SETUP.md
+      });
+      console.log(`Uploaded Short (~${Math.round(shortTotal)}s): https://youtube.com/watch?v=${uploadedShort.id}`);
+    }
+  } catch (e) {
+    // A failed Short should never take down the main video, which has already uploaded successfully.
+    console.warn("Short build/upload failed, continuing without it:", e.message);
+  }
+
   // 7) Caption tracks — English first, then translated languages (reusing the same scene lines).
-  // Captions are the ONLY narration now, so these matter more than before — every viewer reads them.
+  // These mirror the spoken narration on screen, and are the only thing viewers watching muted see.
   const enSrt = buildSrt(built, built.map((b) => b.line));
   const enSrtPath = path.join(BUILD_DIR, "captions_en.srt");
   await fs.writeFile(enSrtPath, enSrt);
