@@ -74,13 +74,49 @@ function buildCaptionChunks(text, duration) {
   });
 }
 
-export async function buildScene({ clipPath, duration, text, outPath }) {
-  const clipHasAudio = await hasAudioStream(clipPath);
+// Ambient bed level when a voice track is mixed in underneath it — low enough to not
+// compete with narration, high enough that the stock clip doesn't feel muted.
+const AMBIENT_DUCK_VOLUME = 0.12;
 
-  const inputs = clipHasAudio
-    ? ["-stream_loop", "-1", "-i", clipPath]
-    : ["-stream_loop", "-1", "-i", clipPath, "-f", "lavfi", "-i", `anullsrc=channel_layout=stereo:sample_rate=${OUTPUT_SAMPLE_RATE}`];
-  const audioMap = clipHasAudio ? ["-map", "0:a"] : ["-map", "1:a"];
+// Landscape (main video) vs vertical (Shorts, 9:16) output dimensions and caption sizing.
+const DIMENSIONS = {
+  landscape: { w: 1280, h: 720, fontsize: 64, captionY: "h*0.38" },
+  vertical: { w: 720, h: 1280, fontsize: 52, captionY: "h*0.42" },
+};
+
+export async function buildScene({ clipPath, duration, text, outPath, voicePath, orientation = "landscape" }) {
+  const dim = DIMENSIONS[orientation] || DIMENSIONS.landscape;
+  const clipHasAudio = await hasAudioStream(clipPath);
+  const hasVoice = Boolean(voicePath);
+
+  const inputs = ["-stream_loop", "-1", "-i", clipPath];
+  if (hasVoice) {
+    inputs.push("-i", voicePath);
+  } else if (!clipHasAudio) {
+    inputs.push("-f", "lavfi", "-i", `anullsrc=channel_layout=stereo:sample_rate=${OUTPUT_SAMPLE_RATE}`);
+  }
+
+  // Audio graph, built as part of the same -filter_complex as the caption drawtext chain below:
+  //  - voice + clip audio: duck the clip's ambient sound and mix the narration on top
+  //  - voice, silent clip: narration is the only audio
+  //  - no voice, clip has audio: pass the clip's own audio through unchanged (old behavior)
+  //  - no voice, silent clip: silence (old behavior)
+  let audioFilter = null;
+  let audioMap;
+  if (hasVoice && clipHasAudio) {
+    audioFilter = `[0:a]volume=${AMBIENT_DUCK_VOLUME}[amb];[1:a]volume=1.0[voice];[amb][voice]amix=inputs=2:duration=first:normalize=0[a]`;
+    audioMap = ["-map", "[a]"];
+  } else if (hasVoice) {
+    // apad: the clip has no ambient bed, so once the voice clip ends there's nothing to fill
+    // the padding buffer with — pad it with silence rather than let -shortest cut the scene
+    // short right at the last word.
+    audioFilter = `[1:a]volume=1.0,apad[a]`;
+    audioMap = ["-map", "[a]"];
+  } else if (clipHasAudio) {
+    audioMap = ["-map", "0:a"];
+  } else {
+    audioMap = ["-map", "1:a"];
+  }
 
   const chunks = buildCaptionChunks(text, duration);
   const captionFilters = chunks
@@ -89,8 +125,8 @@ export async function buildScene({ clipPath, duration, text, outPath }) {
       const s = start.toFixed(3);
       const fadeEnd = Math.min(start + POP_IN_SECONDS, end).toFixed(3);
       return (
-        `drawtext=fontfile=${CAPTION_FONT}:text='${safe}':fontcolor=${color}:fontsize=64:` +
-        `box=1:boxcolor=black@0.6:boxborderw=18:x=(w-text_w)/2:y=h*0.38-text_h/2:` +
+        `drawtext=fontfile=${CAPTION_FONT}:text='${safe}':fontcolor=${color}:fontsize=${dim.fontsize}:` +
+        `box=1:boxcolor=black@0.6:boxborderw=18:x=(w-text_w)/2:y=${dim.captionY}-text_h/2:` +
         `alpha='if(lt(t,${s}),0,if(lt(t,${fadeEnd}),(t-${s})/${POP_IN_SECONDS},1))':` +
         `enable='between(t,${s},${end.toFixed(3)})'`
       );
@@ -98,9 +134,10 @@ export async function buildScene({ clipPath, duration, text, outPath }) {
     .join(",");
 
   const filterComplex =
-    `[0:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720` +
+    `[0:v]scale=${dim.w}:${dim.h}:force_original_aspect_ratio=increase,crop=${dim.w}:${dim.h}` +
     (captionFilters ? `,${captionFilters}` : "") +
-    `[v]`;
+    `[v]` +
+    (audioFilter ? `;${audioFilter}` : "");
 
   await run("ffmpeg", [
     "-y",
@@ -164,4 +201,4 @@ export function buildSrt(scenesWithDurations, translatedLines) {
     const ms = String(Math.floor((sec % 1) * 1000)).padStart(3, "0");
     return `${h}:${m}:${s},${ms}`;
   }
-    }
+}
