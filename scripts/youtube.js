@@ -57,11 +57,28 @@ export async function uploadThumbnail({ videoId, imagePath }) {
 
 export async function uploadCaptionTrack({ videoId, language, srtPath, name }) {
   const youtube = client();
-  await youtube.captions.insert({
-    part: ["snippet"],
-    requestBody: {
-      snippet: { videoId, language, name, isDraft: false },
-    },
-    media: { body: fs.createReadStream(srtPath) },
-  });
-      }
+  // Retry: calling captions.insert immediately after videos.insert can fail with a
+  // "video not found" style error because YouTube hasn't finished registering the upload yet.
+  // This is a known timing race, not a real error — a short backoff clears it almost always.
+  let lastErr;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      await youtube.captions.insert({
+        part: ["snippet"],
+        requestBody: {
+          snippet: { videoId, language, name, isDraft: false },
+        },
+        media: { body: fs.createReadStream(srtPath) },
+      });
+      return;
+    } catch (err) {
+      lastErr = err;
+      const isLast = attempt === 4;
+      console.warn(
+        `captions.insert (${language}): attempt ${attempt}/4 failed${isLast ? "" : ", retrying"}: ${err.message}`
+      );
+      if (!isLast) await new Promise((r) => setTimeout(r, 4000 * attempt)); // 4s, 8s, 12s
+    }
+  }
+  throw lastErr;
+}
