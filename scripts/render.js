@@ -160,6 +160,28 @@ export async function buildScene({ clipPath, duration, text, outPath, voicePath,
   return { outPath, duration };
 }
 
+// Mixes a looped background music track under a finished video's existing audio (narration +
+// ambient, already mixed by buildScene). Runs as a separate pass AFTER concatScenes rather than
+// per-scene, so the music plays continuously across scene cuts instead of restarting each scene.
+const MUSIC_VOLUME = 0.07; // quiet bed, well under the narration — not meant to be noticed
+export async function mixBackgroundMusic({ videoPath, musicPath, outPath }) {
+  const duration = await probeDuration(videoPath);
+  await run("ffmpeg", [
+    "-y",
+    "-i", videoPath,
+    "-stream_loop", "-1", "-i", musicPath, // loop the track in case it's shorter than the video
+    "-filter_complex",
+    `[1:a]volume=${MUSIC_VOLUME}[music];[0:a][music]amix=inputs=2:duration=first:normalize=0[a]`,
+    "-map", "0:v",
+    "-map", "[a]",
+    "-t", String(duration),
+    "-c:v", "copy", // video stream is untouched, no need to re-encode it
+    "-c:a", "aac",
+    outPath,
+  ]);
+  return outPath;
+}
+
 export async function concatScenes(sceneOutPaths, listFile, outPath) {
   const fs = await import("node:fs/promises");
   const content = sceneOutPaths.map((p) => `file '${path.resolve(p)}'`).join("\n");
@@ -201,4 +223,4 @@ export function buildSrt(scenesWithDurations, translatedLines) {
     const ms = String(Math.floor((sec % 1) * 1000)).padStart(3, "0");
     return `${h}:${m}:${s},${ms}`;
   }
-}
+            }
