@@ -61,6 +61,7 @@ Strict rules:
 - Explicitly mention once, naturally, that the book is available in English only.
 - End with a call to action to read the full book on the High Definition Learning Group website.
 - Do not use quotation marks of any kind inside a line's text — rephrase instead of quoting anything.
+- Mention the book's exact title, "${book.title}", naturally exactly 3 times across the whole script — once early to introduce it, once in the middle to reinforce it, and once in the closing call to action. Do not use the title any other number of times; refer to it as "the book," "this guide," or similar in between.
 - Produce between 32 and 40 scenes — more, shorter scenes than a typical script, so the visuals cut more often. Each scene's line is 3-4 sentences (roughly 40-55 words) written to be spoken naturally in about 15-22 seconds — the total script across all scenes should land around 1650-1800 words so the finished narration runs close to 10 minutes.`;
 
   const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
@@ -156,4 +157,4 @@ export async function translateMeta(title, description, targetLang) {
     title: (tTitle || title).slice(0, YT_TITLE_MAX),
     description: tDesc || description,
   };
-    }
+              }
