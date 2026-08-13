@@ -57,4 +57,4 @@ export function pickTodaysBook(date = new Date()) {
   const start = new Date(date.getFullYear(), 0, 0);
   const dayOfYear = Math.floor((date - start) / 86400000);
   return CATALOG[dayOfYear % CATALOG.length];
-    }
+  }
