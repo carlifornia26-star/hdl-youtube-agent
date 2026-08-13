@@ -15,6 +15,13 @@ const MAX_SCENE_SECONDS = 45;
 const SHORT_MIN_SECONDS = 40; // Short target window — comfortably inside YouTube's Shorts duration
 const SHORT_MAX_SECONDS = 65; // limit under either the old 60s rule or the current 3-minute one
 
+// If more than this fraction of scenes end up with no narration (Fish Audio down, key revoked,
+// the Aug 31 2026 free-model promo ending, etc.), the run still PUBLISHES everything as normal —
+// captions-only fallback is fine for an occasional flaky scene — but throws at the very end so
+// GitHub Actions shows a red X and you actually notice, instead of silently shipping an
+// all-silent video indefinitely. The throw happens after uploads, so it never blocks publishing.
+const VOICE_FAILURE_THRESHOLD = 0.2; // 20%
+
 // Cloudflare's m2m100 model uses its own short codes (zh, es, fr...) for translation —
 // those must stay untouched in VIDEO_LANGS. YouTube's localizations map, however, requires
 // proper BCP-47 tags and rejects a couple of the short codes outright (most notably plain
@@ -70,6 +77,14 @@ async function main() {
   }
 
   console.log(`Total runtime ~${Math.round(built.reduce((a, b) => a + b.duration, 0) / 60)} min`);
+
+  // Track how many scenes had no narration at all — checked at the very end of the run (see
+  // VOICE_FAILURE_THRESHOLD above), after everything has already been uploaded.
+  const voicelessCount = built.filter((b) => !b.voicePath).length;
+  const voicelessRatio = built.length ? voicelessCount / built.length : 0;
+  if (voicelessCount > 0) {
+    console.warn(`${voicelessCount}/${built.length} scenes (${Math.round(voicelessRatio * 100)}%) have no narration.`);
+  }
 
   // Soft check on the "mention the title exactly 3 times" prompt instruction — an LLM
   // following a numeric instruction isn't guaranteed, so this just makes drift visible in the
@@ -143,16 +158,16 @@ async function main() {
   await uploadThumbnail({ videoId: uploaded.id, imagePath: thumbPath });
 
   // 6c) YouTube Short — the opening few scenes (the strongest hook, since this is a teaser),
-  // re-rendered vertical (9:16) instead of a new upload. Reuses the SAME stock clips and the
-  // SAME Fish Audio narration already generated for the main video — no extra Pexels or Fish
-  // Audio calls, just a second ffmpeg pass on files already on disk. Stops accumulating scenes
-  // once it's inside the SHORT_MIN/MAX window, skipping any scene whose voice synthesis failed
-  // (no voice = no narration, and the Short is too short to carry a captions-only gap well).
+  // re-rendered vertical (9:16) instead of a new upload. Reuses the SAME stock clips already
+  // fetched for the main video — no extra Pexels calls, just a second ffmpeg pass on files
+  // already on disk. Scenes WITHOUT narration are still included (captions-only, same fallback
+  // as the main video) rather than skipped — a total Fish Audio outage should still produce a
+  // Short, just a silent one, instead of no Short at all. Stops accumulating scenes once it's
+  // inside the SHORT_MIN/MAX window.
   try {
     const shortScenes = [];
     let shortTotal = 0;
     for (const scene of built) {
-      if (!scene.voicePath) continue;
       if (shortTotal >= SHORT_MIN_SECONDS && shortTotal + scene.duration > SHORT_MAX_SECONDS) break;
       shortScenes.push(scene);
       shortTotal += scene.duration;
@@ -160,7 +175,7 @@ async function main() {
     }
 
     if (shortScenes.length === 0) {
-      console.warn("No scenes with usable voice available for a Short — skipping Short upload.");
+      console.warn("No scenes available for a Short — skipping Short upload.");
     } else {
       const shortBuilt = [];
       for (let i = 0; i < shortScenes.length; i++) {
@@ -171,7 +186,7 @@ async function main() {
           duration: s.duration,
           text: s.line,
           outPath,
-          voicePath: s.voicePath,
+          voicePath: s.voicePath, // null is fine — buildScene falls back to captions-only
           orientation: "vertical",
         });
         shortBuilt.push(built_scene.outPath);
@@ -267,6 +282,17 @@ async function main() {
   }
 
   console.log("Done.");
+
+  // Final check, after everything above has already published successfully: if too many
+  // scenes had no narration, fail the run NOW so GitHub Actions shows a red X and you get
+  // notified — the video/Short are already live, this is purely an alert, not a rollback.
+  if (voicelessRatio > VOICE_FAILURE_THRESHOLD) {
+    throw new Error(
+      `Voice synthesis failed for ${voicelessCount}/${built.length} scenes (${Math.round(voicelessRatio * 100)}%), ` +
+        `above the ${Math.round(VOICE_FAILURE_THRESHOLD * 100)}% threshold. The video and Short published anyway, ` +
+        `but check FISH_API_KEY and your Fish Audio plan/promo status — narration is likely broken.`
+    );
+  }
 }
 
 main().catch((err) => {
