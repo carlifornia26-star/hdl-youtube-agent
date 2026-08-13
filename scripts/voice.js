@@ -17,9 +17,9 @@ import fs from "node:fs/promises";
 const FISH_API_URL = "https://api.fish.audio/v1/tts";
 const FISH_MODEL_HEADER = "s2.1-pro-free";
 // Slightly faster than natural (1.0) reading pace — lets the higher word count per video fit
-// inside ~10 minutes without artificially extending runtime. 1.15 still reads as normal-paced,
-// energetic narration rather than sped-up/chipmunked; raise or lower to taste.
-const NARRATION_SPEED = 1.15;
+// inside ~10 minutes without artificially extending runtime. 1.05 is a light nudge, closer to
+// natural pace than a previous, too-brisk 1.15 — raise or lower to taste.
+const NARRATION_SPEED = 1.05;
 
 async function withRetry(label, fn, attempts = 3) {
   let lastErr;
@@ -69,4 +69,4 @@ export async function synthesizeVoice(text, outPath) {
     await fs.writeFile(outPath, buffer);
     return outPath;
   });
-}
+  }
