@@ -28,4 +28,4 @@ export async function fetchStockClip(keyword, outPath, index = 0) {
   const buf = Buffer.from(await clip.arrayBuffer());
   await fs.writeFile(outPath, buf);
   return outPath;
-     }
+    }
