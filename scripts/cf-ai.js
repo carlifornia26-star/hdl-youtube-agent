@@ -2,10 +2,11 @@ import fetch from "node-fetch";
 
 const BASE = (accountId) => `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run`;
 
-// Workers AI occasionally returns transient 500s (e.g. internal error code 3043) that
-// succeed on retry — this is a known, documented-nowhere flakiness on Cloudflare's side,
-// not something a request change fixes. Retry a few times with backoff before giving up.
-async function withRetry(label, fn, attempts = 3) {
+// Workers AI occasionally returns transient errors (ECONNRESET, 408 timeout, 504 upstream
+// unavailable) that succeed on retry — this is known, documented-nowhere flakiness on
+// Cloudflare's side, worse under load for large/slow completions. 5 attempts with exponential
+// backoff (2s, 4s, 8s, 16s, 30s) gives real overload room to clear instead of giving up in ~6s.
+async function withRetry(label, fn, attempts = 5) {
   let lastErr;
   for (let i = 1; i <= attempts; i++) {
     try {
@@ -15,7 +16,8 @@ async function withRetry(label, fn, attempts = 3) {
       const isLast = i === attempts;
       console.error(`${label}: attempt ${i}/${attempts} failed${isLast ? "" : ", retrying"}: ${err.message}`);
       if (!isLast) {
-        await new Promise((r) => setTimeout(r, 1000 * i)); // 1s, 2s, ...
+        const delay = Math.min(30000, 2000 * 2 ** (i - 1)); // 2s, 4s, 8s, 16s, 30s
+        await new Promise((r) => setTimeout(r, delay));
       }
     }
   }
@@ -43,56 +45,7 @@ async function run(model, body) {
   });
 }
 
-// Produces a teaser script: an array of { line } scenes. Each line is BOTH spoken (Fish Audio
-// TTS, voice.js) and burned in as MrBeast-style flowing word-chunk captions (render.js) synced
-// to the actual narration audio. Scene duration comes directly from how long the voice line
-// takes to speak, so total runtime is only as close to 10 minutes as total word count + Fish
-// Audio's narration speed (voice.js NARRATION_SPEED) gets it. Target ~1650-1800 spoken words
-// across 32-40 scenes (more, shorter scenes than before — more Pexels clip variety per minute)
-// tuned against NARRATION_SPEED=1.15 to land near 600s.
-export async function generateScript(book) {
-  const prompt = `You are writing a 10-minute YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group.
-
-This video has a spoken AI narrator voice reading each scene's line aloud, with the same words also burned in on screen as fast-paced flowing captions timed to the narration. Write each line to sound natural when spoken aloud — short, punchy, declarative sentences work best both for narration pacing and for the on-screen caption bursts.
-
-Strict rules:
-- This is a TEASER, not a summary. Never reveal specific chapters, frameworks, numbered steps, or concrete conclusions from the book.
-- Build curiosity: pose the problem the book addresses, why it matters right now, and what kind of reader it's for — without giving away the answers.
-- Explicitly mention once, naturally, that the book is available in English only.
-- End with a call to action to read the full book on the High Definition Learning Group website.
-- Do not use quotation marks of any kind inside a line's text — rephrase instead of quoting anything.
-- Mention the book's exact title, "${book.title}", naturally exactly 3 times across the whole script — once early to introduce it, once in the middle to reinforce it, and once in the closing call to action. Do not use the title any other number of times; refer to it as "the book," "this guide," or similar in between.
-- Produce between 32 and 40 scenes — more, shorter scenes than a typical script, so the visuals cut more often. Each scene's line is 3-4 sentences (roughly 40-55 words) written to be spoken naturally in about 15-22 seconds — the total script across all scenes should land around 1650-1800 words so the finished narration runs close to 10 minutes.`;
-
-  const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
-    messages: [{ role: "user", content: prompt }],
-    max_tokens: 5000, // raised — more scenes (32-40) and a higher total word target (~1650-1800) than before
-    // JSON Schema mode: Cloudflare validates/parses the output server-side, so we get
-    // back a real object instead of free text that can contain JSON-breaking characters
-    // (e.g. an unescaped quote inside a sentence) that trips a manual JSON.parse.
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        type: "object",
-        properties: {
-          scenes: {
-            type: "array",
-            minItems: 32,
-            maxItems: 40,
-            items: {
-              type: "object",
-              properties: { line: { type: "string" } },
-              required: ["line"],
-            },
-          },
-        },
-        required: ["scenes"],
-      },
-    },
-  });
-
-  // In JSON Schema mode, result.response is already a parsed object: { scenes: [...] }.
-  // Fall back to treating it as a JSON string (older behavior / other model configs) for safety.
+function extractScenes(result) {
   let scenes;
   if (result?.response && typeof result.response === "object" && Array.isArray(result.response.scenes)) {
     scenes = result.response.scenes;
@@ -115,9 +68,85 @@ Strict rules:
     }
     scenes = Array.isArray(parsed) ? parsed : parsed?.scenes;
   }
-
   if (!Array.isArray(scenes) || scenes.length === 0) throw new Error("Script generation returned no scenes");
   return scenes.map((s) => ({ line: s.line }));
+}
+
+// One batch of the teaser script. Kept deliberately smaller than a full 32-40 scene script —
+// large single completions (max_tokens 5000, JSON-schema-constrained) are what was timing out
+// upstream (408/504) under Workers AI load. Two ~half-size batches finish faster individually
+// and are far less likely to hit that ceiling. `titleMentions` and `includeCTA` split the
+// original "mention the title exactly 3 times, end with a CTA" rule across the two batches so
+// the combined script still gets it right.
+async function generateScriptBatch(book, { minScenes, maxScenes, wordLow, wordHigh, titleMentions, includeCTA, partLabel }) {
+  const prompt = `You are writing PART ${partLabel} of a 10-minute YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group.
+
+This video has a spoken AI narrator voice reading each scene's line aloud, with the same words also burned in on screen as fast-paced flowing captions timed to the narration. Write each line to sound natural when spoken aloud — short, punchy, declarative sentences work best both for narration pacing and for the on-screen caption bursts.
+
+Strict rules:
+- This is a TEASER, not a summary. Never reveal specific chapters, frameworks, numbered steps, or concrete conclusions from the book.
+- Build curiosity: pose the problem the book addresses, why it matters right now, and what kind of reader it's for — without giving away the answers.
+- Do not use quotation marks of any kind inside a line's text — rephrase instead of quoting anything.
+- Mention the book's exact title, "${book.title}", naturally exactly ${titleMentions} time${titleMentions === 1 ? "" : "s"} across this part. Do not use the title any other number of times; refer to it as "the book," "this guide," or similar otherwise.
+${includeCTA
+    ? '- This is the FINAL part. End with a call to action to read the full book on the High Definition Learning Group website, and mention once, naturally, that the book is available in English only.'
+    : "- This is NOT the final part — do not include a closing call to action yet, the script continues after this."}
+- Produce between ${minScenes} and ${maxScenes} scenes. Each scene's line is 3-4 sentences (roughly 40-55 words) written to be spoken naturally in about 15-22 seconds — this part's total word count should land around ${wordLow}-${wordHigh} words.`;
+
+  const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
+    messages: [{ role: "user", content: prompt }],
+    max_tokens: 2700, // roughly half the old single-call budget — smaller, faster completions
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        type: "object",
+        properties: {
+          scenes: {
+            type: "array",
+            minItems: minScenes,
+            maxItems: maxScenes,
+            items: {
+              type: "object",
+              properties: { line: { type: "string" } },
+              required: ["line"],
+            },
+          },
+        },
+        required: ["scenes"],
+      },
+    },
+  });
+
+  return extractScenes(result);
+}
+
+// Produces a teaser script: an array of { line } scenes, built from two smaller batches (see
+// generateScriptBatch) instead of one large 32-40 scene call. Target ~1650-1800 spoken words
+// total across 32-40 scenes, tuned against NARRATION_SPEED=1.15 in voice.js to land near 600s.
+export async function generateScript(book) {
+  const part1 = await generateScriptBatch(book, {
+    minScenes: 16,
+    maxScenes: 20,
+    wordLow: 825,
+    wordHigh: 900,
+    titleMentions: 2, // once early to introduce it, once in the middle to reinforce it
+    includeCTA: false,
+    partLabel: "1 of 2",
+  });
+
+  const part2 = await generateScriptBatch(book, {
+    minScenes: 16,
+    maxScenes: 20,
+    wordLow: 825,
+    wordHigh: 900,
+    titleMentions: 1, // once in the closing call to action
+    includeCTA: true,
+    partLabel: "2 of 2",
+  });
+
+  const scenes = [...part1, ...part2];
+  console.log(`Script generated in 2 batches: ${part1.length} + ${part2.length} = ${scenes.length} scenes`);
+  return scenes;
 }
 
 // Translates {title, description} into a small set of target languages for YouTube `localizations`.
@@ -157,4 +186,4 @@ export async function translateMeta(title, description, targetLang) {
     title: (tTitle || title).slice(0, YT_TITLE_MAX),
     description: tDesc || description,
   };
-              }
+                               }
