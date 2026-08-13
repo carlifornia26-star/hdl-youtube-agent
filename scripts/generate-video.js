@@ -4,7 +4,8 @@ import { pickTodaysBook } from "./catalog.js";
 import { generateScript, translateMeta, VIDEO_LANGS } from "./cf-ai.js";
 import { fetchStockClip } from "./assets.js";
 import { synthesizeVoice } from "./voice.js";
-import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration } from "./render.js";
+import { fetchBackgroundMusic, attributionLine } from "./music.js";
+import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic } from "./render.js";
 import { uploadVideo, uploadCaptionTrack, uploadThumbnail } from "./youtube.js";
 
 const BUILD_DIR = path.resolve("build");
@@ -70,27 +71,56 @@ async function main() {
 
   console.log(`Total runtime ~${Math.round(built.reduce((a, b) => a + b.duration, 0) / 60)} min`);
 
+  // Soft check on the "mention the title exactly 3 times" prompt instruction — an LLM
+  // following a numeric instruction isn't guaranteed, so this just makes drift visible in the
+  // log rather than silently trusting the model got it right.
+  const titleMentions = built
+    .map((b) => b.line.toLowerCase().split(book.title.toLowerCase()).length - 1)
+    .reduce((a, b) => a + b, 0);
+  if (titleMentions !== 3) {
+    console.warn(`Expected the title mentioned exactly 3 times, script actually has ${titleMentions}.`);
+  }
+
   // 3) Concat scenes — each scene already has its narration mixed in, no separate mix step needed
   const listFile = path.join(BUILD_DIR, "concat.txt");
   const finalPath = path.join(BUILD_DIR, "final.mp4");
   await concatScenes(built.map((b) => b.outPath), listFile, finalPath);
 
+  // 3b) Background music — a real, free, attribution-licensed track (see music.js), mixed in
+  // as a quiet bed under the narration that's already in finalPath. If the download or mix
+  // fails for any reason, fall back to uploading without music rather than failing the run.
+  let musicTrack = null;
+  let uploadPath = finalPath;
+  try {
+    const musicPath = path.join(BUILD_DIR, "music.mp3");
+    musicTrack = await fetchBackgroundMusic(musicPath);
+    const musicOutPath = path.join(BUILD_DIR, "final_with_music.mp4");
+    await mixBackgroundMusic({ videoPath: finalPath, musicPath, outPath: musicOutPath });
+    uploadPath = musicOutPath;
+  } catch (e) {
+    console.warn("Background music failed, uploading without it:", e.message);
+  }
+
   // 4) English metadata
   const enTitle = `${book.title} — ${book.angle} | HDL Group`;
-  const enDescription =
+  let enDescription =
     `${book.title} explores ${book.angle}. Available in English only, exclusively on Google Play Books.\n` +
     `Read the full book: ${book.pageUrl}\n\n` +
     `#HDLGroup #${book.slug.replace(/-/g, "")}`;
+  if (musicTrack) enDescription += `\n\n${attributionLine(musicTrack)}`;
 
   // 5) Translated titles/descriptions -> YouTube localizations map
   // Translate with Cloudflare's own code (`lang`), but key the localizations object with
   // the YouTube-safe code (`ytLang`) so a mismatch like "zh" vs "zh-Hans" can't happen.
+  // The music attribution line is appended AFTER translation, untranslated — it's a legal
+  // credit line with a proper name and URL, not something to risk a translation model mangling.
   const localizations = {};
   for (const lang of VIDEO_LANGS) {
     const ytLang = YT_LOCALE_MAP[lang] ?? lang;
     try {
       const t = await translateMeta(enTitle, enDescription, lang);
-      localizations[ytLang] = { title: t.title, description: t.description };
+      const description = musicTrack ? `${t.description}\n\n${attributionLine(musicTrack)}` : t.description;
+      localizations[ytLang] = { title: t.title, description };
     } catch (e) {
       console.warn(`Translation failed for ${lang}, skipping:`, e.message);
     }
@@ -98,7 +128,7 @@ async function main() {
 
   // 6) Upload video
   const uploaded = await uploadVideo({
-    videoPath: finalPath,
+    videoPath: uploadPath,
     title: enTitle,
     description: enDescription,
     tags: [book.title, "HDL Group", book.angle, "ebook"],
@@ -151,19 +181,46 @@ async function main() {
       const shortFinalPath = path.join(BUILD_DIR, "short.mp4");
       await concatScenes(shortBuilt, shortListFile, shortFinalPath);
 
+      // Same track as the main video today, already downloaded — just mix it in again.
+      let shortUploadPath = shortFinalPath;
+      if (musicTrack) {
+        try {
+          const musicPath = path.join(BUILD_DIR, "music.mp3");
+          const shortMusicOutPath = path.join(BUILD_DIR, "short_with_music.mp4");
+          await mixBackgroundMusic({ videoPath: shortFinalPath, musicPath, outPath: shortMusicOutPath });
+          shortUploadPath = shortMusicOutPath;
+        } catch (e) {
+          console.warn("Short background music failed, uploading without it:", e.message);
+        }
+      }
+
       const shortTitle = `${book.title} #Shorts`.slice(0, 100); // YouTube's 100-char title cap
-      const shortDescription =
+      let shortDescription =
         `${book.title} — ${book.angle}.\n` +
         `Watch the full video: https://youtube.com/watch?v=${uploaded.id}\n` +
         `Read the full book: ${book.pageUrl}\n\n` +
         `#Shorts #HDLGroup #${book.slug.replace(/-/g, "")}`;
+      if (musicTrack) shortDescription += `\n\n${attributionLine(musicTrack)}`;
+
+      // Translated title/description, matching the main video — same 15 languages + English.
+      const shortLocalizations = {};
+      for (const lang of VIDEO_LANGS) {
+        const ytLang = YT_LOCALE_MAP[lang] ?? lang;
+        try {
+          const t = await translateMeta(shortTitle, shortDescription, lang);
+          const description = musicTrack ? `${t.description}\n\n${attributionLine(musicTrack)}` : t.description;
+          shortLocalizations[ytLang] = { title: t.title, description };
+        } catch (e) {
+          console.warn(`Short translation failed for ${lang}, skipping:`, e.message);
+        }
+      }
 
       const uploadedShort = await uploadVideo({
-        videoPath: shortFinalPath,
+        videoPath: shortUploadPath,
         title: shortTitle,
         description: shortDescription,
         tags: [book.title, "HDL Group", book.angle, "Shorts"],
-        localizations: {}, // English only for now — see SETUP.md
+        localizations: shortLocalizations,
       });
       console.log(`Uploaded Short (~${Math.round(shortTotal)}s): https://youtube.com/watch?v=${uploadedShort.id}`);
     }
@@ -174,10 +231,21 @@ async function main() {
 
   // 7) Caption tracks — English first, then translated languages (reusing the same scene lines).
   // These mirror the spoken narration on screen, and are the only thing viewers watching muted see.
+  // A short wait before the first caption call: calling captions.insert immediately after
+  // videos.insert can otherwise hit YouTube before it's finished registering the new video
+  // (uploadCaptionTrack also retries internally — this just makes the first attempt more
+  // likely to succeed). Every caption upload is wrapped in try/catch: a caption failure should
+  // never take down the run — the video has already uploaded successfully by this point.
+  await new Promise((r) => setTimeout(r, 5000));
+
   const enSrt = buildSrt(built, built.map((b) => b.line));
   const enSrtPath = path.join(BUILD_DIR, "captions_en.srt");
   await fs.writeFile(enSrtPath, enSrt);
-  await uploadCaptionTrack({ videoId: uploaded.id, language: "en", srtPath: enSrtPath, name: "English" });
+  try {
+    await uploadCaptionTrack({ videoId: uploaded.id, language: "en", srtPath: enSrtPath, name: "English" });
+  } catch (e) {
+    console.warn("English caption upload failed:", e.message);
+  }
 
   for (const lang of VIDEO_LANGS) {
     const ytLang = YT_LOCALE_MAP[lang] ?? lang;
