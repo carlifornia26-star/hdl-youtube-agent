@@ -9,6 +9,7 @@ import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, m
 import { uploadVideo, uploadCaptionTrack, uploadThumbnail } from "./youtube.js";
 
 const BUILD_DIR = path.resolve("build");
+const SITE_URL = "https://highdefinitionlearning.pages.dev/"; // every description link points here, not the per-book page
 const PADDING_SECONDS = 0.8; // per-scene buffer after the voice line finishes, before the next scene cuts in
 const MIN_SCENE_SECONDS = 4;
 const MAX_SCENE_SECONDS = 45;
@@ -120,7 +121,7 @@ async function main() {
   const enTitle = `${book.title} — ${book.angle} | HDL Group`;
   let enDescription =
     `${book.title} explores ${book.angle}. Available in English only, exclusively on Google Play Books.\n` +
-    `Read the full book: ${book.pageUrl}\n\n` +
+    `Read the full book: ${SITE_URL}\n\n` +
     `#HDLGroup #${book.slug.replace(/-/g, "")}`;
   if (musicTrack) enDescription += `\n\n${attributionLine(musicTrack)}`;
 
@@ -213,7 +214,7 @@ async function main() {
       let shortDescription =
         `${book.title} — ${book.angle}.\n` +
         `Watch the full video: https://youtube.com/watch?v=${uploaded.id}\n` +
-        `Read the full book: ${book.pageUrl}\n\n` +
+        `Read the full book: ${SITE_URL}\n\n` +
         `#Shorts #HDLGroup #${book.slug.replace(/-/g, "")}`;
       if (musicTrack) shortDescription += `\n\n${attributionLine(musicTrack)}`;
 
