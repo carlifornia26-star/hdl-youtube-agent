@@ -1,4 +1,4 @@
-hereimport fetch from "node-fetch";
+import fetch from "node-fetch";
 
 const BASE = (accountId) => `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run`;
 
@@ -183,4 +183,4 @@ export async function translateMeta(title, description, targetLang) {
     title: (tTitle || title).slice(0, YT_TITLE_MAX),
     description: (tDesc || description).slice(0, YT_DESCRIPTION_MAX),
   };
-  }
+                   }
