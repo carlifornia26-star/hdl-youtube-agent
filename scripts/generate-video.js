@@ -138,25 +138,33 @@ async function main() {
 
   // 4) English metadata
   const enTitle = `${book.title} — ${book.angle} | HDL Group`;
-  let enDescription =
+  // Base description is the ONLY part that ever goes to the translation model. Credit lines
+  // (music + thumbnail) contain proper names and raw URLs/query strings that a translation
+  // model will happily mangle (corrupted domains, translated query-param values, and — with
+  // long repeated legal boilerplate like this — occasional runaway repetition loops that blow
+  // past YouTube's description length limit and fail the whole upload with a generic
+  // "invalidVideoMetadata" error). So: build attribution separately, translate only the base,
+  // and append attribution AFTER translation, untranslated, for every language including English.
+  const baseDescription =
     `${book.title} explores ${book.angle}. Available in English only, exclusively on Google Play Books.\n` +
     `Read the full book: ${SITE_URL}\n\n` +
     `#HDLGroup #${book.slug.replace(/-/g, "")}`;
-  if (musicTrack) enDescription += `\n\n${attributionLine(musicTrack)}`;
-  if (thumbAttribution) enDescription += `\n\n${unsplashAttributionLine(thumbAttribution)}`;
+  let attributionSuffix = "";
+  if (musicTrack) attributionSuffix += `\n\n${attributionLine(musicTrack)}`;
+  if (thumbAttribution) attributionSuffix += `\n\n${unsplashAttributionLine(thumbAttribution)}`;
+  const enDescription = baseDescription + attributionSuffix;
 
   // 5) Translated titles/descriptions -> YouTube localizations map
   // Translate with Cloudflare's own code (`lang`), but key the localizations object with
   // the YouTube-safe code (`ytLang`) so a mismatch like "zh" vs "zh-Hans" can't happen.
-  // Both attribution lines are appended AFTER translation, untranslated — they're credit lines
-  // with proper names and URLs, not something to risk a translation model mangling.
+  // Only baseDescription is translated — attributionSuffix is appended AFTER, untranslated,
+  // exactly once (see comment above).
   const localizations = {};
   for (const lang of VIDEO_LANGS) {
     const ytLang = YT_LOCALE_MAP[lang] ?? lang;
     try {
-      const t = await translateMeta(enTitle, enDescription, lang);
-      let description = musicTrack ? `${t.description}\n\n${attributionLine(musicTrack)}` : t.description;
-      if (thumbAttribution) description += `\n\n${unsplashAttributionLine(thumbAttribution)}`;
+      const t = await translateMeta(enTitle, baseDescription, lang);
+      const description = t.description + attributionSuffix;
       localizations[ytLang] = { title: t.title, description };
     } catch (e) {
       console.warn(`Translation failed for ${lang}, skipping:`, e.message);
@@ -229,20 +237,23 @@ async function main() {
       }
 
       const shortTitle = `${book.title} #Shorts`.slice(0, 100); // YouTube's 100-char title cap
-      let shortDescription =
+      const shortBaseDescription =
         `${book.title} — ${book.angle}.\n` +
         `Watch the full video: https://youtube.com/watch?v=${uploaded.id}\n` +
         `Read the full book: ${SITE_URL}\n\n` +
         `#Shorts #HDLGroup #${book.slug.replace(/-/g, "")}`;
-      if (musicTrack) shortDescription += `\n\n${attributionLine(musicTrack)}`;
+      const shortAttributionSuffix = musicTrack ? `\n\n${attributionLine(musicTrack)}` : "";
+      const shortDescription = shortBaseDescription + shortAttributionSuffix;
 
       // Translated title/description, matching the main video — same 15 languages + English.
+      // Same rule as the main video: only the base (translatable) text goes to the model;
+      // the credit line is appended after, untranslated.
       const shortLocalizations = {};
       for (const lang of VIDEO_LANGS) {
         const ytLang = YT_LOCALE_MAP[lang] ?? lang;
         try {
-          const t = await translateMeta(shortTitle, shortDescription, lang);
-          const description = musicTrack ? `${t.description}\n\n${attributionLine(musicTrack)}` : t.description;
+          const t = await translateMeta(shortTitle, shortBaseDescription, lang);
+          const description = t.description + shortAttributionSuffix;
           shortLocalizations[ytLang] = { title: t.title, description };
         } catch (e) {
           console.warn(`Short translation failed for ${lang}, skipping:`, e.message);
