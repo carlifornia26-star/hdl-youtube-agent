@@ -28,4 +28,45 @@ export async function fetchStockClip(keyword, outPath, index = 0) {
   const buf = Buffer.from(await clip.arrayBuffer());
   await fs.writeFile(outPath, buf);
   return outPath;
-    }
+}
+
+// Unsplash: free forever, 50 requests/hour on the demo tier — plenty for the ~1 call/day this
+// makes. Photos are free for commercial use under the Unsplash License, but the API Guidelines
+// separately require (a) crediting the photographer + Unsplash with a link when a photo pulled
+// via the API is displayed, and (b) pinging the download-tracking endpoint whenever a photo is
+// actually used, not just searched. Both handled here — see unsplashAttributionLine() below,
+// appended to the video description the same way music.js's attribution line is.
+export async function fetchUnsplashPhoto(keyword, outPath, index = 0) {
+  const accessKey = process.env.UNSPLASH_ACCESS_KEY;
+  const searchRes = await fetch(
+    `https://api.unsplash.com/search/photos?query=${encodeURIComponent(keyword)}&orientation=landscape&per_page=10`,
+    { headers: { Authorization: `Client-ID ${accessKey}` } }
+  );
+  if (!searchRes.ok) throw new Error(`Unsplash search failed: ${searchRes.status}`);
+  const data = await searchRes.json();
+  const results = data.results || [];
+  if (results.length === 0) throw new Error(`No Unsplash results for "${keyword}"`);
+  const photo = results[index % results.length];
+
+  const imgRes = await fetch(photo.urls.regular);
+  if (!imgRes.ok) throw new Error(`Unsplash image download failed: ${imgRes.status}`);
+  const buf = Buffer.from(await imgRes.arrayBuffer());
+  await fs.writeFile(outPath, buf);
+
+  // Required by the API Guidelines whenever a photo is actually used — best-effort, a failure
+  // here shouldn't fail the run since the image itself already downloaded successfully.
+  try {
+    await fetch(`${photo.links.download_location}&client_id=${accessKey}`);
+  } catch (e) {
+    console.warn("Unsplash download-tracking ping failed (non-fatal):", e.message);
+  }
+
+  return {
+    photographerName: photo.user.name,
+    photographerProfileUrl: `${photo.user.links.html}?utm_source=hdl_group&utm_medium=referral`,
+  };
+}
+
+export function unsplashAttributionLine({ photographerName, photographerProfileUrl }) {
+  return `Thumbnail photo by ${photographerName} on Unsplash (${photographerProfileUrl})`;
+      }
