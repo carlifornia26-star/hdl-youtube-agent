@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { pickTodaysBook } from "./catalog.js";
 import { generateScript, translateMeta, VIDEO_LANGS } from "./cf-ai.js";
-import { fetchStockClip } from "./assets.js";
+import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./assets.js";
 import { synthesizeVoice } from "./voice.js";
 import { fetchBackgroundMusic, attributionLine } from "./music.js";
 import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic } from "./render.js";
@@ -117,6 +117,25 @@ async function main() {
     console.warn("Background music failed, uploading without it:", e.message);
   }
 
+  // 3c) Thumbnail image — a real Unsplash photo matching the book's topic, with the title
+  // overlaid, instead of a grabbed video frame (which can land on an awkward or blurry moment).
+  // Falls back to the old video-frame approach if Unsplash fails for any reason (missing key,
+  // rate limit, network hiccup) so a thumbnail always gets set either way. Done here, BEFORE
+  // metadata is built, so the photographer attribution (if any) can be included in the
+  // description — uploadThumbnail itself still happens later, once a videoId exists.
+  const thumbPath = path.join(BUILD_DIR, "thumbnail.jpg");
+  let thumbAttribution = null;
+  try {
+    const thumbKeyword = book.stockKeywords[0];
+    const thumbPhotoPath = path.join(BUILD_DIR, "thumb_photo.jpg");
+    thumbAttribution = await fetchUnsplashPhoto(thumbKeyword, thumbPhotoPath, Math.floor(scenes.length / 2));
+    await generateThumbnail({ imagePath: thumbPhotoPath, title: book.title, outPath: thumbPath });
+  } catch (e) {
+    console.warn("Unsplash thumbnail failed, falling back to a video frame:", e.message);
+    const midClip = path.join(BUILD_DIR, `clip_${Math.floor(scenes.length / 2)}.mp4`);
+    await generateThumbnail({ imagePath: midClip, title: book.title, outPath: thumbPath });
+  }
+
   // 4) English metadata
   const enTitle = `${book.title} — ${book.angle} | HDL Group`;
   let enDescription =
@@ -124,18 +143,20 @@ async function main() {
     `Read the full book: ${SITE_URL}\n\n` +
     `#HDLGroup #${book.slug.replace(/-/g, "")}`;
   if (musicTrack) enDescription += `\n\n${attributionLine(musicTrack)}`;
+  if (thumbAttribution) enDescription += `\n\n${unsplashAttributionLine(thumbAttribution)}`;
 
   // 5) Translated titles/descriptions -> YouTube localizations map
   // Translate with Cloudflare's own code (`lang`), but key the localizations object with
   // the YouTube-safe code (`ytLang`) so a mismatch like "zh" vs "zh-Hans" can't happen.
-  // The music attribution line is appended AFTER translation, untranslated — it's a legal
-  // credit line with a proper name and URL, not something to risk a translation model mangling.
+  // Both attribution lines are appended AFTER translation, untranslated — they're credit lines
+  // with proper names and URLs, not something to risk a translation model mangling.
   const localizations = {};
   for (const lang of VIDEO_LANGS) {
     const ytLang = YT_LOCALE_MAP[lang] ?? lang;
     try {
       const t = await translateMeta(enTitle, enDescription, lang);
-      const description = musicTrack ? `${t.description}\n\n${attributionLine(musicTrack)}` : t.description;
+      let description = musicTrack ? `${t.description}\n\n${attributionLine(musicTrack)}` : t.description;
+      if (thumbAttribution) description += `\n\n${unsplashAttributionLine(thumbAttribution)}`;
       localizations[ytLang] = { title: t.title, description };
     } catch (e) {
       console.warn(`Translation failed for ${lang}, skipping:`, e.message);
@@ -152,10 +173,7 @@ async function main() {
   });
   console.log(`Uploaded: https://youtube.com/watch?v=${uploaded.id}`);
 
-  // 6b) Custom thumbnail — grabs a frame from the middle scene, overlays the book title
-  const midClip = path.join(BUILD_DIR, `clip_${Math.floor(scenes.length / 2)}.mp4`);
-  const thumbPath = path.join(BUILD_DIR, "thumbnail.jpg");
-  await generateThumbnail({ clipPath: midClip, title: book.title, outPath: thumbPath });
+  // 6b) Upload the thumbnail generated back in step 3c
   await uploadThumbnail({ videoId: uploaded.id, imagePath: thumbPath });
 
   // 6c) YouTube Short — the opening few scenes (the strongest hook, since this is a teaser),
