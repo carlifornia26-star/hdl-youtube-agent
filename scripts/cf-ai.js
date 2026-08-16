@@ -43,33 +43,24 @@ async function run(model, body) {
   });
 }
 
-// Produces a teaser script: an array of { line } scenes. Each line is BOTH spoken (Fish Audio
-// TTS, voice.js) and burned in as MrBeast-style flowing word-chunk captions (render.js) synced
-// to the actual narration audio. Scene duration comes directly from how long the voice line
-// takes to speak, so total runtime is only as close to 10 minutes as total word count + Fish
-// Audio's narration speed (voice.js NARRATION_SPEED) gets it. Target ~1650-1800 spoken words
-// across 32-40 scenes (more, shorter scenes than before — more Pexels clip variety per minute)
-// tuned against NARRATION_SPEED=1.15 to land near 600s.
-export async function generateScript(book) {
-  const prompt = `You are writing a 10-minute YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group.
+// Produces a teaser script: an array of { line } scenes. Each line is BOTH spoken (Kokoro TTS,
+// voice.js) and burned in as MrBeast-style flowing word-chunk captions (render.js) synced to
+// the actual narration audio. Scene duration comes directly from how long the voice line
+// actually takes to speak (measured after synthesis, see generate-video.js) — the scene/word
+// counts below are a starting target aimed at landing near 10 minutes, not a guarantee, since
+// the exact reading pace depends on the TTS voice. generate-video.js measures the REAL total
+// runtime after synthesis and tops it up with generateBonusScenes() below if it still lands
+// short, so the finished video's length isn't purely at the mercy of these targets.
+const SCRIPT_MIN_SCENES = 36;
+const SCRIPT_MAX_SCENES = 46;
 
-This video has a spoken AI narrator voice reading each scene's line aloud, with the same words also burned in on screen as fast-paced flowing captions timed to the narration. Write each line to sound natural when spoken aloud — short, punchy, declarative sentences work best both for narration pacing and for the on-screen caption bursts.
-
-Strict rules:
-- This is a TEASER, not a summary. Never reveal specific chapters, frameworks, numbered steps, or concrete conclusions from the book.
-- Build curiosity: pose the problem the book addresses, why it matters right now, and what kind of reader it's for — without giving away the answers.
-- Explicitly mention once, naturally, that the book is available in English only.
-- End with a call to action to read the full book on the High Definition Learning Group website.
-- Do not use quotation marks of any kind inside a line's text — rephrase instead of quoting anything.
-- Mention the book's exact title, "${book.title}", naturally exactly 3 times across the whole script — once early to introduce it, once in the middle to reinforce it, and once in the closing call to action. Do not use the title any other number of times; refer to it as "the book," "this guide," or similar in between.
-- Produce between 32 and 40 scenes — more, shorter scenes than a typical script, so the visuals cut more often. Each scene's line is 3-4 sentences (roughly 40-55 words) written to be spoken naturally in about 15-22 seconds — the total script across all scenes should land around 1650-1800 words so the finished narration runs close to 10 minutes.`;
-
+// Shared by generateScript and generateBonusScenes — requests a `{ scenes: [{line}] }` array
+// via Workers AI's JSON Schema mode (validated/parsed server-side, so no manual JSON.parse
+// tripping over an unescaped quote in a sentence) and normalizes the response shape.
+async function requestSceneScript(prompt, minItems, maxItems, maxTokens) {
   const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
     messages: [{ role: "user", content: prompt }],
-    max_tokens: 5000, // raised — more scenes (32-40) and a higher total word target (~1650-1800) than before
-    // JSON Schema mode: Cloudflare validates/parses the output server-side, so we get
-    // back a real object instead of free text that can contain JSON-breaking characters
-    // (e.g. an unescaped quote inside a sentence) that trips a manual JSON.parse.
+    max_tokens: maxTokens,
     response_format: {
       type: "json_schema",
       json_schema: {
@@ -77,8 +68,8 @@ Strict rules:
         properties: {
           scenes: {
             type: "array",
-            minItems: 32,
-            maxItems: 40,
+            minItems,
+            maxItems,
             items: {
               type: "object",
               properties: { line: { type: "string" } },
@@ -118,6 +109,44 @@ Strict rules:
 
   if (!Array.isArray(scenes) || scenes.length === 0) throw new Error("Script generation returned no scenes");
   return scenes.map((s) => ({ line: s.line }));
+}
+
+export async function generateScript(book) {
+  const prompt = `You are writing a 10-minute YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group.
+
+This video has a spoken AI narrator voice reading each scene's line aloud, with the same words also burned in on screen as fast-paced flowing captions timed to the narration. Write each line to sound natural when spoken aloud — short, punchy, declarative sentences work best both for narration pacing and for the on-screen caption bursts.
+
+Strict rules:
+- This is a TEASER, not a summary. Never reveal specific chapters, frameworks, numbered steps, or concrete conclusions from the book.
+- Build curiosity: pose the problem the book addresses, why it matters right now, and what kind of reader it's for — without giving away the answers.
+- Explicitly mention once, naturally, that the book is available in English only.
+- End with a call to action to read the full book on the High Definition Learning Group website.
+- Do not use quotation marks of any kind inside a line's text — rephrase instead of quoting anything.
+- Mention the book's exact title, "${book.title}", naturally exactly 3 times across the whole script — once early to introduce it, once in the middle to reinforce it, and once in the closing call to action. Do not use the title any other number of times; refer to it as "the book," "this guide," or similar in between.
+- Produce between ${SCRIPT_MIN_SCENES} and ${SCRIPT_MAX_SCENES} scenes — more, shorter scenes than a typical script, so the visuals cut more often. Each scene's line is 3-4 sentences (roughly 40-55 words) written to be spoken naturally in about 15-22 seconds — the total script across all scenes should land around 2000-2300 words so the finished narration runs close to 10 minutes.`;
+
+  return requestSceneScript(prompt, SCRIPT_MIN_SCENES, SCRIPT_MAX_SCENES, 6000);
+}
+
+// Called by generate-video.js only when the built video still lands under the 8-minute target
+// after the main script's scenes have all been synthesized and their REAL durations measured.
+// Requests `count` ADDITIONAL scenes to insert into the video — no title mention, no CTA, no
+// "English only" line (all three are already covered by the main script and are checked for
+// separately) — so these can just be appended to the existing scene list with no bookkeeping.
+export async function generateBonusScenes(book, count) {
+  const prompt = `You are extending an existing YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group. The intro, main body, and closing call-to-action already exist — you're writing ${count} ADDITIONAL supporting scenes to insert into the video, deepening the curiosity without revealing the book's actual chapters, frameworks, steps, or conclusions.
+
+Same style as the rest of the video: an AI narrator speaks each line aloud, natural and punchy, with the same words burned in on screen as fast-paced captions.
+
+Strict rules:
+- Do NOT use the book's title, "${book.title}" — refer to it only as "the book," "this guide," or similar; the title is already covered elsewhere in the video.
+- Do NOT include a call to action or say where to read/buy it — that's already covered elsewhere.
+- Do NOT restate that it's available in English only — that's already covered elsewhere.
+- Do NOT use quotation marks of any kind inside a line's text.
+- Each scene's line is 3-4 sentences (roughly 40-55 words), written to be spoken naturally in about 15-22 seconds.
+- Produce exactly ${count} scenes building curiosity about who this book helps, what problem it solves, and why it matters right now — varied angles, no two scenes making the same point.`;
+
+  return requestSceneScript(prompt, count, count, 3000);
 }
 
 // Translates {title, description} into a small set of target languages for YouTube `localizations`.
@@ -183,4 +212,4 @@ export async function translateMeta(title, description, targetLang) {
     title: (tTitle || title).slice(0, YT_TITLE_MAX),
     description: (tDesc || description).slice(0, YT_DESCRIPTION_MAX),
   };
-                   }
+                                         }
