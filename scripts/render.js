@@ -190,15 +190,15 @@ export async function concatScenes(sceneOutPaths, listFile, outPath) {
   return outPath;
 }
 
-export async function generateThumbnail({ imagePath, title, outPath }) {
-  const safeTitle = escapeDrawtext(title.toUpperCase());
+// Clean thumbnail: just the Unsplash photo (or fallback video frame), cropped to YouTube's
+// 1280x720 thumbnail size — no title text or any other overlay burned in. YouTube shows the
+// video's own title as text right next to the thumbnail in every surface it appears, so a
+// title baked into the image is redundant and (with a photo this size) usually looks cluttered.
+export async function generateThumbnail({ imagePath, outPath }) {
   await run("ffmpeg", [
     "-y",
     "-i", imagePath,
-    "-vf",
-    `scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,` +
-      `drawtext=fontfile=${CAPTION_FONT}:text='${safeTitle}':fontcolor=yellow:fontsize=64:` +
-      `box=1:boxcolor=black@0.6:boxborderw=20:x=(w-text_w)/2:y=(h-text_h)/2`,
+    "-vf", `scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720`,
     "-frames:v", "1",
     outPath,
   ]);
