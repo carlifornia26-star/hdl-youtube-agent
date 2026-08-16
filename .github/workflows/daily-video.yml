@@ -13,7 +13,7 @@ concurrency:
 jobs:
   build-and-upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60 # raised from 45 — more scenes (36-46 base, plus possible duration top-up rounds) and Kokoro's local CPU synthesis both add runtime
     steps:
       - uses: actions/checkout@v4
 
@@ -37,8 +37,8 @@ jobs:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-          FISH_API_KEY: ${{ secrets.FISH_API_KEY }}
-          # Optional — omit to use Fish Audio's default voice
+          FISH_API_KEY: ${{ secrets.FISH_API_KEY }} # optional now — Kokoro (local) is primary; this is a fallback
+          # Optional — omit to use Fish Audio's default voice (only matters if the fallback runs)
           FISH_VOICE_ID: ${{ secrets.FISH_VOICE_ID }}
           # Optional: set to "true" to upload as Private instead of Public while you're testing
           DRY_RUN_PRIVATE: ${{ vars.DRY_RUN_PRIVATE }}
