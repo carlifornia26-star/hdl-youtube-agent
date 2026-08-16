@@ -1,27 +1,63 @@
 import fetch from "node-fetch";
 import fs from "node:fs/promises";
 
-// Fish Audio's free-tier TTS API (api.fish.audio/v1/tts). Real REST endpoint, callable with
-// just an API key from a GitHub Actions runner — no browser, no login session, same shape as
-// the Cloudflare Workers AI calls in cf-ai.js.
+// --- Kokoro (local, free, no API) -----------------------------------------------------------
+// Kokoro-82M: Apache 2.0, 82M params, runs on CPU (no GPU needed) via ONNX — fast enough on a
+// standard GitHub Actions runner. Model weights (~300MB) download fresh each run since the
+// runner is wiped after every job; nothing persists, nothing to host or maintain. This is the
+// primary narration path — Fish Audio below is only a fallback.
+// KOKORO_VOICE (optional): defaults to "af_heart". Run `tts.list_voices()` locally to see others.
+const KOKORO_MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
+
+let kokoroPromise = null;
+function getKokoro() {
+  if (!kokoroPromise) {
+    // Dynamic import so a load failure (missing package, ONNX runtime issue, etc.) is caught by
+    // the try/catch in synthesizeVoice below and falls through to Fish Audio, rather than
+    // crashing the whole module at import time.
+    kokoroPromise = import("kokoro-js").then(({ KokoroTTS }) =>
+      KokoroTTS.from_pretrained(KOKORO_MODEL_ID, { dtype: "q8", device: "cpu" })
+    );
+  }
+  return kokoroPromise;
+}
+
+// KOKORO_SPEED (optional): Kokoro's own speed multiplier, 1.0 = its natural pace. Defaults to
+// a touch under natural (0.92) — gives every scene slightly more runtime for the same word
+// count, which combines with the duration top-up in generate-video.js to reliably land the
+// finished video above the 8-minute floor without sounding rushed. Override via env if a
+// finished video still consistently runs too short/long for your taste.
+async function synthesizeVoiceKokoro(text, outPath) {
+  const tts = await getKokoro();
+  const voice = process.env.KOKORO_VOICE || "af_heart";
+  const speed = Number(process.env.KOKORO_SPEED || 0.92);
+  const audio = await tts.generate(text, { voice, speed });
+  // Writes real WAV bytes regardless of outPath's .mp3 extension — ffmpeg/ffprobe read the
+  // actual container format from the file's contents, not its name, so this is safe as-is.
+  await audio.save(outPath);
+  return outPath;
+}
+
+// --- Fish Audio (fallback) --------------------------------------------------------------------
+// Fish Audio's free-tier TTS API (api.fish.audio/v1/tts). Kept as a fallback in case Kokoro
+// fails for any reason — not the primary path anymore, so this only runs if Kokoro's attempts
+// above are exhausted.
 //
-// FISH_API_KEY (required): fish.audio/app/api-keys
+// FISH_API_KEY (optional now — only needed if you want the fallback to work): fish.audio/app/api-keys
 // FISH_VOICE_ID (optional): a "reference_id" for a specific cloned/library voice. If unset,
 //   the request omits reference_id and Fish Audio falls back to its default model voice.
 //
-// NOTE (Aug 2026): Fish Audio's S2.1 Pro model is free under fair use through Aug 31, 2026,
-// via the `model: s2.1-pro-free` header — confirm current terms at fish.audio/pricing before
-// this ships, since that free window has already been extended once and could change or end.
-// The free tier's stated commercial-use terms should also be double-checked given this is a
-// monetized channel — see the note left in SETUP.md.
+// NOTE (Aug 2026): Fish Audio's S2.1 Pro model was free under fair use through Aug 31, 2026,
+// via the `model: s2.1-pro-free` header — confirm current terms at fish.audio/pricing, since
+// that window may have ended or changed. If it has, this fallback will simply fail too, which
+// is fine — Kokoro above needs nothing from Fish Audio to keep working.
 const FISH_API_URL = "https://api.fish.audio/v1/tts";
 const FISH_MODEL_HEADER = "s2.1-pro-free";
 // Slightly faster than natural (1.0) reading pace — lets the higher word count per video fit
-// inside ~10 minutes without artificially extending runtime. 1.05 is a light nudge, closer to
-// natural pace than a previous, too-brisk 1.15 — raise or lower to taste.
+// inside ~10 minutes without artificially extending runtime.
 const NARRATION_SPEED = 1.05;
 
-async function withRetry(label, fn, attempts = 3) {
+async function withRetry(label, fn, attempts = 3, baseDelayMs = 1500) {
   let lastErr;
   for (let i = 1; i <= attempts; i++) {
     try {
@@ -30,16 +66,15 @@ async function withRetry(label, fn, attempts = 3) {
       lastErr = err;
       const isLast = i === attempts;
       console.error(`${label}: attempt ${i}/${attempts} failed${isLast ? "" : ", retrying"}: ${err.message}`);
-      if (!isLast) await new Promise((r) => setTimeout(r, 1500 * i));
+      if (!isLast) await new Promise((r) => setTimeout(r, baseDelayMs * i));
     }
   }
   throw lastErr;
 }
 
-// Synthesizes `text` to speech and writes an mp3 to `outPath`. Returns outPath.
-export async function synthesizeVoice(text, outPath) {
+async function synthesizeVoiceFishAudio(text, outPath) {
   const apiKey = process.env.FISH_API_KEY;
-  if (!apiKey) throw new Error("FISH_API_KEY is not set");
+  if (!apiKey) throw new Error("FISH_API_KEY is not set — fallback unavailable");
 
   return withRetry("Fish Audio TTS", async () => {
     const body = {
@@ -69,4 +104,33 @@ export async function synthesizeVoice(text, outPath) {
     await fs.writeFile(outPath, buffer);
     return outPath;
   });
+}
+
+// --- Public entry point -------------------------------------------------------------------
+// Synthesizes `text` to speech and writes an audio file to `outPath`. Tries Kokoro (local,
+// free) first; falls back to Fish Audio only if Kokoro fails after retries. Throws only if
+// BOTH fail — the caller (generate-video.js) already treats that as "no narration for this
+// scene" and falls back to captions-only, so this function doesn't need its own final fallback.
+let engineAnnounced = false; // logs which engine narrated the video exactly once per run, not once per scene
+export async function synthesizeVoice(text, outPath) {
+  try {
+    const result = await withRetry("Kokoro TTS (local)", () => synthesizeVoiceKokoro(text, outPath), 2, 1000);
+    if (!engineAnnounced) {
+      console.log("Narration engine: Kokoro (local, free).");
+      engineAnnounced = true;
+    }
+    return result;
+  } catch (kokoroErr) {
+    console.warn(`Kokoro TTS failed (${kokoroErr.message}), falling back to Fish Audio`);
+    try {
+      const result = await synthesizeVoiceFishAudio(text, outPath);
+      if (!engineAnnounced) {
+        console.log("Narration engine: Fish Audio (fallback).");
+        engineAnnounced = true;
+      }
+      return result;
+    } catch (fishErr) {
+      throw new Error(`Both Kokoro (${kokoroErr.message}) and Fish Audio (${fishErr.message}) failed`);
+    }
   }
+                                             }
