@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pickTodaysBook } from "./catalog.js";
-import { generateScript, translateMeta, VIDEO_LANGS } from "./cf-ai.js";
+import { generateScript, generateBonusScenes, translateMeta, VIDEO_LANGS } from "./cf-ai.js";
 import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./assets.js";
 import { synthesizeVoice } from "./voice.js";
 import { fetchBackgroundMusic, attributionLine } from "./music.js";
@@ -15,6 +15,16 @@ const MIN_SCENE_SECONDS = 4;
 const MAX_SCENE_SECONDS = 45;
 const SHORT_MIN_SECONDS = 40; // Short target window — comfortably inside YouTube's Shorts duration
 const SHORT_MAX_SECONDS = 65; // limit under either the old 60s rule or the current 3-minute one
+
+// The main script's scene/word counts (cf-ai.js) are tuned to land near 10 minutes, but the
+// exact result depends on the TTS voice's actual reading pace, which can drift. Rather than
+// trust that estimate, the REAL total runtime is measured after synthesis (every scene's
+// duration comes from its actual audio file, not a word-count guess) and topped up with extra
+// scenes if it still lands under this floor — so "above 8 minutes" is enforced directly against
+// measured audio, not against a script-length assumption that can go stale.
+const TARGET_MIN_SECONDS = 8.5 * 60; // 510s — a bit above the 8:00 floor so small variance still clears it
+const MAX_TOPUP_ROUNDS = 4;
+const TOPUP_SCENES_PER_ROUND = 10;
 
 // If more than this fraction of scenes end up with no narration (Fish Audio down, key revoked,
 // the Aug 31 2026 free-model promo ending, etc.), the run still PUBLISHES everything as normal —
@@ -43,21 +53,21 @@ async function main() {
   const scenes = await generateScript(book);
   console.log(`Generated ${scenes.length} scenes`);
 
-  // 2) Per-scene: stock clip + Fish Audio narration + burned caption -> scene_N.mp4.
+  // 2) Per-scene: stock clip + Kokoro narration + burned caption -> scene_N.mp4.
   // Scene duration comes from the ACTUAL narration length (probed after synthesis), not an
   // estimate — captions and the video cut are timed to the real voice track.
   // If TTS fails for a scene (rate limit, transient API error) after retries, that one scene
   // falls back to captions-only over the stock clip's ambient sound rather than failing the
-  // entire day's video.
-  const built = [];
-  for (let i = 0; i < scenes.length; i++) {
-    const scene = scenes[i];
-    const clipPath = path.join(BUILD_DIR, `clip_${i}.mp4`);
-    const voicePath = path.join(BUILD_DIR, `voice_${i}.mp3`);
-    const outPath = path.join(BUILD_DIR, `scene_${i}.mp4`);
+  // entire day's video. `index` drives both the filename and the stock-keyword cycling, and
+  // must stay globally unique across the main script AND any top-up scenes added below —
+  // callers pass built.length so it keeps counting up rather than restarting at 0.
+  async function buildOneScene(scene, index) {
+    const clipPath = path.join(BUILD_DIR, `clip_${index}.mp4`);
+    const voicePath = path.join(BUILD_DIR, `voice_${index}.mp3`);
+    const outPath = path.join(BUILD_DIR, `scene_${index}.mp4`);
 
-    const keyword = book.stockKeywords[i % book.stockKeywords.length];
-    await fetchStockClip(keyword, clipPath, i);
+    const keyword = book.stockKeywords[index % book.stockKeywords.length];
+    await fetchStockClip(keyword, clipPath, index);
 
     let usableVoicePath = null;
     let duration = MIN_SCENE_SECONDS;
@@ -67,17 +77,57 @@ async function main() {
       duration = Math.min(MAX_SCENE_SECONDS, Math.max(MIN_SCENE_SECONDS, voiceDuration + PADDING_SECONDS));
       usableVoicePath = voicePath;
     } catch (e) {
-      console.warn(`Voice synthesis failed for scene ${i}, falling back to captions-only:`, e.message);
+      console.warn(`Voice synthesis failed for scene ${index}, falling back to captions-only:`, e.message);
       // Rough fallback so the scene still gets a reasonable amount of screen time to be read.
       const words = scene.line.trim().split(/\s+/).filter(Boolean).length;
       duration = Math.min(MAX_SCENE_SECONDS, Math.max(MIN_SCENE_SECONDS, words / 2.3 + PADDING_SECONDS));
     }
 
     const built_scene = await buildScene({ clipPath, duration, text: scene.line, outPath, voicePath: usableVoicePath });
-    built.push({ ...scene, duration, outPath: built_scene.outPath, clipPath, voicePath: usableVoicePath });
+    return { ...scene, duration, outPath: built_scene.outPath, clipPath, voicePath: usableVoicePath };
   }
 
-  console.log(`Total runtime ~${Math.round(built.reduce((a, b) => a + b.duration, 0) / 60)} min`);
+  const built = [];
+  for (let i = 0; i < scenes.length; i++) {
+    built.push(await buildOneScene(scenes[i], i));
+  }
+  let totalSeconds = built.reduce((a, b) => a + b.duration, 0);
+  console.log(`Runtime after main script: ~${Math.round(totalSeconds / 60)} min (${built.length} scenes)`);
+
+  // 2b) Duration top-up: if the measured runtime still lands under the 8-minute-ish floor
+  // (TARGET_MIN_SECONDS), generate and build extra scenes and append them, re-measuring after
+  // each round, until the target is hit or MAX_TOPUP_ROUNDS is reached. Bounded so a persistent
+  // shortfall (or a flaky Workers AI response) can't loop the run forever — if still short after
+  // the cap, publish anyway with a warning rather than fail a day's video over runtime length.
+  let topupRound = 0;
+  while (totalSeconds < TARGET_MIN_SECONDS && topupRound < MAX_TOPUP_ROUNDS) {
+    topupRound++;
+    console.log(
+      `Runtime ~${Math.round(totalSeconds / 60)} min is under the target, generating ` +
+        `${TOPUP_SCENES_PER_ROUND} bonus scenes (round ${topupRound}/${MAX_TOPUP_ROUNDS})...`
+    );
+    let bonusScenes;
+    try {
+      bonusScenes = await generateBonusScenes(book, TOPUP_SCENES_PER_ROUND);
+    } catch (e) {
+      console.warn("Bonus scene generation failed, stopping top-up early:", e.message);
+      break;
+    }
+    for (const scene of bonusScenes) {
+      built.push(await buildOneScene(scene, built.length));
+    }
+    totalSeconds = built.reduce((a, b) => a + b.duration, 0);
+  }
+
+  console.log(
+    `Total runtime ~${Math.round(totalSeconds / 60)} min (${built.length} scenes)` +
+      (topupRound ? ` after ${topupRound} top-up round(s)` : "")
+  );
+  if (totalSeconds < TARGET_MIN_SECONDS) {
+    console.warn(
+      `Still under the ${Math.round(TARGET_MIN_SECONDS / 60)}-min target after ${MAX_TOPUP_ROUNDS} top-up rounds — publishing anyway.`
+    );
+  }
 
   // Track how many scenes had no narration at all — checked at the very end of the run (see
   // VOICE_FAILURE_THRESHOLD above), after everything has already been uploaded.
@@ -89,7 +139,8 @@ async function main() {
 
   // Soft check on the "mention the title exactly 3 times" prompt instruction — an LLM
   // following a numeric instruction isn't guaranteed, so this just makes drift visible in the
-  // log rather than silently trusting the model got it right.
+  // log rather than silently trusting the model got it right. Bonus top-up scenes are
+  // instructed never to mention the title at all, so they shouldn't move this count.
   const titleMentions = built
     .map((b) => b.line.toLowerCase().split(book.title.toLowerCase()).length - 1)
     .reduce((a, b) => a + b, 0);
@@ -117,23 +168,23 @@ async function main() {
     console.warn("Background music failed, uploading without it:", e.message);
   }
 
-  // 3c) Thumbnail image — a real Unsplash photo matching the book's topic, with the title
-  // overlaid, instead of a grabbed video frame (which can land on an awkward or blurry moment).
-  // Falls back to the old video-frame approach if Unsplash fails for any reason (missing key,
-  // rate limit, network hiccup) so a thumbnail always gets set either way. Done here, BEFORE
-  // metadata is built, so the photographer attribution (if any) can be included in the
-  // description — uploadThumbnail itself still happens later, once a videoId exists.
+  // 3c) Thumbnail image — a real Unsplash photo matching the book's topic, cropped clean with
+  // no text overlay, instead of a grabbed video frame (which can land on an awkward or blurry
+  // moment). Falls back to the old video-frame approach if Unsplash fails for any reason
+  // (missing key, rate limit, network hiccup) so a thumbnail always gets set either way. Done
+  // here, BEFORE metadata is built, so the photographer attribution (if any) can be included in
+  // the description — uploadThumbnail itself still happens later, once a videoId exists.
   const thumbPath = path.join(BUILD_DIR, "thumbnail.jpg");
   let thumbAttribution = null;
   try {
     const thumbKeyword = book.stockKeywords[0];
     const thumbPhotoPath = path.join(BUILD_DIR, "thumb_photo.jpg");
     thumbAttribution = await fetchUnsplashPhoto(thumbKeyword, thumbPhotoPath, Math.floor(scenes.length / 2));
-    await generateThumbnail({ imagePath: thumbPhotoPath, title: book.title, outPath: thumbPath });
+    await generateThumbnail({ imagePath: thumbPhotoPath, outPath: thumbPath });
   } catch (e) {
     console.warn("Unsplash thumbnail failed, falling back to a video frame:", e.message);
     const midClip = path.join(BUILD_DIR, `clip_${Math.floor(scenes.length / 2)}.mp4`);
-    await generateThumbnail({ imagePath: midClip, title: book.title, outPath: thumbPath });
+    await generateThumbnail({ imagePath: midClip, outPath: thumbPath });
   }
 
   // 4) English metadata
