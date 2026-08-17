@@ -3,7 +3,7 @@ import path from "node:path";
 import { pickTodaysBook } from "./catalog.js";
 import { generateScript, generateBonusScenes, translateMeta, VIDEO_LANGS } from "./cf-ai.js";
 import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./assets.js";
-import { synthesizeVoice } from "./voice.js";
+import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
 import { fetchBackgroundMusic, attributionLine } from "./music.js";
 import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic } from "./render.js";
 import { uploadVideo, uploadCaptionTrack, uploadThumbnail } from "./youtube.js";
@@ -46,8 +46,31 @@ const YT_LOCALE_MAP = {
 async function main() {
   await fs.mkdir(BUILD_DIR, { recursive: true });
 
+  // Preflight: confirm the local Kokoro TTS package actually resolves before burning through a
+  // whole script's worth of scenes finding out the hard way. `npm install` should always put this
+  // in node_modules since it's a normal (non-optional) dependency in package.json — if this warns,
+  // the run WILL still complete (Fish Audio picks up every scene instead), just check that
+  // `kokoro-js` is really listed in package.json and that "Install dependencies" in the Actions
+  // log shows it actually being fetched (dozens of packages, several seconds+) rather than a
+  // suspiciously instant no-op.
+  try {
+    await import("kokoro-js");
+    console.log("Preflight: kokoro-js resolved OK.");
+  } catch (e) {
+    console.warn(
+      `Preflight WARNING: kokoro-js failed to import (${e.message}). Every scene will fall back ` +
+        `to Fish Audio (or captions-only if that's also unavailable) for this entire run.`
+    );
+  }
+
   const book = pickTodaysBook();
   console.log(`Today's book: ${book.title}`);
+
+  // One narrator voice for the ENTIRE video (main + Short), computed once here and passed into
+  // every synthesizeVoice() call below — never mixed voices within one video. Tomorrow's video
+  // gets the next voice in the rotation (see VOICE_POOL in voice.js).
+  const narratorVoice = pickTodaysVoice();
+  console.log(`Today's narrator voice: ${narratorVoice}`);
 
   // 1) Script (teaser-only, scene count set by the model within the schema's range)
   const scenes = await generateScript(book);
@@ -72,7 +95,7 @@ async function main() {
     let usableVoicePath = null;
     let duration = MIN_SCENE_SECONDS;
     try {
-      await synthesizeVoice(scene.line, voicePath);
+      await synthesizeVoice(scene.line, voicePath, narratorVoice);
       const voiceDuration = await probeDuration(voicePath);
       duration = Math.min(MAX_SCENE_SECONDS, Math.max(MIN_SCENE_SECONDS, voiceDuration + PADDING_SECONDS));
       usableVoicePath = voicePath;
@@ -189,17 +212,17 @@ async function main() {
 
   // 4) English metadata
   const enTitle = `${book.title} — ${book.angle} | HDL Group`;
-  // Base description is the ONLY part that ever goes to the translation model. Credit lines
-  // (music + thumbnail) contain proper names and raw URLs/query strings that a translation
-  // model will happily mangle (corrupted domains, translated query-param values, and — with
-  // long repeated legal boilerplate like this — occasional runaway repetition loops that blow
-  // past YouTube's description length limit and fail the whole upload with a generic
-  // "invalidVideoMetadata" error). So: build attribution separately, translate only the base,
-  // and append attribution AFTER translation, untranslated, for every language including English.
-  const baseDescription =
-    `${book.title} explores ${book.angle}. Available in English only, exclusively on Google Play Books.\n` +
-    `Read the full book: ${SITE_URL}\n\n` +
-    `#HDLGroup #${book.slug.replace(/-/g, "")}`;
+  // Only the plain descriptive sentence goes to the translation model. Everything else —
+  // the URL, the hashtags, and (further below) the music/thumbnail credit lines — is appended
+  // AFTER translation, untranslated, for every language including English. This used to only
+  // apply to the credit lines; the URL was still being sent through translation and Cloudflare's
+  // model was silently corrupting it in every single non-English localization (e.g.
+  // "highdefinitionlearning.pages.dev" coming back as "hbhefinitionlearning.pages.d ev" — a
+  // broken link in the description of every translated video). Hashtags are static identifiers
+  // too, so they're pulled out for the same reason even though they're lower-risk than a URL.
+  const translatableDescription = `${book.title} explores ${book.angle}. Available in English only, exclusively on Google Play Books.`;
+  const untranslatedSuffix = `\nRead the full book: ${SITE_URL}\n\n#HDLGroup #${book.slug.replace(/-/g, "")}`;
+  const baseDescription = translatableDescription + untranslatedSuffix;
   let attributionSuffix = "";
   if (musicTrack) attributionSuffix += `\n\n${attributionLine(musicTrack)}`;
   if (thumbAttribution) attributionSuffix += `\n\n${unsplashAttributionLine(thumbAttribution)}`;
@@ -208,14 +231,14 @@ async function main() {
   // 5) Translated titles/descriptions -> YouTube localizations map
   // Translate with Cloudflare's own code (`lang`), but key the localizations object with
   // the YouTube-safe code (`ytLang`) so a mismatch like "zh" vs "zh-Hans" can't happen.
-  // Only baseDescription is translated — attributionSuffix is appended AFTER, untranslated,
-  // exactly once (see comment above).
+  // Only translatableDescription goes to the model — untranslatedSuffix (URL + hashtags) and
+  // attributionSuffix are appended AFTER, untranslated, exactly once (see comment above).
   const localizations = {};
   for (const lang of VIDEO_LANGS) {
     const ytLang = YT_LOCALE_MAP[lang] ?? lang;
     try {
-      const t = await translateMeta(enTitle, baseDescription, lang);
-      const description = t.description + attributionSuffix;
+      const t = await translateMeta(enTitle, translatableDescription, lang);
+      const description = t.description + untranslatedSuffix + attributionSuffix;
       localizations[ytLang] = { title: t.title, description };
     } catch (e) {
       console.warn(`Translation failed for ${lang}, skipping:`, e.message);
@@ -288,23 +311,27 @@ async function main() {
       }
 
       const shortTitle = `${book.title} #Shorts`.slice(0, 100); // YouTube's 100-char title cap
-      const shortBaseDescription =
-        `${book.title} — ${book.angle}.\n` +
-        `Watch the full video: https://youtube.com/watch?v=${uploaded.id}\n` +
+      // Same URL-safety fix as the main video's description above: only the plain sentence goes
+      // to the translation model. The two URLs (YouTube link + book link) and the hashtags are
+      // appended after, untranslated, so they can't come back corrupted in any language.
+      const shortTranslatableDescription = `${book.title} — ${book.angle}.`;
+      const shortUntranslatedSuffix =
+        `\nWatch the full video: https://youtube.com/watch?v=${uploaded.id}\n` +
         `Read the full book: ${SITE_URL}\n\n` +
         `#Shorts #HDLGroup #${book.slug.replace(/-/g, "")}`;
+      const shortBaseDescription = shortTranslatableDescription + shortUntranslatedSuffix;
       const shortAttributionSuffix = musicTrack ? `\n\n${attributionLine(musicTrack)}` : "";
       const shortDescription = shortBaseDescription + shortAttributionSuffix;
 
       // Translated title/description, matching the main video — same 15 languages + English.
-      // Same rule as the main video: only the base (translatable) text goes to the model;
-      // the credit line is appended after, untranslated.
+      // Same rule as the main video: only the translatable sentence goes to the model; the URLs,
+      // hashtags, and credit line are appended after, untranslated.
       const shortLocalizations = {};
       for (const lang of VIDEO_LANGS) {
         const ytLang = YT_LOCALE_MAP[lang] ?? lang;
         try {
-          const t = await translateMeta(shortTitle, shortBaseDescription, lang);
-          const description = t.description + shortAttributionSuffix;
+          const t = await translateMeta(shortTitle, shortTranslatableDescription, lang);
+          const description = t.description + shortUntranslatedSuffix + shortAttributionSuffix;
           shortLocalizations[ytLang] = { title: t.title, description };
         } catch (e) {
           console.warn(`Short translation failed for ${lang}, skipping:`, e.message);
