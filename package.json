@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "googleapis": "^140.0.0",
+    "kokoro-js": "^1.2.1",
     "node-fetch": "^3.3.2"
   }
 }
