@@ -7,6 +7,30 @@ function client() {
   return google.youtube({ version: "v3", auth: oauth2 });
 }
 
+// google-auth-library's own error for a dead refresh token is `GaxiosError: invalid_grant` with
+// no video/upload-specific wording anywhere in it, buried under a huge dumped request/response
+// object — easy to mistake for a one-off upload glitch instead of what it actually is: the
+// YT_REFRESH_TOKEN secret is dead and EVERY call in this run (upload, thumbnail, captions) will
+// fail the same way until it's replaced. This turns that into one unmissable line, logged before
+// the original error is rethrown (so the full details are still there for debugging below it).
+// Printed once per run (not once per caption language) via authErrorExplained.
+let authErrorExplained = false;
+function explainIfAuthError(err) {
+  const reason = err?.response?.data?.error || err?.message || "";
+  if (String(reason).includes("invalid_grant") && !authErrorExplained) {
+    authErrorExplained = true;
+    console.error(
+      "\n*** YOUTUBE AUTH IS DEAD, NOT A ONE-OFF FAILURE ***\n" +
+        "YT_REFRESH_TOKEN has expired or been revoked (Google shows this if the OAuth consent " +
+        "screen is still in 'Testing' mode — those tokens expire after 7 days — or if access was " +
+        "manually revoked). Every upload call this run will fail the same way. Fix: redo the " +
+        "OAuth Playground flow in SETUP.md step 2.4 to mint a fresh refresh token, then update " +
+        "the YT_REFRESH_TOKEN repo secret. If your OAuth consent screen is in Testing mode, " +
+        "publish it (or add yourself as a permanent test user) so this stops recurring.\n"
+    );
+  }
+}
+
 export async function uploadVideo({ videoPath, title, description, tags, localizations }) {
   const youtube = client();
   const isPrivate = process.env.DRY_RUN_PRIVATE === "true";
@@ -42,6 +66,7 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
 
     return res.data; // includes .id
   } catch (err) {
+    explainIfAuthError(err);
     console.error("uploadVideo failed. requestBody was:\n", JSON.stringify(requestBody, null, 2));
     throw err;
   }
@@ -49,10 +74,15 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
 
 export async function uploadThumbnail({ videoId, imagePath }) {
   const youtube = client();
-  await youtube.thumbnails.set({
-    videoId,
-    media: { body: fs.createReadStream(imagePath) },
-  });
+  try {
+    await youtube.thumbnails.set({
+      videoId,
+      media: { body: fs.createReadStream(imagePath) },
+    });
+  } catch (err) {
+    explainIfAuthError(err);
+    throw err;
+  }
 }
 
 export async function uploadCaptionTrack({ videoId, language, srtPath, name }) {
@@ -73,12 +103,15 @@ export async function uploadCaptionTrack({ videoId, language, srtPath, name }) {
       return;
     } catch (err) {
       lastErr = err;
-      const isLast = attempt === 4;
+      const isAuthDead = String(err?.response?.data?.error || err?.message || "").includes("invalid_grant");
+      const isLast = attempt === 4 || isAuthDead; // no point retrying a dead token 4x per language
       console.warn(
         `captions.insert (${language}): attempt ${attempt}/4 failed${isLast ? "" : ", retrying"}: ${err.message}`
       );
+      if (isLast) explainIfAuthError(err);
       if (!isLast) await new Promise((r) => setTimeout(r, 4000 * attempt)); // 4s, 8s, 12s
+      if (isAuthDead) break;
     }
   }
   throw lastErr;
-}
+      }
