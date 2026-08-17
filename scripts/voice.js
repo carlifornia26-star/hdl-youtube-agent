@@ -6,8 +6,35 @@ import fs from "node:fs/promises";
 // standard GitHub Actions runner. Model weights (~300MB) download fresh each run since the
 // runner is wiped after every job; nothing persists, nothing to host or maintain. This is the
 // primary narration path — Fish Audio below is only a fallback.
-// KOKORO_VOICE (optional): defaults to "af_heart". Run `tts.list_voices()` locally to see others.
+// KOKORO_VOICE (optional): overrides the rotation below and pins every video to one fixed voice.
+// Leave unset to let the daily rotation (see VOICE_POOL / pickTodaysVoice) pick automatically.
 const KOKORO_MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
+
+// One narrator voice per video, rotating day to day — never mixed voices within a single video.
+// Same day-of-year rotation as pickTodaysBook() in catalog.js, but on its own cycle (11 voices
+// vs. 7 books) so voice and book drift independently instead of always pairing the same two up.
+// All English (US + UK) so translated-metadata videos still get an English narrator; a mix of
+// genders/accents so the channel doesn't sound identical every day.
+const VOICE_POOL = [
+  "af_heart", // US female — warm, friendly
+  "am_michael", // US male — grounded, professional
+  "bf_emma", // UK female — sophisticated
+  "am_adam", // US male — energetic
+  "af_bella", // US female — elegant
+  "bm_george", // UK male — authoritative
+  "af_nicole", // US female — professional
+  "am_liam", // US male — clear, confident
+  "bf_isabella", // UK female — elegant
+  "am_fenrir", // US male — deep
+  "af_sarah", // US female — clear, articulate
+];
+
+export function pickTodaysVoice(date = new Date()) {
+  if (process.env.KOKORO_VOICE) return process.env.KOKORO_VOICE; // manual override wins
+  const start = new Date(date.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((date - start) / 86400000);
+  return VOICE_POOL[dayOfYear % VOICE_POOL.length];
+}
 
 let kokoroPromise = null;
 function getKokoro() {
@@ -27,9 +54,8 @@ function getKokoro() {
 // count, which combines with the duration top-up in generate-video.js to reliably land the
 // finished video above the 8-minute floor without sounding rushed. Override via env if a
 // finished video still consistently runs too short/long for your taste.
-async function synthesizeVoiceKokoro(text, outPath) {
+async function synthesizeVoiceKokoro(text, outPath, voice) {
   const tts = await getKokoro();
-  const voice = process.env.KOKORO_VOICE || "af_heart";
   const speed = Number(process.env.KOKORO_SPEED || 0.92);
   const audio = await tts.generate(text, { voice, speed });
   // Writes real WAV bytes regardless of outPath's .mp3 extension — ffmpeg/ffprobe read the
@@ -107,14 +133,17 @@ async function synthesizeVoiceFishAudio(text, outPath) {
 }
 
 // --- Public entry point -------------------------------------------------------------------
-// Synthesizes `text` to speech and writes an audio file to `outPath`. Tries Kokoro (local,
-// free) first; falls back to Fish Audio only if Kokoro fails after retries. Throws only if
-// BOTH fail — the caller (generate-video.js) already treats that as "no narration for this
-// scene" and falls back to captions-only, so this function doesn't need its own final fallback.
+// Synthesizes `text` to speech and writes an audio file to `outPath`, using `voice` (a Kokoro
+// voice id — see VOICE_POOL above) for every call. Callers should compute the voice ONCE per
+// video via pickTodaysVoice() and pass the same value into every scene, so one video always has
+// one consistent narrator; only the NEXT video's voice differs. Tries Kokoro (local, free)
+// first; falls back to Fish Audio only if Kokoro fails after retries. Throws only if BOTH fail —
+// the caller (generate-video.js) already treats that as "no narration for this scene" and falls
+// back to captions-only, so this function doesn't need its own final fallback.
 let engineAnnounced = false; // logs which engine narrated the video exactly once per run, not once per scene
-export async function synthesizeVoice(text, outPath) {
+export async function synthesizeVoice(text, outPath, voice = pickTodaysVoice()) {
   try {
-    const result = await withRetry("Kokoro TTS (local)", () => synthesizeVoiceKokoro(text, outPath), 2, 1000);
+    const result = await withRetry("Kokoro TTS (local)", () => synthesizeVoiceKokoro(text, outPath, voice), 2, 1000);
     if (!engineAnnounced) {
       console.log("Narration engine: Kokoro (local, free).");
       engineAnnounced = true;
@@ -133,4 +162,4 @@ export async function synthesizeVoice(text, outPath) {
       throw new Error(`Both Kokoro (${kokoroErr.message}) and Fish Audio (${fishErr.message}) failed`);
     }
   }
-                                             }
+    }
