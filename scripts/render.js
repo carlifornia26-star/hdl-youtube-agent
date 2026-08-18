@@ -190,15 +190,46 @@ export async function concatScenes(sceneOutPaths, listFile, outPath) {
   return outPath;
 }
 
-// Clean thumbnail: just the Unsplash photo (or fallback video frame), cropped to YouTube's
-// 1280x720 thumbnail size — no title text or any other overlay burned in. YouTube shows the
-// video's own title as text right next to the thumbnail in every surface it appears, so a
-// title baked into the image is redundant and (with a photo this size) usually looks cluttered.
-export async function generateThumbnail({ imagePath, outPath }) {
+// Breaks a title into up to 2 lines of roughly maxCharsPerLine each, for the bold-text
+// thumbnail variant below. Not true text-measurement (ffmpeg drawtext has no easy way to query
+// glyph widths ahead of time from execFile), just a word-count heuristic — good enough for a
+// thumbnail overlay where a slightly uneven wrap is harmless.
+function wrapTitle(text, maxCharsPerLine = 18, maxLines = 2) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines = [];
+  let cur = "";
+  for (const w of words) {
+    const candidate = cur ? `${cur} ${w}` : w;
+    if (candidate.length > maxCharsPerLine && cur) {
+      lines.push(cur);
+      cur = w;
+      if (lines.length === maxLines) break;
+    } else {
+      cur = candidate;
+    }
+  }
+  if (cur && lines.length < maxLines) lines.push(cur);
+  return lines.join("\n");
+}
+
+// Thumbnail generation, with an optional bold title-text overlay for A/B style testing
+// (see thumbnailVariant in generate-video.js). Without titleText: just the Unsplash photo (or
+// fallback video frame), cropped to YouTube's 1280x720 thumbnail size — no overlay burned in.
+// With titleText: same photo, plus a bold white-on-black-stroke title across the top, MrBeast-
+// thumbnail style — this is "variant B", compared against the plain "variant A" over time.
+export async function generateThumbnail({ imagePath, outPath, titleText }) {
+  const vf = [`scale=1280:720:force_original_aspect_ratio=increase`, `crop=1280:720`];
+  if (titleText) {
+    const wrapped = escapeDrawtext(wrapTitle(titleText.toUpperCase()));
+    vf.push(
+      `drawtext=fontfile=${CAPTION_FONT}:text='${wrapped}':fontcolor=white:fontsize=84:` +
+        `bordercolor=black:borderw=10:line_spacing=14:x=(w-text_w)/2:y=50`
+    );
+  }
   await run("ffmpeg", [
     "-y",
     "-i", imagePath,
-    "-vf", `scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720`,
+    "-vf", vf.join(","),
     "-frames:v", "1",
     outPath,
   ]);
@@ -223,4 +254,4 @@ export function buildSrt(scenesWithDurations, translatedLines) {
     const ms = String(Math.floor((sec % 1) * 1000)).padStart(3, "0");
     return `${h}:${m}:${s},${ms}`;
   }
-  }
+      }
