@@ -7,6 +7,7 @@ import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
 import { fetchBackgroundMusic, attributionLine } from "./music.js";
 import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic } from "./render.js";
 import { uploadVideo, uploadCaptionTrack, uploadThumbnail } from "./youtube.js";
+import { appendVideoEntry } from "./manifest.js";
 
 const BUILD_DIR = path.resolve("build");
 const SITE_URL = "https://highdefinitionlearning.pages.dev/"; // every description link points here, not the per-book page
@@ -199,15 +200,38 @@ async function main() {
   // the description — uploadThumbnail itself still happens later, once a videoId exists.
   const thumbPath = path.join(BUILD_DIR, "thumbnail.jpg");
   let thumbAttribution = null;
+  let thumbSourcePath;
   try {
     const thumbKeyword = book.stockKeywords[0];
     const thumbPhotoPath = path.join(BUILD_DIR, "thumb_photo.jpg");
     thumbAttribution = await fetchUnsplashPhoto(thumbKeyword, thumbPhotoPath, Math.floor(scenes.length / 2));
-    await generateThumbnail({ imagePath: thumbPhotoPath, outPath: thumbPath });
+    thumbSourcePath = thumbPhotoPath;
   } catch (e) {
-    console.warn("Unsplash thumbnail failed, falling back to a video frame:", e.message);
-    const midClip = path.join(BUILD_DIR, `clip_${Math.floor(scenes.length / 2)}.mp4`);
-    await generateThumbnail({ imagePath: midClip, outPath: thumbPath });
+    console.warn("Unsplash thumbnail photo failed, falling back to a video frame:", e.message);
+    thumbSourcePath = path.join(BUILD_DIR, `clip_${Math.floor(scenes.length / 2)}.mp4`);
+  }
+
+  // A/B thumbnail testing: YouTube's native "Test & compare" tool lives in Studio only and
+  // isn't reachable through the Data API, and since this channel publishes a different one-off
+  // book each day there's no repeat audience to split-test *within* a single video anyway.
+  // Instead this alternates two THUMBNAIL STYLES day to day — plain photo (variant A) vs. photo
+  // + bold title text (variant B) — same day-of-year rotation pattern as the narrator voice.
+  // Which variant ran is logged in videos-manifest.json (see thumbnail_variant below) so you can
+  // later pull each video's impressions/CTR from the YouTube Analytics API and compare A vs. B
+  // averages across the catalog. That reporting step needs the yt-analytics.readonly OAuth
+  // scope, which YT_REFRESH_TOKEN does NOT currently have (see SETUP.md) — it would need to be
+  // re-minted with that scope added before any analytics pull will work.
+  const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+  const thumbnailVariant = dayOfYear % 2 === 0 ? "A" : "B";
+  try {
+    await generateThumbnail({
+      imagePath: thumbSourcePath,
+      outPath: thumbPath,
+      titleText: thumbnailVariant === "B" ? book.title : undefined,
+    });
+  } catch (e) {
+    console.warn(`Thumbnail generation (variant ${thumbnailVariant}) failed, retrying plain:`, e.message);
+    await generateThumbnail({ imagePath: thumbSourcePath, outPath: thumbPath });
   }
 
   // 4) English metadata
@@ -257,6 +281,11 @@ async function main() {
 
   // 6b) Upload the thumbnail generated back in step 3c
   await uploadThumbnail({ videoId: uploaded.id, imagePath: thumbPath });
+
+  // Tracked across the Short block below (stays null if the Short fails/skips) so the
+  // manifest entry written in 6d can still record it when it succeeds, without blocking on it.
+  let shortVideoId = null;
+  let shortSceneCount = 0; // how many of `built`'s leading scenes the Short used — set below, read by the Short-caption block in step 7
 
   // 6c) YouTube Short — the opening few scenes (the strongest hook, since this is a teaser),
   // re-rendered vertical (9:16) instead of a new upload. Reuses the SAME stock clips already
@@ -346,10 +375,36 @@ async function main() {
         localizations: shortLocalizations,
       });
       console.log(`Uploaded Short (~${Math.round(shortTotal)}s): https://youtube.com/watch?v=${uploadedShort.id}`);
+      shortVideoId = uploadedShort.id;
+      shortSceneCount = shortScenes.length;
     }
   } catch (e) {
     // A failed Short should never take down the main video, which has already uploaded successfully.
     console.warn("Short build/upload failed, continuing without it:", e.message);
+  }
+
+  // 6d) Record today's video in videos-manifest.json — this is what the website reads (via
+  // raw.githubusercontent.com, see the site's _worker.js) to embed the video on book's page,
+  // list it on /videos.html, and include it in /sitemap-videos.xml. Written AFTER upload
+  // succeeds, using the same real title/description/thumbnail already sent to YouTube, so the
+  // site never shows anything that isn't actually live. A failure here should never take down
+  // an otherwise-successful publish — logged and swallowed, same pattern as the Short above.
+  try {
+    await appendVideoEntry({
+      video_id: uploaded.id,
+      short_video_id: shortVideoId,
+      book_slug: book.slug,
+      page_url: book.pageUrl,
+      title: enTitle,
+      description: translatableDescription,
+      thumbnail_url: `https://i.ytimg.com/vi/${uploaded.id}/maxresdefault.jpg`,
+      thumbnail_variant: thumbnailVariant,
+      duration_seconds: Math.round(totalSeconds),
+      published_at: new Date().toISOString(),
+    });
+    console.log("videos-manifest.json updated.");
+  } catch (e) {
+    console.warn("Failed to update videos-manifest.json (video is still live on YouTube):", e.message);
   }
 
   // 7) Caption tracks — English first, then translated languages (reusing the same scene lines).
@@ -370,6 +425,11 @@ async function main() {
     console.warn("English caption upload failed:", e.message);
   }
 
+  // Stashes each language's per-scene translated lines as they're produced below, so the Short
+  // captions block right after can reuse them for its own SRT (same scenes, same translations,
+  // just the first shortSceneCount of them, re-timed to start at 0) instead of re-calling
+  // translateMeta for lines it already has.
+  const translatedCaptionLines = {};
   for (const lang of VIDEO_LANGS) {
     const ytLang = YT_LOCALE_MAP[lang] ?? lang;
     if (!localizations[ytLang]) continue;
@@ -380,12 +440,46 @@ async function main() {
         const t = await translateMeta(scene.line, "", lang);
         lines.push(t.title);
       }
+      translatedCaptionLines[lang] = lines;
       const srt = buildSrt(built, lines);
       const srtPath = path.join(BUILD_DIR, `captions_${lang}.srt`);
       await fs.writeFile(srtPath, srt);
       await uploadCaptionTrack({ videoId: uploaded.id, language: ytLang, srtPath, name: lang });
     } catch (e) {
       console.warn(`Caption upload failed for ${lang}, skipping:`, e.message);
+    }
+  }
+
+  // 7b) Short captions — previously the Short had NO caption track at all (only the burned-in
+  // MrBeast-style text), leaving it with no real CC/subtitle track for viewers who toggle
+  // captions on. shortScenes is always the leading shortSceneCount entries of `built` (see the
+  // Short block above), so its lines and translations are just a slice of what was already
+  // computed above — zero extra translateMeta calls needed. Re-timed from 0 since the Short is
+  // its own, shorter file.
+  if (shortVideoId && shortSceneCount > 0) {
+    const shortBuiltScenes = built.slice(0, shortSceneCount);
+
+    const shortEnSrt = buildSrt(shortBuiltScenes, shortBuiltScenes.map((b) => b.line));
+    const shortEnSrtPath = path.join(BUILD_DIR, "captions_short_en.srt");
+    await fs.writeFile(shortEnSrtPath, shortEnSrt);
+    try {
+      await uploadCaptionTrack({ videoId: shortVideoId, language: "en", srtPath: shortEnSrtPath, name: "English" });
+    } catch (e) {
+      console.warn("Short English caption upload failed:", e.message);
+    }
+
+    for (const lang of VIDEO_LANGS) {
+      const ytLang = YT_LOCALE_MAP[lang] ?? lang;
+      const lines = translatedCaptionLines[lang];
+      if (!lines) continue;
+      try {
+        const shortSrt = buildSrt(shortBuiltScenes, lines.slice(0, shortSceneCount));
+        const shortSrtPath = path.join(BUILD_DIR, `captions_short_${lang}.srt`);
+        await fs.writeFile(shortSrtPath, shortSrt);
+        await uploadCaptionTrack({ videoId: shortVideoId, language: ytLang, srtPath: shortSrtPath, name: lang });
+      } catch (e) {
+        console.warn(`Short caption upload failed for ${lang}, skipping:`, e.message);
+      }
     }
   }
 
