@@ -1,0 +1,45 @@
+name: HDL Thumbnail A/B Report
+
+on:
+  schedule:
+    # 10:00 UTC every Sunday — after the daily video's 09:15 UTC run, once a week is plenty
+    # since a single day rarely shifts a CTR average that's built up over weeks of videos.
+    - cron: "0 10 * * 0"
+  workflow_dispatch: {} # lets you trigger a manual re-check from the GitHub app/site
+
+permissions:
+  contents: write # needed to commit the updated thumbnail-winner.json back to the repo
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run thumbnail A/B report
+        run: npm run report:thumbnails
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+
+      - name: Commit thumbnail-winner.json
+        if: always()
+        run: |
+          if [ -n "$(git status --porcelain thumbnail-winner.json)" ]; then
+            git config user.name "hdl-thumbnail-report-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add thumbnail-winner.json
+            git commit -m "Update thumbnail-winner.json [skip ci]"
+            git push
+          else
+            echo "No change to thumbnail-winner.json."
+          fi
