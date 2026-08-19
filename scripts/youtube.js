@@ -1,10 +1,22 @@
 import { google } from "googleapis";
 import fs from "node:fs";
 
-function client() {
+function oauth2Client() {
   const oauth2 = new google.auth.OAuth2(process.env.YT_CLIENT_ID, process.env.YT_CLIENT_SECRET);
   oauth2.setCredentials({ refresh_token: process.env.YT_REFRESH_TOKEN });
-  return google.youtube({ version: "v3", auth: oauth2 });
+  return oauth2;
+}
+
+function client() {
+  return google.youtube({ version: "v3", auth: oauth2Client() });
+}
+
+// Separate client for the YouTube Analytics API (thumbnail-report.js) — same refresh token,
+// but only works if it was minted with the yt-analytics.readonly scope added (see SETUP.md).
+// A missing-scope call fails with a 403 "insufficient authentication scopes" error, which
+// thumbnail-report.js catches and explains on its own.
+export function analyticsClient() {
+  return google.youtubeAnalytics({ version: "v2", auth: oauth2Client() });
 }
 
 // google-auth-library's own error for a dead refresh token is `GaxiosError: invalid_grant` with
