@@ -377,13 +377,33 @@ async function main() {
         }
       }
 
-      const uploadedShort = await uploadVideo({
-        videoPath: shortUploadPath,
-        title: shortTitle,
-        description: shortDescription,
-        tags: [book.title, "HDL Group", book.angle, "Shorts"],
-        localizations: shortLocalizations,
-      });
+      // One bad/unrecognized translation anywhere in `localizations` fails the ENTIRE upload
+      // with YouTube's generic invalidVideoMetadata error (see YT_LOCALE_MAP note above) — so a
+      // single mistranslated title can cost the whole Short instead of just that one language.
+      // Retry once with localizations stripped: an English-only Short beats no Short at all.
+      let uploadedShort;
+      try {
+        uploadedShort = await uploadVideo({
+          videoPath: shortUploadPath,
+          title: shortTitle,
+          description: shortDescription,
+          tags: [book.title, "HDL Group", book.angle, "Shorts"],
+          localizations: shortLocalizations,
+        });
+      } catch (e) {
+        console.warn(
+          "Short upload with localizations failed, retrying English-only:",
+          e.message
+        );
+        uploadedShort = await uploadVideo({
+          videoPath: shortUploadPath,
+          title: shortTitle,
+          description: shortDescription,
+          tags: [book.title, "HDL Group", book.angle, "Shorts"],
+          localizations: {},
+        });
+        console.log("Short uploaded English-only after localizations retry.");
+      }
       console.log(`Uploaded Short (~${Math.round(shortTotal)}s): https://youtube.com/watch?v=${uploadedShort.id}`);
       shortVideoId = uploadedShort.id;
       shortSceneCount = shortScenes.length;
