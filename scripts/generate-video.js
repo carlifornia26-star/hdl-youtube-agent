@@ -216,13 +216,23 @@ async function main() {
   // book each day there's no repeat audience to split-test *within* a single video anyway.
   // Instead this alternates two THUMBNAIL STYLES day to day — plain photo (variant A) vs. photo
   // + bold title text (variant B) — same day-of-year rotation pattern as the narrator voice.
-  // Which variant ran is logged in videos-manifest.json (see thumbnail_variant below) so you can
-  // later pull each video's impressions/CTR from the YouTube Analytics API and compare A vs. B
-  // averages across the catalog. That reporting step needs the yt-analytics.readonly OAuth
-  // scope, which YT_REFRESH_TOKEN does NOT currently have (see SETUP.md) — it would need to be
-  // re-minted with that scope added before any analytics pull will work.
+  // scripts/thumbnail-report.js runs weekly (see .github/workflows/thumbnail-report.yml),
+  // pulls real per-video CTR from the YouTube Analytics API, and writes thumbnail-winner.json
+  // with a decided variant once there's enough data and a clear lead. If that file names a
+  // winner, EVERY video uses it from here on — no manual step. Otherwise (file missing, no
+  // winner yet, or not enough data) this keeps alternating exactly as before.
   const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
-  const thumbnailVariant = dayOfYear % 2 === 0 ? "A" : "B";
+  let thumbnailVariant = dayOfYear % 2 === 0 ? "A" : "B";
+  try {
+    const winnerRaw = await fs.readFile(path.resolve("thumbnail-winner.json"), "utf8");
+    const winnerData = JSON.parse(winnerRaw);
+    if (winnerData.winner === "A" || winnerData.winner === "B") {
+      thumbnailVariant = winnerData.winner;
+      console.log(`thumbnail-winner.json has a decided winner: variant ${thumbnailVariant}. Using it (no more alternating).`);
+    }
+  } catch {
+    // No winner file yet (first run before thumbnail-report.js has ever run) — keep alternating.
+  }
   try {
     await generateThumbnail({
       imagePath: thumbSourcePath,
