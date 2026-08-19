@@ -79,6 +79,14 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
     return res.data; // includes .id
   } catch (err) {
     explainIfAuthError(err);
+    // err.message alone is just the generic top-level reason ("The request metadata is
+    // invalid.") — Google's actual per-field detail lives in err.response.data.error (or
+    // err.errors on older client versions). Logging that too is the difference between
+    // guessing which field broke it and actually knowing.
+    const apiError = err?.response?.data?.error || err?.errors || null;
+    if (apiError) {
+      console.error("uploadVideo failed. API error detail:\n", JSON.stringify(apiError, null, 2));
+    }
     console.error("uploadVideo failed. requestBody was:\n", JSON.stringify(requestBody, null, 2));
     throw err;
   }
@@ -126,4 +134,4 @@ export async function uploadCaptionTrack({ videoId, language, srtPath, name }) {
     }
   }
   throw lastErr;
-      }
+    }
