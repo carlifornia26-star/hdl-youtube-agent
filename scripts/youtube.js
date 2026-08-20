@@ -92,6 +92,48 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
   }
 }
 
+// Returns every application language YouTube itself supports (used by customize-channel.js to
+// know what "all available languages" actually means — this is Google's own list, not a guess).
+export async function listSupportedLanguages() {
+  const youtube = client();
+  const res = await youtube.i18nLanguages.list({ part: ["snippet"], hl: "en" });
+  return (res.data.items || [])
+    .map((l) => ({ code: l.id, name: l.snippet?.name }))
+    .filter((l) => l.code);
+}
+
+export async function getMyChannelBranding() {
+  const youtube = client();
+  const res = await youtube.channels.list({
+    part: ["snippet", "brandingSettings", "localizations"],
+    mine: true,
+  });
+  const channel = res.data.items?.[0];
+  if (!channel) throw new Error("No channel found for this account/token.");
+  return channel;
+}
+
+// channels.update REPLACES the entire localizations object with whatever is sent — it does not
+// merge — so callers must include every localization they want kept, not just the new/changed
+// ones. Costs 50 quota units total regardless of how many languages are in the map (one call).
+export async function updateChannelLocalizations({ channelId, localizations }) {
+  const youtube = client();
+  try {
+    const res = await youtube.channels.update({
+      part: ["localizations"],
+      requestBody: { id: channelId, localizations },
+    });
+    return res.data;
+  } catch (err) {
+    explainIfAuthError(err);
+    const apiError = err?.response?.data?.error || err?.errors || null;
+    if (apiError) {
+      console.error("updateChannelLocalizations failed. API error detail:\n", JSON.stringify(apiError, null, 2));
+    }
+    throw err;
+  }
+}
+
 export async function uploadThumbnail({ videoId, imagePath }) {
   const youtube = client();
   try {
@@ -134,4 +176,4 @@ export async function uploadCaptionTrack({ videoId, language, srtPath, name }) {
     }
   }
   throw lastErr;
-    }
+}
