@@ -10,6 +10,9 @@ concurrency:
   group: hdl-daily-video
   cancel-in-progress: false
 
+permissions:
+  contents: write # needed to commit the updated videos-manifest.json back to the repo
+
 jobs:
   build-and-upload:
     runs-on: ubuntu-latest
@@ -43,6 +46,23 @@ jobs:
           # Optional: set to "true" to upload as Private instead of Public while you're testing
           DRY_RUN_PRIVATE: ${{ vars.DRY_RUN_PRIVATE }}
 
+      # Commits the manifest update AND today's community-post draft (image + caption text,
+      # written by community-post.js) even if the main step above exited non-zero — that step
+      # intentionally throws AFTER publishing (see VOICE_FAILURE_THRESHOLD in generate-video.js)
+      # just to redden the Actions check, so the video/manifest/post draft can all be live already.
+      - name: Commit updated video manifest + community post draft
+        if: always()
+        run: |
+          git config user.name "hdl-daily-video-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add videos-manifest.json community-posts/ 2>/dev/null || true
+          if [ -n "$(git status --porcelain videos-manifest.json community-posts/ 2>/dev/null)" ]; then
+            git commit -m "Update videos-manifest.json + today's community post draft [skip ci]"
+            git push
+          else
+            echo "No manifest/community-post changes to commit."
+          fi
+
       - name: Upload run artifacts (for debugging, kept 3 days)
         if: always()
         uses: actions/upload-artifact@v4
@@ -50,5 +70,6 @@ jobs:
           name: video-run-${{ github.run_number }}
           path: |
             build/
+            community-posts/
           retention-days: 3
           if-no-files-found: ignore
