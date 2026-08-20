@@ -63,9 +63,43 @@ async function main() {
   console.log(`Translated ${translated} languages, skipped ${skipped}.`);
 
   console.log("Sending localizations to YouTube (channels.update)...");
-  await updateChannelLocalizations({ channelId, localizations });
-  console.log(`Done — channel name + description now localized into ${Object.keys(localizations).length} languages.`);
-  console.log("Check it: Studio -> Customization -> Basic info -> language dropdown at the top.");
+  try {
+    await updateChannelLocalizations({ channelId, localizations });
+    console.log(`Done — channel name + description now localized into ${Object.keys(localizations).length} languages.`);
+    console.log("Check it: Studio -> Customization -> Basic info -> language dropdown at the top.");
+  } catch (e) {
+    console.warn("Bulk update rejected. Bisecting to find which locale key(s) YouTube won't accept...");
+    const base = { ...(channel.localizations || {}) }; // last known-good state, applied incrementally below
+    const newKeys = Object.keys(localizations).filter((k) => !(k in base));
+    const bad = [];
+
+    async function bisect(keys) {
+      if (keys.length === 0) return;
+      const trial = { ...base };
+      for (const k of keys) trial[k] = localizations[k];
+      try {
+        await updateChannelLocalizations({ channelId, localizations: trial });
+        Object.assign(base, trial); // this subset is clean — keep it applied and move on
+      } catch {
+        if (keys.length === 1) {
+          bad.push(keys[0]);
+          return;
+        }
+        const mid = Math.ceil(keys.length / 2);
+        await bisect(keys.slice(0, mid));
+        await bisect(keys.slice(mid));
+      }
+    }
+
+    await bisect(newKeys);
+    if (bad.length) {
+      console.error(`Rejected locale key(s): ${bad.join(", ")} — YouTube's channels.update won't accept these as localization keys.`);
+      console.log(`All ${Object.keys(base).length - Object.keys(channel.localizations || {}).length} other new languages were applied successfully.`);
+    } else {
+      console.error("Bisection found no single bad key — likely a transient error. Re-run the workflow.");
+    }
+    process.exitCode = 1;
+  }
 }
 
 main().catch((err) => {
