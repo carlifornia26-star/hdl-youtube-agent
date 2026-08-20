@@ -8,6 +8,7 @@ import { fetchBackgroundMusic, attributionLine } from "./music.js";
 import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic } from "./render.js";
 import { uploadVideo, uploadCaptionTrack, uploadThumbnail } from "./youtube.js";
 import { appendVideoEntry } from "./manifest.js";
+import { buildDailyCommunityPost } from "./community-post.js";
 
 const BUILD_DIR = path.resolve("build");
 const SITE_URL = "https://highdefinitionlearning.pages.dev/"; // every description link points here, not the per-book page
@@ -435,6 +436,15 @@ async function main() {
     console.log("videos-manifest.json updated.");
   } catch (e) {
     console.warn("Failed to update videos-manifest.json (video is still live on YouTube):", e.message);
+  }
+
+  // 6e) Daily Community-tab post draft (image + 16-language caption) — NOT auto-published,
+  // the YouTube API has no endpoint for that. See community-post.js for why and what this
+  // produces instead. A failure here should never take down the run.
+  try {
+    await buildDailyCommunityPost(book, BUILD_DIR);
+  } catch (e) {
+    console.warn("Community post draft failed, continuing:", e.message);
   }
 
   // 7) Caption tracks — English first, then translated languages (reusing the same scene lines).
