@@ -116,6 +116,14 @@ export async function getMyChannelBranding() {
 // channels.update REPLACES the entire localizations object with whatever is sent — it does not
 // merge — so callers must include every localization they want kept, not just the new/changed
 // ones. Costs 50 quota units total regardless of how many languages are in the map (one call).
+// A 403 with reason "quotaExceeded" means the day's YouTube Data API quota is used up. It has
+// nothing to do with which locale keys were sent, it will fail identically no matter what's in
+// the request, and retrying (or bisecting) just burns more of an already-empty quota. Tag it so
+// callers can tell "the whole account is out of quota" apart from "one specific key is invalid."
+function isQuotaExceeded(apiError) {
+  return apiError?.errors?.some((e) => e.reason === "quotaExceeded") ?? false;
+}
+
 export async function updateChannelLocalizations({ channelId, localizations }) {
   const youtube = client();
   try {
@@ -130,6 +138,7 @@ export async function updateChannelLocalizations({ channelId, localizations }) {
     if (apiError) {
       console.error("updateChannelLocalizations failed. API error detail:\n", JSON.stringify(apiError, null, 2));
     }
+    err.isQuotaExceeded = isQuotaExceeded(apiError);
     throw err;
   }
 }
@@ -176,4 +185,4 @@ export async function uploadCaptionTrack({ videoId, language, srtPath, name }) {
     }
   }
   throw lastErr;
-}
+    }
