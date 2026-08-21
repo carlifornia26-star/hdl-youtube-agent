@@ -1,0 +1,51 @@
+name: HDL Channel Localization
+
+# Manual only (workflow_dispatch) — the channel name/description don't change often, so this
+# isn't on a cron. Run it from the Actions tab any time you edit the English name/description
+# in Studio's Basic info page and want the translations to catch up.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  localize:
+    name: Translate & sync channel title/description
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # customize-channel.js sets process.exitCode = 1 on quota failure, verification failure,
+      # or any unhandled error — and 0 only after the read-back verification confirms every
+      # requested locale is actually live on YouTube. That exit code is what makes this step
+      # (and therefore the job) fail or succeed; nothing here overrides or second-guesses it.
+      - name: Run channel localization
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: npm run customize-channel
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "### Localization update succeeded and was verified on YouTube." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Localization run did not complete successfully." >> "$GITHUB_STEP_SUMMARY"
+            echo "Check the \"Run channel localization\" step log above for the reason:" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **QUOTA FAILURE** — YouTube Data API quotaExceeded. Wait for quota reset (midnight Pacific Time) and re-run." >> "$GITHUB_STEP_SUMMARY"
+            echo "- **VERIFICATION FAILURE** — the update call was accepted but read-back from YouTube found missing locales." >> "$GITHUB_STEP_SUMMARY"
+            echo "- Anything else (auth, scopes, channel ID) — see the full error dump in the step log." >> "$GITHUB_STEP_SUMMARY"
+          fi
