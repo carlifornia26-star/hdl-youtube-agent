@@ -1,6 +1,18 @@
 {
   "videos": [
     {
+      "video_id": "itZZ0n76C68",
+      "short_video_id": "N8TXIe-hIf8",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "Bitcoin Standard — Bitcoin & digital finance | HDL Group",
+      "description": "Bitcoin Standard explores Bitcoin & digital finance. Available in English only, exclusively on Google Play Books.",
+      "thumbnail_url": "https://i.ytimg.com/vi/itZZ0n76C68/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "duration_seconds": 684,
+      "published_at": "2026-08-21T10:08:44.624Z"
+    },
+    {
       "video_id": "5cTh5YoeFRg",
       "short_video_id": "",
       "book_slug": "science-of-feeling-great",
@@ -12,5 +24,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-08-17T09:25:00Z"
+  "updated_at": "2026-08-21T10:08:44.624Z"
 }
