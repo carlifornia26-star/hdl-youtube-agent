@@ -120,8 +120,17 @@ export async function getMyChannelBranding() {
 // nothing to do with which locale keys were sent, it will fail identically no matter what's in
 // the request, and retrying (or bisecting) just burns more of an already-empty quota. Tag it so
 // callers can tell "the whole account is out of quota" apart from "one specific key is invalid."
-function isQuotaExceeded(apiError) {
-  return apiError?.errors?.some((e) => e.reason === "quotaExceeded") ?? false;
+//
+// Checks BOTH the HTTP status and the reason string, and looks in every shape googleapis is
+// known to put them in across versions (err.response.data.error.errors[0].reason is the modern
+// gaxios shape; err.errors[0].reason is the older/alternate shape) — a mismatch in either would
+// silently fall through to the "treat it like a bad locale" bisection path, which is exactly the
+// bug this exists to prevent.
+export function isQuotaExceeded(err) {
+  const status = err?.response?.status ?? err?.code ?? err?.status;
+  const errors = err?.response?.data?.error?.errors ?? err?.errors ?? [];
+  const reason = errors?.[0]?.reason ?? "";
+  return Number(status) === 403 && String(reason).toLowerCase() === "quotaexceeded";
 }
 
 export async function updateChannelLocalizations({ channelId, localizations }) {
@@ -138,9 +147,26 @@ export async function updateChannelLocalizations({ channelId, localizations }) {
     if (apiError) {
       console.error("updateChannelLocalizations failed. API error detail:\n", JSON.stringify(apiError, null, 2));
     }
-    err.isQuotaExceeded = isQuotaExceeded(apiError);
+    err.isQuotaExceeded = isQuotaExceeded(err);
     throw err;
   }
+}
+
+// Post-update read-back verification (guide item E). A 200 OK from channels.update only means
+// YouTube ACCEPTED the request — it does not guarantee every locale in it was actually stored.
+// This re-fetches the channel directly from YouTube so callers can confirm what's really live,
+// rather than trusting the update call's own success response.
+export async function getChannelLocalizations(channelId) {
+  const youtube = client();
+  const res = await youtube.channels.list({
+    part: ["snippet", "localizations"],
+    id: [channelId],
+  });
+  const channel = res.data.items?.[0];
+  if (!channel) {
+    throw new Error(`Verification failed: channels.list returned no channel for id ${channelId}.`);
+  }
+  return channel.localizations || {};
 }
 
 export async function uploadThumbnail({ videoId, imagePath }) {
@@ -185,4 +211,4 @@ export async function uploadCaptionTrack({ videoId, language, srtPath, name }) {
     }
   }
   throw lastErr;
-    }
+      }
