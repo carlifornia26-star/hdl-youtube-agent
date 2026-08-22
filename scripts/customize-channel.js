@@ -23,6 +23,32 @@ function baseLangForTranslation(ytCode) {
   return ytCode.split(/[-_]/)[0];
 }
 
+// A few YouTube codes map to a DIFFERENT code in m2m100 for the same language — not missing,
+// just spelled differently. `iw` is the old/deprecated ISO code YouTube still uses for Hebrew;
+// m2m100 only recognizes the current code `he`. Applied AFTER baseLangForTranslation, so this
+// keys on the base code (e.g. "iw", not "iw-SomeRegion").
+const M2M100_CODE_ALIASES = {
+  iw: "he", // Hebrew
+};
+
+// Confirmed (2026-08-22, from a full run against all 82 YouTube-supported languages) not present
+// in m2m100's vocabulary under any code or name — every attempt fails with the same permanent
+// 400, so there's no alias fix like `iw`. Skip these up front instead of spending 3 retries with
+// backoff on a call that can only ever fail. Re-check occasionally in case Cloudflare adds
+// support: https://developers.cloudflare.com/workers-ai/models/m2m100-1.2b/
+const M2M100_UNSUPPORTED = new Set([
+  "as", // Assamese
+  "eu", // Basque
+  "fil", // Filipino
+  "ky", // Kyrgyz
+  "te", // Telugu
+]);
+
+function m2m100LangFor(ytCode) {
+  const base = baseLangForTranslation(ytCode);
+  return M2M100_CODE_ALIASES[base] || base;
+}
+
 // Read-back verification (fix guide item E). channels.update returning 200 only means YouTube
 // ACCEPTED the request — it does NOT prove every locale was actually stored. This re-fetches the
 // channel from YouTube and checks each requested locale is really there before anything is
@@ -56,7 +82,13 @@ async function main() {
   let translated = 0;
   let skipped = 0;
   for (const { code, name } of languages) {
-    const mtLang = baseLangForTranslation(code);
+    const base = baseLangForTranslation(code);
+    if (M2M100_UNSUPPORTED.has(base)) {
+      skipped++;
+      console.warn(`  skip: ${code} (${name}) — not supported by m2m100 (no translation model available for this language)`);
+      continue;
+    }
+    const mtLang = m2m100LangFor(code);
     try {
       const t = await translateMeta(defaultTitle, defaultDescription, mtLang);
       localizations[code] = {
@@ -95,32 +127,81 @@ async function main() {
     );
     console.log("Check it: Studio -> Customization -> Basic info -> language dropdown at the top.");
   } catch (e) {
-    // Quota exhaustion fails identically no matter which keys are sent — retrying or probing
-    // learns nothing from it and just spends more quota you don't have. Stop here.
+    // Quota exhaustion fails identically no matter which keys are sent — bisecting can't learn
+    // anything from it, and every bisection call spends more quota you don't have, which is how
+    // a single quota error turns into dozens of languages wrongly logged as "rejected." Stop here.
     if (e.isQuotaExceeded) {
       console.error(
         "QUOTA FAILURE: Localization was not changed because YouTube Data API quotaExceeded. " +
           "None of the language codes are actually invalid — the bulk update simply couldn't go " +
           "through today. Wait for quota reset (midnight Pacific Time) or use the correct Google " +
-          "Cloud project/quota, then re-run this workflow."
+          "Cloud project/quota, then re-run this workflow. Do not bisect or test individual " +
+          "locales off the back of this error."
       );
       process.exitCode = 1;
       return;
     }
 
-    // No locale-by-locale bisection here on purpose: hunting for a single bad key by trial and
-    // error costs one full channels.update call (50 quota units) per trial, and recursively
-    // bisecting ~75+ languages can run to 100+ trial calls — enough to exhaust a day's quota by
-    // itself chasing down one bad key. updateChannelLocalizations() already logs the full API
-    // error detail (including, for a genuine invalid-locale rejection, whatever YouTube reports)
-    // before this is thrown — check that log output above to see exactly what YouTube objected
-    // to, fix it by hand, and re-run once quota allows.
-    console.error(
-      "UPDATE FAILURE: channels.update was rejected for a non-quota reason. See the API error " +
-        "detail logged above (from updateChannelLocalizations) for what YouTube actually " +
-        "objected to. No automatic locale-by-locale retry is attempted, since that can burn " +
-        "through a day's quota chasing a single bad key."
-    );
+    console.warn("Bulk update rejected. Bisecting to find which locale key(s) YouTube won't accept...");
+    const base = { ...(channel.localizations || {}) }; // last known-good state, applied incrementally below
+    const newKeys = Object.keys(localizations).filter((k) => !(k in base));
+    const bad = [];
+    let quotaHitMidBisect = false;
+
+    async function bisect(keys) {
+      if (keys.length === 0 || quotaHitMidBisect) return;
+      const trial = { ...base };
+      for (const k of keys) trial[k] = localizations[k];
+      try {
+        await updateChannelLocalizations({ channelId, localizations: trial });
+        Object.assign(base, trial); // this subset is clean — keep it applied and move on
+      } catch (trialErr) {
+        // Quota can run out mid-bisection too (each trial call still costs units). Stop instead
+        // of continuing to misattribute quota failures to whatever keys happen to be left.
+        if (trialErr.isQuotaExceeded) {
+          quotaHitMidBisect = true;
+          return;
+        }
+        if (keys.length === 1) {
+          bad.push(keys[0]);
+          return;
+        }
+        const mid = Math.ceil(keys.length / 2);
+        await bisect(keys.slice(0, mid));
+        await bisect(keys.slice(mid));
+      }
+    }
+
+    await bisect(newKeys);
+
+    // Verify whatever `base` claims succeeded against what YouTube actually has, rather than
+    // trusting the bisection trial calls' own success responses.
+    const appliedCount = Object.keys(base).length - Object.keys(channel.localizations || {}).length;
+    const stillMissing = appliedCount > 0 ? await verifySaved(channelId, base) : [];
+
+    if (quotaHitMidBisect) {
+      console.error(
+        "QUOTA FAILURE: YouTube Data API quota ran out partway through bisection — stopping here. " +
+          `${appliedCount} language(s) were accepted before that; the rest are still untested, not ` +
+          "confirmed bad. Re-run after quota resets (midnight Pacific Time)."
+      );
+    } else if (bad.length) {
+      console.error(`Rejected locale key(s): ${bad.join(", ")} — YouTube's channels.update won't accept these as localization keys.`);
+      console.log(`${appliedCount} other new language(s) were accepted by the bisection trial calls.`);
+    } else {
+      console.error("VERIFICATION FAILURE: Bisection found no single bad key — likely a transient error. Re-run the workflow.");
+    }
+
+    if (stillMissing.length) {
+      console.error(
+        `VERIFICATION FAILURE: Of the ${appliedCount} language(s) the bisection calls reported as ` +
+          `accepted, ${stillMissing.length} are NOT present on read-back: ${stillMissing.join(", ")}. ` +
+          "Do not trust an accepted response alone."
+      );
+    } else if (appliedCount > 0) {
+      console.log(`Verified: ${appliedCount} language(s) from the bisection recovery are confirmed present on YouTube.`);
+    }
+
     process.exitCode = 1;
   }
 }
