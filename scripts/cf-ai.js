@@ -5,6 +5,18 @@ const BASE = (accountId) => `https://api.cloudflare.com/client/v4/accounts/${acc
 // Workers AI occasionally returns transient 500s (e.g. internal error code 3043) that
 // succeed on retry — this is a known, documented-nowhere flakiness on Cloudflare's side,
 // not something a request change fixes. Retry a few times with backoff before giving up.
+//
+// A 4xx (e.g. "target_lang is not one of [...]") is NOT one of those flaky cases — it's the
+// API rejecting the request as permanently invalid. Retrying it just repeats the exact same
+// call and gets the exact same rejection, burning ~1s+2s of backoff and two extra HTTP calls
+// per failure for nothing. Mark 4xx errors non-retryable so withRetry gives up immediately.
+class WorkersAIError extends Error {
+  constructor(message, { retryable }) {
+    super(message);
+    this.retryable = retryable;
+  }
+}
+
 async function withRetry(label, fn, attempts = 3) {
   let lastErr;
   for (let i = 1; i <= attempts; i++) {
@@ -12,11 +24,13 @@ async function withRetry(label, fn, attempts = 3) {
       return await fn();
     } catch (err) {
       lastErr = err;
-      const isLast = i === attempts;
+      const retryable = err.retryable !== false; // unknown/non-WorkersAIError errors default to retryable
+      const isLast = i === attempts || !retryable;
       console.error(`${label}: attempt ${i}/${attempts} failed${isLast ? "" : ", retrying"}: ${err.message}`);
       if (!isLast) {
         await new Promise((r) => setTimeout(r, 1000 * i)); // 1s, 2s, ...
       }
+      if (!retryable) break;
     }
   }
   throw lastErr;
@@ -35,10 +49,14 @@ async function run(model, body) {
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      throw new Error(`Workers AI ${model} failed: ${res.status} ${await res.text()}`);
+      const text = await res.text();
+      // 4xx = the request itself is invalid (bad target_lang, malformed body, etc.) — retrying
+      // an identical request won't change that. 5xx/network = worth the existing retry/backoff.
+      const retryable = !(res.status >= 400 && res.status < 500);
+      throw new WorkersAIError(`Workers AI ${model} failed: ${res.status} ${text}`, { retryable });
     }
     const json = await res.json();
-    if (!json.success) throw new Error(`Workers AI ${model} error: ${JSON.stringify(json.errors)}`);
+    if (!json.success) throw new WorkersAIError(`Workers AI ${model} error: ${JSON.stringify(json.errors)}`, { retryable: true });
     return json.result;
   });
 }
@@ -212,4 +230,4 @@ export async function translateMeta(title, description, targetLang) {
     title: (tTitle || title).slice(0, YT_TITLE_MAX),
     description: (tDesc || description).slice(0, YT_DESCRIPTION_MAX),
   };
-                                         }
+    }
