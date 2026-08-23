@@ -1,6 +1,18 @@
 {
   "videos": [
     {
+      "video_id": "qhZC3be-Bro",
+      "short_video_id": "ZCGKlH8BydA",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "Art of Joy — the science of happiness | HDL Group",
+      "description": "Art of Joy explores the science of happiness. Available in English only, exclusively on Google Play Books.",
+      "thumbnail_url": "https://i.ytimg.com/vi/qhZC3be-Bro/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "duration_seconds": 524,
+      "published_at": "2026-08-23T09:52:27.052Z"
+    },
+    {
       "video_id": "itZZ0n76C68",
       "short_video_id": "N8TXIe-hIf8",
       "book_slug": "bitcoin-standard",
@@ -24,5 +36,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-08-21T10:08:44.624Z"
+  "updated_at": "2026-08-23T09:52:27.052Z"
 }
