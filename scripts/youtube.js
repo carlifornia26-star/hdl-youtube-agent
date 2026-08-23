@@ -59,15 +59,20 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
       title,
       description,
       tags,
-      categoryId: "27", // Education
-      defaultLanguage: "en",
-      defaultAudioLanguage: "en", // Without this, uploads via the API show "0 languages" —
-      // defaultLanguage alone only tells YouTube the text (title/description) is English;
-      // defaultAudioLanguage is the field that tells it the spoken audio track is English.
+      categoryId: "28", // Science & Technology — matches the "Science and technology" Upload
+      // default set in Studio (Settings > Upload defaults > Advanced settings). Studio's Upload
+      // Defaults are UI-only and never apply to API uploads, so this has to be hardcoded here to
+      // actually match what's configured there.
+      defaultLanguage: "en", // matches Studio's "Title and description language: English"
+      defaultAudioLanguage: "en", // matches Studio's "Video language: English". Without this,
+      // uploads via the API show "0 languages" — defaultLanguage alone only tells YouTube the
+      // text (title/description) is English; this is the field for the spoken audio track.
     },
     status: {
       privacyStatus: isPrivate ? "private" : "public",
       selfDeclaredMadeForKids: false,
+      license: "youtube", // matches Studio's "Licence: Standard YouTube licence" (the other
+      // option, "creativeCommon", is a separate CC BY licence you'd opt into explicitly)
     },
     localizations: cleanLocalizations,
   };
@@ -214,4 +219,4 @@ export async function uploadCaptionTrack({ videoId, language, srtPath, name }) {
     }
   }
   throw lastErr;
-      }
+}
