@@ -23,32 +23,6 @@ function baseLangForTranslation(ytCode) {
   return ytCode.split(/[-_]/)[0];
 }
 
-// A few YouTube codes map to a DIFFERENT code in m2m100 for the same language — not missing,
-// just spelled differently. `iw` is the old/deprecated ISO code YouTube still uses for Hebrew;
-// m2m100 only recognizes the current code `he`. Applied AFTER baseLangForTranslation, so this
-// keys on the base code (e.g. "iw", not "iw-SomeRegion").
-const M2M100_CODE_ALIASES = {
-  iw: "he", // Hebrew
-};
-
-// Confirmed (2026-08-22, from a full run against all 82 YouTube-supported languages) not present
-// in m2m100's vocabulary under any code or name — every attempt fails with the same permanent
-// 400, so there's no alias fix like `iw`. Skip these up front instead of spending 3 retries with
-// backoff on a call that can only ever fail. Re-check occasionally in case Cloudflare adds
-// support: https://developers.cloudflare.com/workers-ai/models/m2m100-1.2b/
-const M2M100_UNSUPPORTED = new Set([
-  "as", // Assamese
-  "eu", // Basque
-  "fil", // Filipino
-  "ky", // Kyrgyz
-  "te", // Telugu
-]);
-
-function m2m100LangFor(ytCode) {
-  const base = baseLangForTranslation(ytCode);
-  return M2M100_CODE_ALIASES[base] || base;
-}
-
 // Read-back verification (fix guide item E). channels.update returning 200 only means YouTube
 // ACCEPTED the request — it does NOT prove every locale was actually stored. This re-fetches the
 // channel from YouTube and checks each requested locale is really there before anything is
@@ -82,13 +56,7 @@ async function main() {
   let translated = 0;
   let skipped = 0;
   for (const { code, name } of languages) {
-    const base = baseLangForTranslation(code);
-    if (M2M100_UNSUPPORTED.has(base)) {
-      skipped++;
-      console.warn(`  skip: ${code} (${name}) — not supported by m2m100 (no translation model available for this language)`);
-      continue;
-    }
-    const mtLang = m2m100LangFor(code);
+    const mtLang = baseLangForTranslation(code);
     try {
       const t = await translateMeta(defaultTitle, defaultDescription, mtLang);
       localizations[code] = {
@@ -106,7 +74,7 @@ async function main() {
 
   console.log("Sending localizations to YouTube (channels.update)...");
   try {
-    await updateChannelLocalizations({ channelId, localizations });
+    await updateChannelLocalizations({ channelId, localizations, title: defaultTitle, description: defaultDescription });
     console.log("API accepted the update — verifying by reading the channel back from YouTube...");
 
     const missing = await verifySaved(channelId, localizations);
@@ -153,7 +121,7 @@ async function main() {
       const trial = { ...base };
       for (const k of keys) trial[k] = localizations[k];
       try {
-        await updateChannelLocalizations({ channelId, localizations: trial });
+        await updateChannelLocalizations({ channelId, localizations: trial, title: defaultTitle, description: defaultDescription });
         Object.assign(base, trial); // this subset is clean — keep it applied and move on
       } catch (trialErr) {
         // Quota can run out mid-bisection too (each trial call still costs units). Stop instead
