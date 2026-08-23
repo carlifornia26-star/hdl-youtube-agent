@@ -62,6 +62,7 @@ export async function fetchUnsplashPhoto(keyword, outPath, index = 0) {
   }
 
   return {
+    photoId: photo.id, // lets callers confirm two fetches actually returned different photos
     photographerName: photo.user.name,
     photographerProfileUrl: `${photo.user.links.html}?utm_source=hdl_group&utm_medium=referral`,
   };
@@ -69,4 +70,4 @@ export async function fetchUnsplashPhoto(keyword, outPath, index = 0) {
 
 export function unsplashAttributionLine({ photographerName, photographerProfileUrl }) {
   return `Thumbnail photo by ${photographerName} on Unsplash (${photographerProfileUrl})`;
-      }
+                          }
