@@ -6,7 +6,7 @@ import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./a
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
 import { fetchBackgroundMusic, attributionLine } from "./music.js";
 import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic } from "./render.js";
-import { uploadVideo, uploadCaptionTrack, uploadThumbnail } from "./youtube.js";
+import { uploadVideo, uploadCaptionTrack, uploadThumbnail, addVideoToPlaylist } from "./youtube.js";
 import { appendVideoEntry } from "./manifest.js";
 import { buildDailyCommunityPost } from "./community-post.js";
 
@@ -316,6 +316,23 @@ async function main() {
 
   // 6b) Upload the thumbnail generated back in step 3c
   await uploadThumbnail({ videoId: uploaded.id, imagePath: thumbPath });
+
+  // 6b2) Add today's video to its book's playlist (if one exists — see setup-playlists.js).
+  // Non-fatal: a missing or failed playlist add should never take down an otherwise-successful
+  // publish — the video is already live on the channel either way.
+  try {
+    const playlistsRaw = await fs.readFile(path.resolve("playlists.json"), "utf8");
+    const playlists = JSON.parse(playlistsRaw);
+    const playlistId = playlists[book.slug];
+    if (playlistId) {
+      await addVideoToPlaylist({ playlistId, videoId: uploaded.id });
+      console.log(`Added to playlist: https://youtube.com/playlist?list=${playlistId}`);
+    } else {
+      console.log(`No playlist configured for ${book.slug} yet — run setup-playlists.js first.`);
+    }
+  } catch (e) {
+    console.warn("Adding video to playlist failed, continuing:", e.message);
+  }
 
   // Tracked across the Short block below (stays null if the Short fails/skips) so the
   // manifest entry written in 6d can still record it when it succeeds, without blocking on it.
