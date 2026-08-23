@@ -133,12 +133,23 @@ export function isQuotaExceeded(err) {
   return Number(status) === 403 && String(reason).toLowerCase() === "quotaexceeded";
 }
 
-export async function updateChannelLocalizations({ channelId, localizations }) {
+export async function updateChannelLocalizations({ channelId, localizations, title, description }) {
   const youtube = client();
   try {
+    // YouTube requires the channel to have an established default language before it will
+    // accept ANY localizations entry — without snippet.defaultLanguage set in the SAME call,
+    // there's no reference "default" version for YouTube to localize from, and it rejects
+    // every locale key identically (a 400 badRequest with no per-key detail), no matter what
+    // the translated content is. This is why bisection alone can't find "the bad key" here —
+    // there isn't one; the whole request shape was incomplete. part must include "snippet" and
+    // requestBody.snippet must be sent alongside localizations, every time.
     const res = await youtube.channels.update({
-      part: ["localizations"],
-      requestBody: { id: channelId, localizations },
+      part: ["snippet", "localizations"],
+      requestBody: {
+        id: channelId,
+        snippet: { title, description, defaultLanguage: "en" },
+        localizations,
+      },
     });
     return res.data;
   } catch (err) {
@@ -211,4 +222,4 @@ export async function uploadCaptionTrack({ videoId, language, srtPath, name }) {
     }
   }
   throw lastErr;
-      }
+}
