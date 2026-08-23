@@ -193,30 +193,51 @@ async function main() {
     console.warn("Background music failed, uploading without it:", e.message);
   }
 
-  // 3c) Thumbnail image — a real Unsplash photo matching the book's topic, cropped clean with
-  // no text overlay, instead of a grabbed video frame (which can land on an awkward or blurry
-  // moment). Falls back to the old video-frame approach if Unsplash fails for any reason
-  // (missing key, rate limit, network hiccup) so a thumbnail always gets set either way. Done
-  // here, BEFORE metadata is built, so the photographer attribution (if any) can be included in
-  // the description — uploadThumbnail itself still happens later, once a videoId exists.
+  // 3c) Thumbnail image — TWO different real Unsplash photos matching the book's topic, both
+  // cropped clean with NO text overlay on either (previously variant B burned the title over
+  // the same photo used for variant A — now both variants are distinct plain photos instead).
+  // Falls back to a grabbed video frame if Unsplash fails entirely (missing key, rate limit,
+  // network hiccup) so a thumbnail always gets set either way. Done here, BEFORE metadata is
+  // built, so both photographers' attribution can be included in the description —
+  // uploadThumbnail itself still happens later, once a videoId exists.
   const thumbPath = path.join(BUILD_DIR, "thumbnail.jpg");
-  let thumbAttribution = null;
-  let thumbSourcePath;
+  let thumbAttributionA = null;
+  let thumbAttributionB = null;
+  let thumbSourcePathA;
+  let thumbSourcePathB;
   try {
     const thumbKeyword = book.stockKeywords[0];
-    const thumbPhotoPath = path.join(BUILD_DIR, "thumb_photo.jpg");
-    thumbAttribution = await fetchUnsplashPhoto(thumbKeyword, thumbPhotoPath, Math.floor(scenes.length / 2));
-    thumbSourcePath = thumbPhotoPath;
+    const baseIndex = Math.floor(scenes.length / 2);
+    const thumbPhotoPathA = path.join(BUILD_DIR, "thumb_photo_a.jpg");
+    const thumbPhotoPathB = path.join(BUILD_DIR, "thumb_photo_b.jpg");
+    thumbAttributionA = await fetchUnsplashPhoto(thumbKeyword, thumbPhotoPathA, baseIndex);
+
+    // Guarantee variant B is a genuinely different photo, not the one already picked for A —
+    // fetchUnsplashPhoto picks results[index % results.length], so a small result pool can
+    // otherwise hand back the exact same photo for two different index values. Walk forward
+    // through the result list until the photo id actually differs (or give up after 5 tries —
+    // only happens if Unsplash returned fewer than ~6 usable results for this keyword).
+    let bIndex = baseIndex + 1;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      thumbAttributionB = await fetchUnsplashPhoto(thumbKeyword, thumbPhotoPathB, bIndex);
+      if (thumbAttributionB.photoId !== thumbAttributionA.photoId) break;
+      bIndex++;
+    }
+    thumbSourcePathA = thumbPhotoPathA;
+    thumbSourcePathB = thumbPhotoPathB;
   } catch (e) {
-    console.warn("Unsplash thumbnail photo failed, falling back to a video frame:", e.message);
-    thumbSourcePath = path.join(BUILD_DIR, `clip_${Math.floor(scenes.length / 2)}.mp4`);
+    console.warn("Unsplash thumbnail photos failed, falling back to a video frame:", e.message);
+    thumbSourcePathA = path.join(BUILD_DIR, `clip_${Math.floor(scenes.length / 2)}.mp4`);
+    thumbSourcePathB = thumbSourcePathA;
+    thumbAttributionA = null;
+    thumbAttributionB = null;
   }
 
   // A/B thumbnail testing: YouTube's native "Test & compare" tool lives in Studio only and
   // isn't reachable through the Data API, and since this channel publishes a different one-off
   // book each day there's no repeat audience to split-test *within* a single video anyway.
-  // Instead this alternates two THUMBNAIL STYLES day to day — plain photo (variant A) vs. photo
-  // + bold title text (variant B) — same day-of-year rotation pattern as the narrator voice.
+  // Instead this alternates which of the two DIFFERENT plain photos above becomes the actual
+  // uploaded thumbnail, day to day — same day-of-year rotation pattern as the narrator voice.
   // scripts/thumbnail-report.js runs weekly (see .github/workflows/thumbnail-report.yml),
   // pulls real per-video CTR from the YouTube Analytics API, and writes thumbnail-winner.json
   // with a decided variant once there's enough data and a clear lead. If that file names a
@@ -234,15 +255,13 @@ async function main() {
   } catch {
     // No winner file yet (first run before thumbnail-report.js has ever run) — keep alternating.
   }
+  const thumbSourcePath = thumbnailVariant === "A" ? thumbSourcePathA : thumbSourcePathB;
   try {
-    await generateThumbnail({
-      imagePath: thumbSourcePath,
-      outPath: thumbPath,
-      titleText: thumbnailVariant === "B" ? book.title : undefined,
-    });
+    await generateThumbnail({ imagePath: thumbSourcePath, outPath: thumbPath }); // always plain — no titleText, on either variant
   } catch (e) {
-    console.warn(`Thumbnail generation (variant ${thumbnailVariant}) failed, retrying plain:`, e.message);
-    await generateThumbnail({ imagePath: thumbSourcePath, outPath: thumbPath });
+    const otherSourcePath = thumbnailVariant === "A" ? thumbSourcePathB : thumbSourcePathA;
+    console.warn(`Thumbnail generation (variant ${thumbnailVariant}) failed, retrying with the other photo:`, e.message);
+    await generateThumbnail({ imagePath: otherSourcePath, outPath: thumbPath });
   }
 
   // 4) English metadata
@@ -260,7 +279,12 @@ async function main() {
   const baseDescription = translatableDescription + untranslatedSuffix;
   let attributionSuffix = "";
   if (musicTrack) attributionSuffix += `\n\n${attributionLine(musicTrack)}`;
-  if (thumbAttribution) attributionSuffix += `\n\n${unsplashAttributionLine(thumbAttribution)}`;
+  // Credit both thumbnail photographers, not just whichever photo ended up as the actual
+  // thumbnail — both photos were sourced and rendered for this video's A/B test.
+  if (thumbAttributionA) attributionSuffix += `\n\n${unsplashAttributionLine(thumbAttributionA)}`;
+  if (thumbAttributionB && thumbAttributionB.photoId !== thumbAttributionA?.photoId) {
+    attributionSuffix += `\n\n${unsplashAttributionLine(thumbAttributionB)}`;
+  }
   const enDescription = baseDescription + attributionSuffix;
 
   // 5) Translated titles/descriptions -> YouTube localizations map
