@@ -61,6 +61,9 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
       tags,
       categoryId: "27", // Education
       defaultLanguage: "en",
+      defaultAudioLanguage: "en", // Without this, uploads via the API show "0 languages" —
+      // defaultLanguage alone only tells YouTube the text (title/description) is English;
+      // defaultAudioLanguage is the field that tells it the spoken audio track is English.
     },
     status: {
       privacyStatus: isPrivate ? "private" : "public",
@@ -133,23 +136,12 @@ export function isQuotaExceeded(err) {
   return Number(status) === 403 && String(reason).toLowerCase() === "quotaexceeded";
 }
 
-export async function updateChannelLocalizations({ channelId, localizations, title, description }) {
+export async function updateChannelLocalizations({ channelId, localizations }) {
   const youtube = client();
   try {
-    // YouTube requires the channel to have an established default language before it will
-    // accept ANY localizations entry — without snippet.defaultLanguage set in the SAME call,
-    // there's no reference "default" version for YouTube to localize from, and it rejects
-    // every locale key identically (a 400 badRequest with no per-key detail), no matter what
-    // the translated content is. This is why bisection alone can't find "the bad key" here —
-    // there isn't one; the whole request shape was incomplete. part must include "snippet" and
-    // requestBody.snippet must be sent alongside localizations, every time.
     const res = await youtube.channels.update({
-      part: ["snippet", "localizations"],
-      requestBody: {
-        id: channelId,
-        snippet: { title, description, defaultLanguage: "en" },
-        localizations,
-      },
+      part: ["localizations"],
+      requestBody: { id: channelId, localizations },
     });
     return res.data;
   } catch (err) {
@@ -222,4 +214,4 @@ export async function uploadCaptionTrack({ videoId, language, srtPath, name }) {
     }
   }
   throw lastErr;
-}
+      }
