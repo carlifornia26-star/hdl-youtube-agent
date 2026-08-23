@@ -220,3 +220,45 @@ export async function uploadCaptionTrack({ videoId, language, srtPath, name }) {
   }
   throw lastErr;
 }
+
+export async function createPlaylist({ title, description, localizations }) {
+  const youtube = client();
+  const cleanLocalizations = Object.fromEntries(
+    Object.entries(localizations || {}).filter(([, v]) => v?.title?.trim())
+  );
+  try {
+    const res = await youtube.playlists.insert({
+      part: ["snippet", "status", "localizations"],
+      requestBody: {
+        snippet: { title, description, defaultLanguage: "en" },
+        status: { privacyStatus: "public" },
+        localizations: cleanLocalizations,
+      },
+    });
+    return res.data; // includes .id
+  } catch (err) {
+    explainIfAuthError(err);
+    const apiError = err?.response?.data?.error || err?.errors || null;
+    if (apiError) {
+      console.error("createPlaylist failed. API error detail:\n", JSON.stringify(apiError, null, 2));
+    }
+    err.isQuotaExceeded = isQuotaExceeded(err);
+    throw err;
+  }
+}
+
+export async function addVideoToPlaylist({ playlistId, videoId }) {
+  const youtube = client();
+  try {
+    await youtube.playlistItems.insert({
+      part: ["snippet"],
+      requestBody: {
+        snippet: { playlistId, resourceId: { kind: "youtube#video", videoId } },
+      },
+    });
+  } catch (err) {
+    explainIfAuthError(err);
+    err.isQuotaExceeded = isQuotaExceeded(err);
+    throw err;
+  }
+    }
