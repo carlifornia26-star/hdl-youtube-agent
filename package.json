@@ -7,7 +7,8 @@
   "scripts": {
     "generate": "node scripts/generate-video.js",
     "report:thumbnails": "node scripts/thumbnail-report.js",
-    "customize-channel": "node scripts/customize-channel.js"
+    "customize-channel": "node scripts/customize-channel.js",
+    "setup-playlists": "node scripts/setup-playlists.js"
   },
   "dependencies": {
     "googleapis": "^140.0.0",
