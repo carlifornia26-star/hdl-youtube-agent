@@ -28,6 +28,11 @@ const TARGET_MIN_SECONDS = 8.5 * 60; // 510s — a bit above the 8:00 floor so s
 const MAX_TOPUP_ROUNDS = 4;
 const TOPUP_SCENES_PER_ROUND = 10;
 
+// YouTube's auto-rendered chapter bar requires: first chapter at 0:00, at least 3 chapters
+// total, and each at least this many seconds apart from the previous one, in ascending order.
+const MIN_CHAPTER_GAP_SECONDS = 10;
+const MIN_CHAPTERS_TO_INCLUDE = 3;
+
 // If more than this fraction of scenes end up with no narration (Fish Audio down, key revoked,
 // the Aug 31 2026 free-model promo ending, etc.), the run still PUBLISHES everything as normal —
 // captions-only fallback is fine for an occasional flaky scene — but throws at the very end so
@@ -44,6 +49,44 @@ const VOICE_FAILURE_THRESHOLD = 0.2; // 20%
 const YT_LOCALE_MAP = {
   zh: "zh-Hans",
 };
+
+// mm:ss for anything under an hour, h:mm:ss beyond that — matches YouTube's own timestamp format.
+function formatTimestamp(totalSeconds) {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = h > 0 ? String(m).padStart(2, "0") : String(m);
+  const ss = String(sec).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+// First chapter is always "Intro"; later ones use the first few words of that scene's line as a
+// free label — costs nothing extra (no translation call, no new data), since `built[i].line`
+// already exists. Left in English even inside translated descriptions (see chaptersBlock below)
+// to avoid a second translateMeta pass just for chapter labels — the timestamps do the real work.
+function chapterLabel(line, index) {
+  if (index === 0) return "Intro";
+  const words = line.trim().split(/\s+/).filter(Boolean).slice(0, 6).join(" ");
+  return words.length > 0 ? words : `Part ${index + 1}`;
+}
+
+// Walks the already-built scene list and picks out chapter marks at least MIN_CHAPTER_GAP_SECONDS
+// apart, always starting at 0:00. Scenes shorter than the gap get merged under whichever chapter
+// mark they fall inside, so the spacing rule holds even with a lot of short scenes.
+function buildChapters(scenes) {
+  const chapters = [];
+  let elapsed = 0;
+  let lastChapterTime = -Infinity;
+  for (let i = 0; i < scenes.length; i++) {
+    if (i === 0 || elapsed - lastChapterTime >= MIN_CHAPTER_GAP_SECONDS) {
+      chapters.push({ time: elapsed, label: chapterLabel(scenes[i].line, i) });
+      lastChapterTime = elapsed;
+    }
+    elapsed += scenes[i].duration;
+  }
+  return chapters;
+}
 
 async function main() {
   await fs.mkdir(BUILD_DIR, { recursive: true });
@@ -264,19 +307,32 @@ async function main() {
     await generateThumbnail({ imagePath: otherSourcePath, outPath: thumbPath });
   }
 
+  // 3d) Chapters — built from the already-measured scene durations, zero extra API calls or
+  // translation cost. Skipped entirely (chaptersBlock stays "") if fewer than 3 valid marks
+  // come out of buildChapters, since YouTube won't render a chapter bar below that anyway.
+  const chapterEntries = buildChapters(built);
+  let chaptersBlock = "";
+  if (chapterEntries.length >= MIN_CHAPTERS_TO_INCLUDE) {
+    chaptersBlock = "\n\n" + chapterEntries.map((c) => `${formatTimestamp(c.time)} ${c.label}`).join("\n");
+    console.log(`Chapters: ${chapterEntries.length} marks.`);
+  } else {
+    console.log(`Only ${chapterEntries.length} chapter mark(s) (need ${MIN_CHAPTERS_TO_INCLUDE}+) — skipping chapters block.`);
+  }
+
   // 4) English metadata
   const enTitle = `${book.title} — ${book.angle} | HDL Group`;
   // Only the plain descriptive sentence goes to the translation model. Everything else —
-  // the URL, the hashtags, and (further below) the music/thumbnail credit lines — is appended
-  // AFTER translation, untranslated, for every language including English. This used to only
-  // apply to the credit lines; the URL was still being sent through translation and Cloudflare's
-  // model was silently corrupting it in every single non-English localization (e.g.
-  // "highdefinitionlearning.pages.dev" coming back as "hbhefinitionlearning.pages.d ev" — a
-  // broken link in the description of every translated video). Hashtags are static identifiers
-  // too, so they're pulled out for the same reason even though they're lower-risk than a URL.
+  // the URL, the hashtags, the chapters block, and (further below) the music/thumbnail credit
+  // lines — is appended AFTER translation, untranslated, for every language including English.
+  // This used to only apply to the credit lines; the URL was still being sent through
+  // translation and Cloudflare's model was silently corrupting it in every single non-English
+  // localization (e.g. "highdefinitionlearning.pages.dev" coming back as
+  // "hbhefinitionlearning.pages.d ev" — a broken link in the description of every translated
+  // video). Hashtags and chapter timestamps are static identifiers too, so they're pulled out
+  // for the same reason even though they're lower-risk than a URL.
   const translatableDescription = `${book.title} explores ${book.angle}. Available in English only, exclusively on Google Play Books.`;
   const untranslatedSuffix = `\nRead the full book: ${SITE_URL}\n\n#HDLGroup #${book.slug.replace(/-/g, "")}`;
-  const baseDescription = translatableDescription + untranslatedSuffix;
+  const baseDescription = translatableDescription + chaptersBlock + untranslatedSuffix;
   let attributionSuffix = "";
   if (musicTrack) attributionSuffix += `\n\n${attributionLine(musicTrack)}`;
   // Credit both thumbnail photographers, not just whichever photo ended up as the actual
@@ -290,14 +346,15 @@ async function main() {
   // 5) Translated titles/descriptions -> YouTube localizations map
   // Translate with Cloudflare's own code (`lang`), but key the localizations object with
   // the YouTube-safe code (`ytLang`) so a mismatch like "zh" vs "zh-Hans" can't happen.
-  // Only translatableDescription goes to the model — untranslatedSuffix (URL + hashtags) and
-  // attributionSuffix are appended AFTER, untranslated, exactly once (see comment above).
+  // Only translatableDescription goes to the model — untranslatedSuffix (URL + hashtags),
+  // chaptersBlock, and attributionSuffix are appended AFTER, untranslated, exactly once
+  // (see comment above).
   const localizations = {};
   for (const lang of VIDEO_LANGS) {
     const ytLang = YT_LOCALE_MAP[lang] ?? lang;
     try {
       const t = await translateMeta(enTitle, translatableDescription, lang);
-      const description = t.description + untranslatedSuffix + attributionSuffix;
+      const description = t.description + chaptersBlock + untranslatedSuffix + attributionSuffix;
       localizations[ytLang] = { title: t.title, description };
     } catch (e) {
       console.warn(`Translation failed for ${lang}, skipping:`, e.message);
@@ -345,7 +402,7 @@ async function main() {
   // already on disk. Scenes WITHOUT narration are still included (captions-only, same fallback
   // as the main video) rather than skipped — a total Fish Audio outage should still produce a
   // Short, just a silent one, instead of no Short at all. Stops accumulating scenes once it's
-  // inside the SHORT_MIN/MAX window.
+  // inside the SHORT_MIN/MAX window. No chapters here — Shorts are too short for them to matter.
   try {
     const shortScenes = [];
     let shortTotal = 0;
