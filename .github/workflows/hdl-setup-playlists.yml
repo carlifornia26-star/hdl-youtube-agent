@@ -1,10 +1,10 @@
 name: HDL Setup Playlists
 
-# Manual only (workflow_dispatch) — playlists only need creating once per book, not on a daily
-# cron. Run it from the Actions tab once now, and again any time you add a new book to CATALOG
-# in scripts/catalog.js. Existing playlists are skipped automatically, so re-running is safe.
 on:
   workflow_dispatch: {}
+
+permissions:
+  contents: write
 
 jobs:
   setup:
