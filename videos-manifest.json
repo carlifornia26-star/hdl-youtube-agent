@@ -1,6 +1,18 @@
 {
   "videos": [
     {
+      "video_id": "y2-CmC6PHtQ",
+      "short_video_id": "Qd1Gjr8V81c",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "Pet Friendly — responsible, modern pet care | HDL Group",
+      "description": "Pet Friendly explores responsible, modern pet care. Available in English only, exclusively on Google Play Books.",
+      "thumbnail_url": "https://i.ytimg.com/vi/y2-CmC6PHtQ/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "duration_seconds": 1223,
+      "published_at": "2026-08-25T10:18:06.742Z"
+    },
+    {
       "video_id": "mkdBI8wQgCg",
       "short_video_id": "-p3TPWl1xHU",
       "book_slug": "youtube-algorithms",
@@ -48,5 +60,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-08-24T10:15:12.547Z"
+  "updated_at": "2026-08-25T10:18:06.743Z"
 }
