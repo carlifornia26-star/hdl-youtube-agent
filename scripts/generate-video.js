@@ -246,33 +246,37 @@ async function main() {
   const finalPath = path.join(BUILD_DIR, "final.mp4");
   await concatScenes(built.map((b) => b.outPath), listFile, finalPath);
 
-  // 3b) Background music — a real, free, attribution-licensed track (see music.js), mixed in
-  // as a quiet bed under the narration that's already in finalPath. If the download or mix
-  // fails for any reason, fall back to uploading without music rather than failing the run.
-  let musicTrack = null;
-  let uploadPath = finalPath;
-  try {
-    const musicPath = path.join(BUILD_DIR, "music.mp3");
-    musicTrack = await fetchBackgroundMusic(musicPath);
-    const musicOutPath = path.join(BUILD_DIR, "final_with_music.mp4");
-    await mixBackgroundMusic({ videoPath: finalPath, musicPath, outPath: musicOutPath });
-    uploadPath = musicOutPath;
-  } catch (e) {
-    console.warn("Background music failed, uploading without it:", e.message);
-  }
-
-  // 3b2) Loudness normalization (Ch. 25: audio quality is a bigger retention killer than video
+  // 3b) Loudness normalization (Ch. 25: audio quality is a bigger retention killer than video
   // quality, and YouTube auto-normalizes playback to -14 LUFS anyway — anything already quieter
-  // just stays quiet turned-down relative to everyone else's pre-mastered audio). Runs on
-  // whatever uploadPath currently points at (with-music or without, from the block above), so
-  // it always normalizes the ACTUAL final mix rather than assuming music succeeded. A failure
-  // here should never block publishing — falls back to the un-normalized mix.
+  // just stays quiet turned-down relative to everyone else's pre-mastered audio). Runs on the
+  // narration/ambient mix BEFORE music is added — loudnorm's single-pass mode is a dynamic
+  // filter tuned to the loudest element in the stream (narration), so if it ran AFTER music was
+  // mixed in it would squash the quiet music bed toward inaudibility instead of preserving the
+  // MUSIC_VOLUME ratio. Normalizing narration-only first, then adding music after at a fixed
+  // volume, keeps the music level deterministic regardless of what loudnorm does to narration.
+  // A failure here should never block publishing — falls back to the un-normalized mix.
+  let uploadPath = finalPath;
   try {
     const normalizedPath = path.join(BUILD_DIR, "final_normalized.mp4");
     await normalizeLoudness({ videoPath: uploadPath, outPath: normalizedPath });
     uploadPath = normalizedPath;
   } catch (e) {
     console.warn("Loudness normalization failed, uploading un-normalized audio:", e.message);
+  }
+
+  // 3b2) Background music — a real, free, attribution-licensed track (see music.js), mixed in
+  // as a quiet bed under the now-normalized narration. Runs AFTER loudnorm (see above) so the
+  // music's audibility isn't at the mercy of loudnorm's dynamic gain curve. If the download or
+  // mix fails for any reason, fall back to uploading without music rather than failing the run.
+  let musicTrack = null;
+  try {
+    const musicPath = path.join(BUILD_DIR, "music.mp3");
+    musicTrack = await fetchBackgroundMusic(musicPath);
+    const musicOutPath = path.join(BUILD_DIR, "final_with_music.mp4");
+    await mixBackgroundMusic({ videoPath: uploadPath, musicPath, outPath: musicOutPath });
+    uploadPath = musicOutPath;
+  } catch (e) {
+    console.warn("Background music failed, uploading without it:", e.message);
   }
 
   // 3c) Thumbnail image — TWO different real Unsplash photos matching the book's topic.
@@ -493,27 +497,29 @@ async function main() {
       const shortFinalPath = path.join(BUILD_DIR, "short.mp4");
       await concatScenes(shortBuilt, shortListFile, shortFinalPath);
 
-      // Same track as the main video today, already downloaded — just mix it in again.
+      // Same normalization as the main video (step 3b) — runs BEFORE music, same reasoning:
+      // the Short is its own separate upload with its own audio mix, so it needs its own pass
+      // rather than inheriting the main video's.
       let shortUploadPath = shortFinalPath;
-      if (musicTrack) {
-        try {
-          const musicPath = path.join(BUILD_DIR, "music.mp3");
-          const shortMusicOutPath = path.join(BUILD_DIR, "short_with_music.mp4");
-          await mixBackgroundMusic({ videoPath: shortFinalPath, musicPath, outPath: shortMusicOutPath });
-          shortUploadPath = shortMusicOutPath;
-        } catch (e) {
-          console.warn("Short background music failed, uploading without it:", e.message);
-        }
-      }
-
-      // Same normalization as the main video (step 3b2) — the Short is its own separate upload
-      // with its own audio mix, so it needs its own pass rather than inheriting the main video's.
       try {
         const shortNormalizedPath = path.join(BUILD_DIR, "short_normalized.mp4");
         await normalizeLoudness({ videoPath: shortUploadPath, outPath: shortNormalizedPath });
         shortUploadPath = shortNormalizedPath;
       } catch (e) {
         console.warn("Short loudness normalization failed, uploading un-normalized audio:", e.message);
+      }
+
+      // Same track as the main video today, already downloaded — just mix it in again, after
+      // normalization so its volume stays fixed regardless of loudnorm's dynamic gain curve.
+      if (musicTrack) {
+        try {
+          const musicPath = path.join(BUILD_DIR, "music.mp3");
+          const shortMusicOutPath = path.join(BUILD_DIR, "short_with_music.mp4");
+          await mixBackgroundMusic({ videoPath: shortUploadPath, musicPath, outPath: shortMusicOutPath });
+          shortUploadPath = shortMusicOutPath;
+        } catch (e) {
+          console.warn("Short background music failed, uploading without it:", e.message);
+        }
       }
 
       const shortTitle = `${book.title} #Shorts`.slice(0, 100); // YouTube's 100-char title cap
