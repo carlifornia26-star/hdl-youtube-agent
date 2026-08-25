@@ -162,4 +162,4 @@ export async function synthesizeVoice(text, outPath, voice = pickTodaysVoice()) 
       throw new Error(`Both Kokoro (${kokoroErr.message}) and Fish Audio (${fishErr.message}) failed`);
     }
   }
-    }
+  }
