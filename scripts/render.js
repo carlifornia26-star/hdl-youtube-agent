@@ -277,4 +277,4 @@ export function buildSrt(scenesWithDurations, translatedLines) {
     const ms = String(Math.floor((sec % 1) * 1000)).padStart(3, "0");
     return `${h}:${m}:${s},${ms}`;
   }
-    }
+}
