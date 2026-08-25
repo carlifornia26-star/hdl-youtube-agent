@@ -5,7 +5,7 @@ import { generateScript, generateBonusScenes, translateMeta, VIDEO_LANGS } from 
 import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./assets.js";
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
 import { fetchBackgroundMusic, attributionLine } from "./music.js";
-import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic } from "./render.js";
+import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic, normalizeLoudness } from "./render.js";
 import { uploadVideo, uploadCaptionTrack, uploadThumbnail, addVideoToPlaylist } from "./youtube.js";
 import { appendVideoEntry } from "./manifest.js";
 import { buildDailyCommunityPost } from "./community-post.js";
@@ -261,6 +261,20 @@ async function main() {
     console.warn("Background music failed, uploading without it:", e.message);
   }
 
+  // 3b2) Loudness normalization (Ch. 25: audio quality is a bigger retention killer than video
+  // quality, and YouTube auto-normalizes playback to -14 LUFS anyway — anything already quieter
+  // just stays quiet turned-down relative to everyone else's pre-mastered audio). Runs on
+  // whatever uploadPath currently points at (with-music or without, from the block above), so
+  // it always normalizes the ACTUAL final mix rather than assuming music succeeded. A failure
+  // here should never block publishing — falls back to the un-normalized mix.
+  try {
+    const normalizedPath = path.join(BUILD_DIR, "final_normalized.mp4");
+    await normalizeLoudness({ videoPath: uploadPath, outPath: normalizedPath });
+    uploadPath = normalizedPath;
+  } catch (e) {
+    console.warn("Loudness normalization failed, uploading un-normalized audio:", e.message);
+  }
+
   // 3c) Thumbnail image — TWO different real Unsplash photos matching the book's topic.
   // Variant A is the plain, text-free photo. Variant B is the same kind of photo but with a
   // short high-contrast title overlay burned in (see thumbTitleText below) — a deliberate
@@ -305,7 +319,7 @@ async function main() {
   // A/B thumbnail testing: YouTube's native "Test & compare" tool lives in Studio only and
   // isn't reachable through the Data API, and since this channel publishes a different one-off
   // book each day there's no repeat audience to split-test *within* a single video anyway.
-  // Instead this alternates which of the two DIFFERENT photos above becomes the actual
+  // Instead this alternates which of the two DIFFERENT plain photos above becomes the actual
   // uploaded thumbnail, day to day — same day-of-year rotation pattern as the narrator voice.
   // scripts/thumbnail-report.js runs weekly (see .github/workflows/thumbnail-report.yml),
   // pulls real per-video CTR from the YouTube Analytics API, and writes thumbnail-winner.json
@@ -384,7 +398,7 @@ async function main() {
   // Translate with Cloudflare's own code (`lang`), but key the localizations object with
   // the YouTube-safe code (`ytLang`) so a mismatch like "zh" vs "zh-Hans" can't happen.
   // Only translatableDescription goes to the model — untranslatedSuffix (URL + hashtags),
-  // chaptersBlock, and attributionSuffix are appended after, untranslated, exactly once
+  // chaptersBlock, and attributionSuffix are appended AFTER, untranslated, exactly once
   // (see comment above).
   const localizations = {};
   for (const lang of VIDEO_LANGS) {
@@ -490,6 +504,16 @@ async function main() {
         } catch (e) {
           console.warn("Short background music failed, uploading without it:", e.message);
         }
+      }
+
+      // Same normalization as the main video (step 3b2) — the Short is its own separate upload
+      // with its own audio mix, so it needs its own pass rather than inheriting the main video's.
+      try {
+        const shortNormalizedPath = path.join(BUILD_DIR, "short_normalized.mp4");
+        await normalizeLoudness({ videoPath: shortUploadPath, outPath: shortNormalizedPath });
+        shortUploadPath = shortNormalizedPath;
+      } catch (e) {
+        console.warn("Short loudness normalization failed, uploading un-normalized audio:", e.message);
       }
 
       const shortTitle = `${book.title} #Shorts`.slice(0, 100); // YouTube's 100-char title cap
