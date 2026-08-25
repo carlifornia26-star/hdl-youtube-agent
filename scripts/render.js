@@ -182,6 +182,29 @@ export async function mixBackgroundMusic({ videoPath, musicPath, outPath }) {
   return outPath;
 }
 
+// Pre-masters the finished mix to YouTube's own target (-14 LUFS integrated) instead of relying
+// on YouTube's playback-time normalization, which only ever turns audio DOWN to match -14 —
+// anything already quieter than that stays quiet. Single-pass loudnorm (not the more "accurate"
+// two-pass form, which needs a first analysis-only run) — the difference matters for mastering
+// studios chasing broadcast-spec precision, not for a teaser video, and two-pass would double
+// ffmpeg's runtime on every single video for a gain not worth it here.
+// Runs as the LAST audio-touching step, after mixBackgroundMusic (or straight after concatScenes
+// if music failed) — so it's normalizing the actual final mix, not narration alone.
+const LOUDNESS_TARGET_LUFS = -14;
+const LOUDNESS_TRUE_PEAK = -1.5; // dBTP ceiling, keeps normalization from clipping on peaks
+const LOUDNESS_RANGE = 11; // LRA target — ffmpeg's own loudnorm default, fine for narration+music
+export async function normalizeLoudness({ videoPath, outPath }) {
+  await run("ffmpeg", [
+    "-y",
+    "-i", videoPath,
+    "-af", `loudnorm=I=${LOUDNESS_TARGET_LUFS}:TP=${LOUDNESS_TRUE_PEAK}:LRA=${LOUDNESS_RANGE}`,
+    "-c:v", "copy", // video stream is untouched, no need to re-encode it
+    "-c:a", "aac",
+    outPath,
+  ]);
+  return outPath;
+}
+
 export async function concatScenes(sceneOutPaths, listFile, outPath) {
   const fs = await import("node:fs/promises");
   const content = sceneOutPaths.map((p) => `file '${path.resolve(p)}'`).join("\n");
@@ -254,4 +277,4 @@ export function buildSrt(scenesWithDurations, translatedLines) {
     const ms = String(Math.floor((sec % 1) * 1000)).padStart(3, "0");
     return `${h}:${m}:${s},${ms}`;
   }
-      }
+    }
