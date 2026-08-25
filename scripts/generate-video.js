@@ -18,39 +18,19 @@ const MAX_SCENE_SECONDS = 45;
 const SHORT_MIN_SECONDS = 40; // Short target window — comfortably inside YouTube's Shorts duration
 const SHORT_MAX_SECONDS = 65; // limit under either the old 60s rule or the current 3-minute one
 
-// The main script's scene/word counts (cf-ai.js) are tuned to land near 10 minutes, but the
-// exact result depends on the TTS voice's actual reading pace, which can drift. Rather than
-// trust that estimate, the REAL total runtime is measured after synthesis (every scene's
-// duration comes from its actual audio file, not a word-count guess) and topped up with extra
-// scenes if it still lands under this floor — so "above 8 minutes" is enforced directly against
-// measured audio, not against a script-length assumption that can go stale.
 const TARGET_MIN_SECONDS = 8.5 * 60; // 510s — a bit above the 8:00 floor so small variance still clears it
 const MAX_TOPUP_ROUNDS = 4;
 const TOPUP_SCENES_PER_ROUND = 10;
 
-// YouTube's auto-rendered chapter bar requires: first chapter at 0:00, at least 3 chapters
-// total, and each at least this many seconds apart from the previous one, in ascending order.
 const MIN_CHAPTER_GAP_SECONDS = 10;
 const MIN_CHAPTERS_TO_INCLUDE = 3;
 
-// If more than this fraction of scenes end up with no narration (Fish Audio down, key revoked,
-// the Aug 31 2026 free-model promo ending, etc.), the run still PUBLISHES everything as normal —
-// captions-only fallback is fine for an occasional flaky scene — but throws at the very end so
-// GitHub Actions shows a red X and you actually notice, instead of silently shipping an
-// all-silent video indefinitely. The throw happens after uploads, so it never blocks publishing.
 const VOICE_FAILURE_THRESHOLD = 0.2; // 20%
 
-// Cloudflare's m2m100 model uses its own short codes (zh, es, fr...) for translation —
-// those must stay untouched in VIDEO_LANGS. YouTube's localizations map, however, requires
-// proper BCP-47 tags and rejects a couple of the short codes outright (most notably plain
-// "zh", which YouTube wants as zh-Hans or zh-Hant) — an unrecognized code anywhere in the
-// localizations map fails the ENTIRE upload with a generic, useless "invalidVideoMetadata"
-// error. This maps Cloudflare's code -> the YouTube-safe equivalent only where they differ.
 const YT_LOCALE_MAP = {
   zh: "zh-Hans",
 };
 
-// mm:ss for anything under an hour, h:mm:ss beyond that — matches YouTube's own timestamp format.
 function formatTimestamp(totalSeconds) {
   const s = Math.max(0, Math.floor(totalSeconds));
   const h = Math.floor(s / 3600);
@@ -61,19 +41,12 @@ function formatTimestamp(totalSeconds) {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
-// First chapter is always "Intro"; later ones use the first few words of that scene's line as a
-// free label — costs nothing extra (no translation call, no new data), since `built[i].line`
-// already exists. Left in English even inside translated descriptions (see chaptersBlock below)
-// to avoid a second translateMeta pass just for chapter labels — the timestamps do the real work.
 function chapterLabel(line, index) {
   if (index === 0) return "Intro";
   const words = line.trim().split(/\s+/).filter(Boolean).slice(0, 6).join(" ");
   return words.length > 0 ? words : `Part ${index + 1}`;
 }
 
-// Walks the already-built scene list and picks out chapter marks at least MIN_CHAPTER_GAP_SECONDS
-// apart, always starting at 0:00. Scenes shorter than the gap get merged under whichever chapter
-// mark they fall inside, so the spacing rule holds even with a lot of short scenes.
 function buildChapters(scenes) {
   const chapters = [];
   let elapsed = 0;
@@ -91,13 +64,6 @@ function buildChapters(scenes) {
 async function main() {
   await fs.mkdir(BUILD_DIR, { recursive: true });
 
-  // Preflight: confirm the local Kokoro TTS package actually resolves before burning through a
-  // whole script's worth of scenes finding out the hard way. `npm install` should always put this
-  // in node_modules since it's a normal (non-optional) dependency in package.json — if this warns,
-  // the run WILL still complete (Fish Audio picks up every scene instead), just check that
-  // `kokoro-js` is really listed in package.json and that "Install dependencies" in the Actions
-  // log shows it actually being fetched (dozens of packages, several seconds+) rather than a
-  // suspiciously instant no-op.
   try {
     await import("kokoro-js");
     console.log("Preflight: kokoro-js resolved OK.");
@@ -111,24 +77,12 @@ async function main() {
   const book = pickTodaysBook();
   console.log(`Today's book: ${book.title}`);
 
-  // One narrator voice for the ENTIRE video (main + Short), computed once here and passed into
-  // every synthesizeVoice() call below — never mixed voices within one video. Tomorrow's video
-  // gets the next voice in the rotation (see VOICE_POOL in voice.js).
   const narratorVoice = pickTodaysVoice();
   console.log(`Today's narrator voice: ${narratorVoice}`);
 
-  // 1) Script (teaser-only, scene count set by the model within the schema's range)
   const scenes = await generateScript(book);
   console.log(`Generated ${scenes.length} scenes`);
 
-  // 2) Per-scene: stock clip + Kokoro narration + burned caption -> scene_N.mp4.
-  // Scene duration comes from the ACTUAL narration length (probed after synthesis), not an
-  // estimate — captions and the video cut are timed to the real voice track.
-  // If TTS fails for a scene (rate limit, transient API error) after retries, that one scene
-  // falls back to captions-only over the stock clip's ambient sound rather than failing the
-  // entire day's video. `index` drives both the filename and the stock-keyword cycling, and
-  // must stay globally unique across the main script AND any top-up scenes added below —
-  // callers pass built.length so it keeps counting up rather than restarting at 0.
   async function buildOneScene(scene, index) {
     const clipPath = path.join(BUILD_DIR, `clip_${index}.mp4`);
     const voicePath = path.join(BUILD_DIR, `voice_${index}.mp3`);
@@ -146,7 +100,6 @@ async function main() {
       usableVoicePath = voicePath;
     } catch (e) {
       console.warn(`Voice synthesis failed for scene ${index}, falling back to captions-only:`, e.message);
-      // Rough fallback so the scene still gets a reasonable amount of screen time to be read.
       const words = scene.line.trim().split(/\s+/).filter(Boolean).length;
       duration = Math.min(MAX_SCENE_SECONDS, Math.max(MIN_SCENE_SECONDS, words / 2.3 + PADDING_SECONDS));
     }
@@ -162,11 +115,6 @@ async function main() {
   let totalSeconds = built.reduce((a, b) => a + b.duration, 0);
   console.log(`Runtime after main script: ~${Math.round(totalSeconds / 60)} min (${built.length} scenes)`);
 
-  // 2b) Duration top-up: if the measured runtime still lands under the 8-minute-ish floor
-  // (TARGET_MIN_SECONDS), generate and build extra scenes and append them, re-measuring after
-  // each round, until the target is hit or MAX_TOPUP_ROUNDS is reached. Bounded so a persistent
-  // shortfall (or a flaky Workers AI response) can't loop the run forever — if still short after
-  // the cap, publish anyway with a warning rather than fail a day's video over runtime length.
   let topupRound = 0;
   while (totalSeconds < TARGET_MIN_SECONDS && topupRound < MAX_TOPUP_ROUNDS) {
     topupRound++;
@@ -197,18 +145,12 @@ async function main() {
     );
   }
 
-  // Track how many scenes had no narration at all — checked at the very end of the run (see
-  // VOICE_FAILURE_THRESHOLD above), after everything has already been uploaded.
   const voicelessCount = built.filter((b) => !b.voicePath).length;
   const voicelessRatio = built.length ? voicelessCount / built.length : 0;
   if (voicelessCount > 0) {
     console.warn(`${voicelessCount}/${built.length} scenes (${Math.round(voicelessRatio * 100)}%) have no narration.`);
   }
 
-  // Soft check on the "mention the title exactly 3 times" prompt instruction — an LLM
-  // following a numeric instruction isn't guaranteed, so this just makes drift visible in the
-  // log rather than silently trusting the model got it right. Bonus top-up scenes are
-  // instructed never to mention the title at all, so they shouldn't move this count.
   const titleMentions = built
     .map((b) => b.line.toLowerCase().split(book.title.toLowerCase()).length - 1)
     .reduce((a, b) => a + b, 0);
@@ -216,14 +158,10 @@ async function main() {
     console.warn(`Expected the title mentioned exactly 3 times, script actually has ${titleMentions}.`);
   }
 
-  // 3) Concat scenes — each scene already has its narration mixed in, no separate mix step needed
   const listFile = path.join(BUILD_DIR, "concat.txt");
   const finalPath = path.join(BUILD_DIR, "final.mp4");
   await concatScenes(built.map((b) => b.outPath), listFile, finalPath);
 
-  // 3b) Background music — a real, free, attribution-licensed track (see music.js), mixed in
-  // as a quiet bed under the narration that's already in finalPath. If the download or mix
-  // fails for any reason, fall back to uploading without music rather than failing the run.
   let musicTrack = null;
   let uploadPath = finalPath;
   try {
@@ -236,13 +174,6 @@ async function main() {
     console.warn("Background music failed, uploading without it:", e.message);
   }
 
-  // 3c) Thumbnail image — TWO different real Unsplash photos matching the book's topic, both
-  // cropped clean with NO text overlay on either (previously variant B burned the title over
-  // the same photo used for variant A — now both variants are distinct plain photos instead).
-  // Falls back to a grabbed video frame if Unsplash fails entirely (missing key, rate limit,
-  // network hiccup) so a thumbnail always gets set either way. Done here, BEFORE metadata is
-  // built, so both photographers' attribution can be included in the description —
-  // uploadThumbnail itself still happens later, once a videoId exists.
   const thumbPath = path.join(BUILD_DIR, "thumbnail.jpg");
   let thumbAttributionA = null;
   let thumbAttributionB = null;
@@ -255,11 +186,6 @@ async function main() {
     const thumbPhotoPathB = path.join(BUILD_DIR, "thumb_photo_b.jpg");
     thumbAttributionA = await fetchUnsplashPhoto(thumbKeyword, thumbPhotoPathA, baseIndex);
 
-    // Guarantee variant B is a genuinely different photo, not the one already picked for A —
-    // fetchUnsplashPhoto picks results[index % results.length], so a small result pool can
-    // otherwise hand back the exact same photo for two different index values. Walk forward
-    // through the result list until the photo id actually differs (or give up after 5 tries —
-    // only happens if Unsplash returned fewer than ~6 usable results for this keyword).
     let bIndex = baseIndex + 1;
     for (let attempt = 0; attempt < 5; attempt++) {
       thumbAttributionB = await fetchUnsplashPhoto(thumbKeyword, thumbPhotoPathB, bIndex);
@@ -276,16 +202,6 @@ async function main() {
     thumbAttributionB = null;
   }
 
-  // A/B thumbnail testing: YouTube's native "Test & compare" tool lives in Studio only and
-  // isn't reachable through the Data API, and since this channel publishes a different one-off
-  // book each day there's no repeat audience to split-test *within* a single video anyway.
-  // Instead this alternates which of the two DIFFERENT plain photos above becomes the actual
-  // uploaded thumbnail, day to day — same day-of-year rotation pattern as the narrator voice.
-  // scripts/thumbnail-report.js runs weekly (see .github/workflows/thumbnail-report.yml),
-  // pulls real per-video CTR from the YouTube Analytics API, and writes thumbnail-winner.json
-  // with a decided variant once there's enough data and a clear lead. If that file names a
-  // winner, EVERY video uses it from here on — no manual step. Otherwise (file missing, no
-  // winner yet, or not enough data) this keeps alternating exactly as before.
   const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
   let thumbnailVariant = dayOfYear % 2 === 0 ? "A" : "B";
   try {
@@ -300,16 +216,14 @@ async function main() {
   }
   const thumbSourcePath = thumbnailVariant === "A" ? thumbSourcePathA : thumbSourcePathB;
   try {
-    await generateThumbnail({ imagePath: thumbSourcePath, outPath: thumbPath }); // always plain — no titleText, on either variant
+    await generateThumbnail({ imagePath: thumbSourcePath, outPath: thumbPath });
   } catch (e) {
     const otherSourcePath = thumbnailVariant === "A" ? thumbSourcePathB : thumbSourcePathA;
     console.warn(`Thumbnail generation (variant ${thumbnailVariant}) failed, retrying with the other photo:`, e.message);
     await generateThumbnail({ imagePath: otherSourcePath, outPath: thumbPath });
   }
 
-  // 3d) Chapters — built from the already-measured scene durations, zero extra API calls or
-  // translation cost. Skipped entirely (chaptersBlock stays "") if fewer than 3 valid marks
-  // come out of buildChapters, since YouTube won't render a chapter bar below that anyway.
+  // 3d) Chapters
   const chapterEntries = buildChapters(built);
   let chaptersBlock = "";
   if (chapterEntries.length >= MIN_CHAPTERS_TO_INCLUDE) {
@@ -321,22 +235,11 @@ async function main() {
 
   // 4) English metadata
   const enTitle = `${book.title} — ${book.angle} | HDL Group`;
-  // Only the plain descriptive sentence goes to the translation model. Everything else —
-  // the URL, the hashtags, the chapters block, and (further below) the music/thumbnail credit
-  // lines — is appended AFTER translation, untranslated, for every language including English.
-  // This used to only apply to the credit lines; the URL was still being sent through
-  // translation and Cloudflare's model was silently corrupting it in every single non-English
-  // localization (e.g. "highdefinitionlearning.pages.dev" coming back as
-  // "hbhefinitionlearning.pages.d ev" — a broken link in the description of every translated
-  // video). Hashtags and chapter timestamps are static identifiers too, so they're pulled out
-  // for the same reason even though they're lower-risk than a URL.
   const translatableDescription = `${book.title} explores ${book.angle}. Available in English only, exclusively on Google Play Books.`;
   const untranslatedSuffix = `\nRead the full book: ${SITE_URL}\n\n#HDLGroup #${book.slug.replace(/-/g, "")}`;
   const baseDescription = translatableDescription + chaptersBlock + untranslatedSuffix;
   let attributionSuffix = "";
   if (musicTrack) attributionSuffix += `\n\n${attributionLine(musicTrack)}`;
-  // Credit both thumbnail photographers, not just whichever photo ended up as the actual
-  // thumbnail — both photos were sourced and rendered for this video's A/B test.
   if (thumbAttributionA) attributionSuffix += `\n\n${unsplashAttributionLine(thumbAttributionA)}`;
   if (thumbAttributionB && thumbAttributionB.photoId !== thumbAttributionA?.photoId) {
     attributionSuffix += `\n\n${unsplashAttributionLine(thumbAttributionB)}`;
@@ -344,11 +247,6 @@ async function main() {
   const enDescription = baseDescription + attributionSuffix;
 
   // 5) Translated titles/descriptions -> YouTube localizations map
-  // Translate with Cloudflare's own code (`lang`), but key the localizations object with
-  // the YouTube-safe code (`ytLang`) so a mismatch like "zh" vs "zh-Hans" can't happen.
-  // Only translatableDescription goes to the model — untranslatedSuffix (URL + hashtags),
-  // chaptersBlock, and attributionSuffix are appended AFTER, untranslated, exactly once
-  // (see comment above).
   const localizations = {};
   for (const lang of VIDEO_LANGS) {
     const ytLang = YT_LOCALE_MAP[lang] ?? lang;
@@ -361,22 +259,50 @@ async function main() {
     }
   }
 
+  // 5b) Multilingual keyword tags — translates the book's short "angle" phrase into each of the
+  // 15 languages and folds those into the flat `tags` array sent to YouTube. `snippet.tags` isn't
+  // per-locale (one array for the whole video), but mixing in translated keyword equivalents
+  // means a search in French, Hindi, etc. still gets a tag-match hit on top of what the
+  // per-locale title/description already do. Reuses translateMeta's title-only-input shape
+  // (same as the caption-line translations below) — no new API surface, zero YouTube quota cost
+  // since this only changes what's sent inside the ALREADY-happening videos.insert call.
+  const translatedTagKeywords = [];
+  for (const lang of VIDEO_LANGS) {
+    const ytLang = YT_LOCALE_MAP[lang] ?? lang;
+    if (!localizations[ytLang]) continue; // skip languages whose main translation already failed
+    try {
+      const t = await translateMeta(book.angle, "", lang);
+      const keyword = t.title.trim().slice(0, 30); // safety margin under YouTube's per-tag length limit
+      if (keyword && !translatedTagKeywords.includes(keyword)) translatedTagKeywords.push(keyword);
+    } catch (e) {
+      console.warn(`Tag keyword translation failed for ${lang}, skipping:`, e.message);
+    }
+  }
+  // YouTube caps snippet.tags at 500 characters total across all tags combined — base tags go
+  // in first, then translated keywords are added only while there's room, so a long book.angle
+  // can never push the request over the limit and fail the whole upload.
+  const baseTags = [book.title, "HDL Group", book.angle, "ebook"];
+  const tags = [...baseTags];
+  let tagCharCount = baseTags.join(",").length;
+  for (const kw of translatedTagKeywords) {
+    if (tagCharCount + kw.length + 1 > 480) break; // margin under the 500-char cap
+    tags.push(kw);
+    tagCharCount += kw.length + 1;
+  }
+  console.log(`Tags (${tags.length}): ${tags.join(", ")}`);
+
   // 6) Upload video
   const uploaded = await uploadVideo({
     videoPath: uploadPath,
     title: enTitle,
     description: enDescription,
-    tags: [book.title, "HDL Group", book.angle, "ebook"],
+    tags,
     localizations,
   });
   console.log(`Uploaded: https://youtube.com/watch?v=${uploaded.id}`);
 
-  // 6b) Upload the thumbnail generated back in step 3c
   await uploadThumbnail({ videoId: uploaded.id, imagePath: thumbPath });
 
-  // 6b2) Add today's video to its book's playlist (if one exists — see setup-playlists.js).
-  // Non-fatal: a missing or failed playlist add should never take down an otherwise-successful
-  // publish — the video is already live on the channel either way.
   try {
     const playlistsRaw = await fs.readFile(path.resolve("playlists.json"), "utf8");
     const playlists = JSON.parse(playlistsRaw);
@@ -391,18 +317,9 @@ async function main() {
     console.warn("Adding video to playlist failed, continuing:", e.message);
   }
 
-  // Tracked across the Short block below (stays null if the Short fails/skips) so the
-  // manifest entry written in 6d can still record it when it succeeds, without blocking on it.
   let shortVideoId = null;
-  let shortSceneCount = 0; // how many of `built`'s leading scenes the Short used — set below, read by the Short-caption block in step 7
+  let shortSceneCount = 0;
 
-  // 6c) YouTube Short — the opening few scenes (the strongest hook, since this is a teaser),
-  // re-rendered vertical (9:16) instead of a new upload. Reuses the SAME stock clips already
-  // fetched for the main video — no extra Pexels calls, just a second ffmpeg pass on files
-  // already on disk. Scenes WITHOUT narration are still included (captions-only, same fallback
-  // as the main video) rather than skipped — a total Fish Audio outage should still produce a
-  // Short, just a silent one, instead of no Short at all. Stops accumulating scenes once it's
-  // inside the SHORT_MIN/MAX window. No chapters here — Shorts are too short for them to matter.
   try {
     const shortScenes = [];
     let shortTotal = 0;
@@ -425,7 +342,7 @@ async function main() {
           duration: s.duration,
           text: s.line,
           outPath,
-          voicePath: s.voicePath, // null is fine — buildScene falls back to captions-only
+          voicePath: s.voicePath,
           orientation: "vertical",
         });
         shortBuilt.push(built_scene.outPath);
@@ -435,7 +352,6 @@ async function main() {
       const shortFinalPath = path.join(BUILD_DIR, "short.mp4");
       await concatScenes(shortBuilt, shortListFile, shortFinalPath);
 
-      // Same track as the main video today, already downloaded — just mix it in again.
       let shortUploadPath = shortFinalPath;
       if (musicTrack) {
         try {
@@ -448,10 +364,7 @@ async function main() {
         }
       }
 
-      const shortTitle = `${book.title} #Shorts`.slice(0, 100); // YouTube's 100-char title cap
-      // Same URL-safety fix as the main video's description above: only the plain sentence goes
-      // to the translation model. The two URLs (YouTube link + book link) and the hashtags are
-      // appended after, untranslated, so they can't come back corrupted in any language.
+      const shortTitle = `${book.title} #Shorts`.slice(0, 100);
       const shortTranslatableDescription = `${book.title} — ${book.angle}.`;
       const shortUntranslatedSuffix =
         `\nWatch the full video: https://youtube.com/watch?v=${uploaded.id}\n` +
@@ -461,9 +374,6 @@ async function main() {
       const shortAttributionSuffix = musicTrack ? `\n\n${attributionLine(musicTrack)}` : "";
       const shortDescription = shortBaseDescription + shortAttributionSuffix;
 
-      // Translated title/description, matching the main video — same 15 languages + English.
-      // Same rule as the main video: only the translatable sentence goes to the model; the URLs,
-      // hashtags, and credit line are appended after, untranslated.
       const shortLocalizations = {};
       for (const lang of VIDEO_LANGS) {
         const ytLang = YT_LOCALE_MAP[lang] ?? lang;
@@ -476,10 +386,6 @@ async function main() {
         }
       }
 
-      // One bad/unrecognized translation anywhere in `localizations` fails the ENTIRE upload
-      // with YouTube's generic invalidVideoMetadata error (see YT_LOCALE_MAP note above) — so a
-      // single mistranslated title can cost the whole Short instead of just that one language.
-      // Retry once with localizations stripped: an English-only Short beats no Short at all.
       let uploadedShort;
       try {
         uploadedShort = await uploadVideo({
@@ -490,10 +396,7 @@ async function main() {
           localizations: shortLocalizations,
         });
       } catch (e) {
-        console.warn(
-          "Short upload with localizations failed, retrying English-only:",
-          e.message
-        );
+        console.warn("Short upload with localizations failed, retrying English-only:", e.message);
         uploadedShort = await uploadVideo({
           videoPath: shortUploadPath,
           title: shortTitle,
@@ -508,16 +411,9 @@ async function main() {
       shortSceneCount = shortScenes.length;
     }
   } catch (e) {
-    // A failed Short should never take down the main video, which has already uploaded successfully.
     console.warn("Short build/upload failed, continuing without it:", e.message);
   }
 
-  // 6d) Record today's video in videos-manifest.json — this is what the website reads (via
-  // raw.githubusercontent.com, see the site's _worker.js) to embed the video on book's page,
-  // list it on /videos.html, and include it in /sitemap-videos.xml. Written AFTER upload
-  // succeeds, using the same real title/description/thumbnail already sent to YouTube, so the
-  // site never shows anything that isn't actually live. A failure here should never take down
-  // an otherwise-successful publish — logged and swallowed, same pattern as the Short above.
   try {
     await appendVideoEntry({
       video_id: uploaded.id,
@@ -536,22 +432,12 @@ async function main() {
     console.warn("Failed to update videos-manifest.json (video is still live on YouTube):", e.message);
   }
 
-  // 6e) Daily Community-tab post draft (image + 16-language caption) — NOT auto-published,
-  // the YouTube API has no endpoint for that. See community-post.js for why and what this
-  // produces instead. A failure here should never take down the run.
   try {
     await buildDailyCommunityPost(book, BUILD_DIR);
   } catch (e) {
     console.warn("Community post draft failed, continuing:", e.message);
   }
 
-  // 7) Caption tracks — English first, then translated languages (reusing the same scene lines).
-  // These mirror the spoken narration on screen, and are the only thing viewers watching muted see.
-  // A short wait before the first caption call: calling captions.insert immediately after
-  // videos.insert can otherwise hit YouTube before it's finished registering the new video
-  // (uploadCaptionTrack also retries internally — this just makes the first attempt more
-  // likely to succeed). Every caption upload is wrapped in try/catch: a caption failure should
-  // never take down the run — the video has already uploaded successfully by this point.
   await new Promise((r) => setTimeout(r, 5000));
 
   const enSrt = buildSrt(built, built.map((b) => b.line));
@@ -563,16 +449,11 @@ async function main() {
     console.warn("English caption upload failed:", e.message);
   }
 
-  // Stashes each language's per-scene translated lines as they're produced below, so the Short
-  // captions block right after can reuse them for its own SRT (same scenes, same translations,
-  // just the first shortSceneCount of them, re-timed to start at 0) instead of re-calling
-  // translateMeta for lines it already has.
   const translatedCaptionLines = {};
   for (const lang of VIDEO_LANGS) {
     const ytLang = YT_LOCALE_MAP[lang] ?? lang;
     if (!localizations[ytLang]) continue;
     try {
-      // Translate each scene line individually for caption timing accuracy
       const lines = [];
       for (const scene of built) {
         const t = await translateMeta(scene.line, "", lang);
@@ -588,12 +469,6 @@ async function main() {
     }
   }
 
-  // 7b) Short captions — previously the Short had NO caption track at all (only the burned-in
-  // MrBeast-style text), leaving it with no real CC/subtitle track for viewers who toggle
-  // captions on. shortScenes is always the leading shortSceneCount entries of `built` (see the
-  // Short block above), so its lines and translations are just a slice of what was already
-  // computed above — zero extra translateMeta calls needed. Re-timed from 0 since the Short is
-  // its own, shorter file.
   if (shortVideoId && shortSceneCount > 0) {
     const shortBuiltScenes = built.slice(0, shortSceneCount);
 
@@ -623,9 +498,6 @@ async function main() {
 
   console.log("Done.");
 
-  // Final check, after everything above has already published successfully: if too many
-  // scenes had no narration, fail the run NOW so GitHub Actions shows a red X and you get
-  // notified — the video/Short are already live, this is purely an alert, not a rollback.
   if (voicelessRatio > VOICE_FAILURE_THRESHOLD) {
     throw new Error(
       `Voice synthesis failed for ${voicelessCount}/${built.length} scenes (${Math.round(voicelessRatio * 100)}%), ` +
