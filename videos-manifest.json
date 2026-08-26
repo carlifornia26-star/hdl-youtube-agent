@@ -1,6 +1,18 @@
 {
   "videos": [
     {
+      "video_id": "4uExETKss7I",
+      "short_video_id": "yA_ddDZ750M",
+      "book_slug": "age-one",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-complete-ai-business-mastery",
+      "title": "AGE ONE — AI & the information economy | HDL Group",
+      "description": "AGE ONE explores AI & the information economy. Available in English only, exclusively on Google Play Books.",
+      "thumbnail_url": "https://i.ytimg.com/vi/4uExETKss7I/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "duration_seconds": 593,
+      "published_at": "2026-08-26T10:11:29.810Z"
+    },
+    {
       "video_id": "y2-CmC6PHtQ",
       "short_video_id": "Qd1Gjr8V81c",
       "book_slug": "pet-friendly",
@@ -60,5 +72,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-08-25T10:18:06.743Z"
+  "updated_at": "2026-08-26T10:11:29.810Z"
 }
