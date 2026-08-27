@@ -2,8 +2,10 @@ name: HDL Daily YouTube Teaser
 
 on:
   schedule:
-    # 09:15 UTC daily — after the article-engine cron (keeps API calls spread out)
-    - cron: "15 9 * * *"
+    # 2:15 PM Eastern during EDT (UTC-4) — Mar-Nov
+    - cron: "15 18 * * *"
+    # 2:15 PM Eastern during EST (UTC-5) — Nov-Mar
+    - cron: "15 19 * * *"
   workflow_dispatch: {} # lets you trigger a manual test run from the GitHub app/site
 
 concurrency:
@@ -24,13 +26,35 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Check DST alignment
+        id: dst_check
+        run: |
+          # Two cron triggers fire year-round (one assumes EDT, one assumes EST).
+          # This step checks which offset is ACTUALLY in effect today and only lets
+          # the matching trigger proceed — the other exits here without running the pipeline.
+          OFFSET=$(TZ="America/New_York" date +%z)
+          SCHEDULE="${{ github.event.schedule }}"
+          if [ "$SCHEDULE" = "15 18 * * *" ] && [ "$OFFSET" = "-0400" ]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          elif [ "$SCHEDULE" = "15 19 * * *" ] && [ "$OFFSET" = "-0500" ]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping — current US Eastern offset is $OFFSET, doesn't match this cron slot. The other scheduled trigger handles today's run."
+          fi
+
       - name: Install ffmpeg
+        if: steps.dst_check.outputs.proceed == 'true'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install dependencies
+        if: steps.dst_check.outputs.proceed == 'true'
         run: npm install
 
       - name: Generate + upload today's video
+        if: steps.dst_check.outputs.proceed == 'true'
         run: npm run generate
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
