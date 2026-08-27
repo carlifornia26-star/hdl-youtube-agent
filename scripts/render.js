@@ -79,9 +79,12 @@ function buildCaptionChunks(text, duration) {
 const AMBIENT_DUCK_VOLUME = 0.12;
 
 // Landscape (main video) vs vertical (Shorts, 9:16) output dimensions and caption sizing.
+// Bumped from 720p to full 1080p (Ch. 25's recommended minimum) — fontsize scaled up 1.5x
+// (720->1080 ratio) so burned captions keep the same visual proportion on the larger frame
+// rather than looking small relative to it.
 const DIMENSIONS = {
-  landscape: { w: 1280, h: 720, fontsize: 64, captionY: "h*0.38" },
-  vertical: { w: 720, h: 1280, fontsize: 52, captionY: "h*0.42" },
+  landscape: { w: 1920, h: 1080, fontsize: 96, captionY: "h*0.38" },
+  vertical: { w: 1080, h: 1920, fontsize: 78, captionY: "h*0.42" },
 };
 
 export async function buildScene({ clipPath, duration, text, outPath, voicePath, orientation = "landscape" }) {
@@ -277,4 +280,4 @@ export function buildSrt(scenesWithDurations, translatedLines) {
     const ms = String(Math.floor((sec % 1) * 1000)).padStart(3, "0");
     return `${h}:${m}:${s},${ms}`;
   }
-      }
+  }
