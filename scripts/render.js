@@ -163,7 +163,7 @@ export async function buildScene({ clipPath, duration, text, outPath, voicePath,
 // Mixes a looped background music track under a finished video's existing audio (narration +
 // ambient, already mixed by buildScene). Runs as a separate pass AFTER concatScenes rather than
 // per-scene, so the music plays continuously across scene cuts instead of restarting each scene.
-const MUSIC_VOLUME = 0.18; // audible bed under the narration (~0.07 was ~-23dB, too quiet to hear at all)
+const MUSIC_VOLUME = 0.35; // audible bed under the narration (~0.18 was ~-15dB, still too quiet to hear clearly)
 export async function mixBackgroundMusic({ videoPath, musicPath, outPath }) {
   const duration = await probeDuration(videoPath);
   await run("ffmpeg", [
@@ -277,4 +277,4 @@ export function buildSrt(scenesWithDurations, translatedLines) {
     const ms = String(Math.floor((sec % 1) * 1000)).padStart(3, "0");
     return `${h}:${m}:${s},${ms}`;
   }
-}
+      }
