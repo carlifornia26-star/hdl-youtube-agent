@@ -43,7 +43,7 @@ function explainIfAuthError(err) {
   }
 }
 
-export async function uploadVideo({ videoPath, title, description, tags, localizations }) {
+export async function uploadVideo({ videoPath, title, description, tags, localizations, categoryId }) {
   const youtube = client();
   const isPrivate = process.env.DRY_RUN_PRIVATE === "true";
 
@@ -59,10 +59,10 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
       title,
       description,
       tags,
-      categoryId: "28", // Science & Technology — matches the "Science and technology" Upload
-      // default set in Studio (Settings > Upload defaults > Advanced settings). Studio's Upload
-      // Defaults are UI-only and never apply to API uploads, so this has to be hardcoded here to
-      // actually match what's configured there.
+      categoryId: categoryId || "28", // Falls back to Science & Technology if a caller doesn't
+      // pass one. Per-channel category now comes from generate-video.js (CATEGORY_ID, set from
+      // CHANNEL_ID) — this hardcoded default only matters if this function is ever called
+      // without that argument.
       defaultLanguage: "en", // matches Studio's "Title and description language: English"
       defaultAudioLanguage: "en", // matches Studio's "Video language: English". Without this,
       // uploads via the API show "0 languages" — defaultLanguage alone only tells YouTube the
