@@ -37,6 +37,12 @@ const LANG_NAMES = {
   vi: "Tiếng Việt",
 };
 
+// CHANNEL_ID is passed in by the workflow (see daily-video.yml). Channel 1 keeps unsuffixed
+// filenames for continuity; channels 2/3 get a suffix so their daily draft doesn't overwrite
+// another channel's post from the same day.
+const CHANNEL_ID = process.env.CHANNEL_ID || "1";
+const FILE_SUFFIX = CHANNEL_ID === "1" ? "" : `-${CHANNEL_ID}`;
+
 export async function buildDailyCommunityPost(book, buildDir) {
   const enLine = `${book.title} — ${book.angle}. Available now, exclusively on Google Play Books. #HDLGroup`;
 
@@ -65,21 +71,21 @@ export async function buildDailyCommunityPost(book, buildDir) {
   const dateStr = new Date().toISOString().slice(0, 10);
   const outDir = path.resolve("community-posts");
   await fs.mkdir(outDir, { recursive: true });
-  const outTextPath = path.join(outDir, `${dateStr}.md`);
-  const outImgPath = path.join(outDir, `${dateStr}.jpg`);
+  const outTextPath = path.join(outDir, `${dateStr}${FILE_SUFFIX}.md`);
+  const outImgPath = path.join(outDir, `${dateStr}${FILE_SUFFIX}.jpg`);
 
   await fs.copyFile(imgPath, outImgPath);
   await fs.writeFile(
     outTextPath,
-    `# Community post draft — ${dateStr}\n\n` +
-      `Image: ${dateStr}.jpg\n` +
+    `# Community post draft — ${dateStr}${CHANNEL_ID !== "1" ? ` (Channel ${CHANNEL_ID})` : ""}\n\n` +
+      `Image: ${dateStr}${FILE_SUFFIX}.jpg\n` +
       `${unsplashAttributionLine(attribution)}\n\n` +
       `To post: open the YouTube Studio app -> Community -> New post -> Image, ` +
-      `attach ${dateStr}.jpg, paste the text below, Post.\n\n` +
+      `attach ${dateStr}${FILE_SUFFIX}.jpg, paste the text below, Post.\n\n` +
       `---\n\n${postText}\n\n---\n` +
       `(${postText.length} characters total — trim languages if the Studio app truncates it)\n`
   );
 
-  console.log(`Community post draft written: community-posts/${dateStr}.md + ${dateStr}.jpg (post manually — see note above).`);
+  console.log(`Community post draft written: community-posts/${dateStr}${FILE_SUFFIX}.md + ${dateStr}${FILE_SUFFIX}.jpg (post manually — see note above).`);
   return { textPath: outTextPath, imgPath: outImgPath };
-    }
+}
