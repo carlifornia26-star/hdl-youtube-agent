@@ -10,6 +10,16 @@ import { uploadVideo, uploadCaptionTrack, uploadThumbnail, addVideoToPlaylist } 
 import { appendVideoEntry } from "./manifest.js";
 import { buildDailyCommunityPost } from "./community-post.js";
 
+// Passed in by the workflow (see daily-video.yml). Channel 1 keeps unsuffixed filenames so
+// its existing history isn't disturbed; channels 2/3 get their own suffixed files so their
+// playlists/manifest don't overwrite each other.
+const CHANNEL_ID = process.env.CHANNEL_ID || "1";
+
+// YouTube's official video category IDs (snippet.categoryId) per channel.
+// 1 = Science & Technology, 2 = Entertainment, 3 = Education.
+const CHANNEL_CATEGORY_IDS = { 1: "28", 2: "24", 3: "27" };
+const CATEGORY_ID = CHANNEL_CATEGORY_IDS[CHANNEL_ID] || CHANNEL_CATEGORY_IDS[1];
+
 const BUILD_DIR = path.resolve("build");
 const SITE_URL = "https://highdefinitionlearning.pages.dev/"; // every description link points here, not the per-book page
 const PADDING_SECONDS = 0.8; // per-scene buffer after the voice line finishes, before the next scene cuts in
@@ -430,6 +440,7 @@ async function main() {
     description: enDescription,
     tags,
     localizations,
+    categoryId: CATEGORY_ID,
   });
   console.log(`Uploaded: https://youtube.com/watch?v=${uploaded.id}`);
 
@@ -440,7 +451,8 @@ async function main() {
   // Non-fatal: a missing or failed playlist add should never take down an otherwise-successful
   // publish — the video is already live on the channel either way.
   try {
-    const playlistsRaw = await fs.readFile(path.resolve("playlists.json"), "utf8");
+    const playlistsPath = path.resolve(CHANNEL_ID === "1" ? "playlists.json" : `playlists-${CHANNEL_ID}.json`);
+    const playlistsRaw = await fs.readFile(playlistsPath, "utf8");
     const playlists = JSON.parse(playlistsRaw);
     const playlistId = playlists[book.slug];
     if (playlistId) {
@@ -567,6 +579,7 @@ async function main() {
           description: shortDescription,
           tags: shortTags,
           localizations: shortLocalizations,
+          categoryId: CATEGORY_ID,
         });
       } catch (e) {
         console.warn(
@@ -579,6 +592,7 @@ async function main() {
           description: shortDescription,
           tags: shortBaseTags,
           localizations: {},
+          categoryId: CATEGORY_ID,
         });
         console.log("Short uploaded English-only after localizations retry.");
       }
