@@ -2,11 +2,26 @@ name: HDL Daily YouTube Teaser
 
 on:
   schedule:
-    # 2:15 PM Eastern during EDT (UTC-4) — Mar-Nov
-    - cron: "15 18 * * *"
-    # 2:15 PM Eastern during EST (UTC-5) — Nov-Mar
-    - cron: "15 19 * * *"
-  workflow_dispatch: {} # lets you trigger a manual test run from the GitHub app/site
+    # --- Channel 1 — 2:15 PM Eastern (existing) ---
+    - cron: "15 18 * * *" # EDT (UTC-4), Mar-Nov
+    - cron: "15 19 * * *" # EST (UTC-5), Nov-Mar
+
+    # --- Channel 2 — 7:00 PM Eastern (ADJUST to your real peak time) ---
+    - cron: "0 23 * * *"  # EDT (UTC-4)
+    - cron: "0 0 * * *"   # EST (UTC-5) — lands 00:00 UTC the next calendar day
+
+    # --- Channel 3 — 9:00 AM Eastern (ADJUST to your real peak time) ---
+    - cron: "0 13 * * *"  # EDT (UTC-4)
+    - cron: "0 14 * * *"  # EST (UTC-5)
+
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Which channel to run manually"
+        required: true
+        default: "1"
+        type: choice
+        options: ["1", "2", "3"]
 
 concurrency:
   group: hdl-daily-video
@@ -18,7 +33,7 @@ permissions:
 jobs:
   build-and-upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 60 # raised from 45 — more scenes (36-46 base, plus possible duration top-up rounds) and Kokoro's local CPU synthesis both add runtime
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -26,56 +41,84 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Check DST alignment
-        id: dst_check
+      - name: Resolve channel + check DST alignment
+        id: resolve
         run: |
-          # Two cron triggers fire year-round (one assumes EDT, one assumes EST).
-          # This step checks which offset is ACTUALLY in effect today and only lets
-          # the matching trigger proceed — the other exits here without running the pipeline.
+          # Maps this run's trigger (cron slot or manual input) to a channel + suffix,
+          # then confirms the US Eastern UTC offset actually matches the assumed one for
+          # the cron slot that fired — the non-matching twin of each pair exits here.
           OFFSET=$(TZ="America/New_York" date +%z)
           SCHEDULE="${{ github.event.schedule }}"
-          if [ "$SCHEDULE" = "15 18 * * *" ] && [ "$OFFSET" = "-0400" ]; then
-            echo "proceed=true" >> "$GITHUB_OUTPUT"
-          elif [ "$SCHEDULE" = "15 19 * * *" ] && [ "$OFFSET" = "-0500" ]; then
-            echo "proceed=true" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CHANNEL="${{ github.event.inputs.channel }}"
             echo "proceed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "proceed=false" >> "$GITHUB_OUTPUT"
-            echo "Skipping — current US Eastern offset is $OFFSET, doesn't match this cron slot. The other scheduled trigger handles today's run."
+            case "$SCHEDULE" in
+              "15 18 * * *") CHANNEL=1; EXPECTED="-0400" ;;
+              "15 19 * * *") CHANNEL=1; EXPECTED="-0500" ;;
+              "0 23 * * *")  CHANNEL=2; EXPECTED="-0400" ;;
+              "0 0 * * *")   CHANNEL=2; EXPECTED="-0500" ;;
+              "0 13 * * *")  CHANNEL=3; EXPECTED="-0400" ;;
+              "0 14 * * *")  CHANNEL=3; EXPECTED="-0500" ;;
+            esac
+
+            if [ "$OFFSET" = "$EXPECTED" ]; then
+              echo "proceed=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "proceed=false" >> "$GITHUB_OUTPUT"
+              echo "Skipping — current US Eastern offset is $OFFSET, doesn't match this cron slot. The other scheduled trigger for this channel handles today's run."
+            fi
           fi
 
+          # Secret names aren't a consistent prefix+suffix pattern (channel 1 kept its
+          # original YT_ names, channels 2/3 were saved as YOUTUBE_..._2 / _3), so map
+          # each channel to its exact secret names explicitly rather than formatting one.
+          case "$CHANNEL" in
+            1)
+              ID_KEY="YT_CLIENT_ID"; SECRET_KEY="YT_CLIENT_SECRET"; TOKEN_KEY="YT_REFRESH_TOKEN" ;;
+            2)
+              ID_KEY="YOUTUBE_CLIENT_ID_2"; SECRET_KEY="YOUTUBE_CLIENT_SECRET_2"; TOKEN_KEY="YOUTUBE_REFRESH_TOKEN_2" ;;
+            3)
+              ID_KEY="YOUTUBE_CLIENT_ID_3"; SECRET_KEY="YOUTUBE_CLIENT_SECRET_3"; TOKEN_KEY="YOUTUBE_REFRESH_TOKEN_3" ;;
+          esac
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "id_key=$ID_KEY" >> "$GITHUB_OUTPUT"
+          echo "secret_key=$SECRET_KEY" >> "$GITHUB_OUTPUT"
+          echo "token_key=$TOKEN_KEY" >> "$GITHUB_OUTPUT"
+
       - name: Install ffmpeg
-        if: steps.dst_check.outputs.proceed == 'true'
+        if: steps.resolve.outputs.proceed == 'true'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install dependencies
-        if: steps.dst_check.outputs.proceed == 'true'
+        if: steps.resolve.outputs.proceed == 'true'
         run: npm install
 
-      - name: Generate + upload today's video
-        if: steps.dst_check.outputs.proceed == 'true'
+      - name: Generate + upload today's video (Channel ${{ steps.resolve.outputs.channel }})
+        if: steps.resolve.outputs.proceed == 'true'
         run: npm run generate
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
-          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
-          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          # Pulls the exact secret matching this run's resolved channel into the
+          # plain names the script already expects — no script changes needed for auth.
+          YT_CLIENT_ID: ${{ secrets[steps.resolve.outputs.id_key] }}
+          YT_CLIENT_SECRET: ${{ secrets[steps.resolve.outputs.secret_key] }}
+          YT_REFRESH_TOKEN: ${{ secrets[steps.resolve.outputs.token_key] }}
           FISH_API_KEY: ${{ secrets.FISH_API_KEY }} # optional now — Kokoro (local) is primary; this is a fallback
-          # Optional — omit to use Fish Audio's default voice (only matters if the fallback runs)
           FISH_VOICE_ID: ${{ secrets.FISH_VOICE_ID }}
-          # Optional: set to "true" to upload as Private instead of Public while you're testing
           DRY_RUN_PRIVATE: ${{ vars.DRY_RUN_PRIVATE }}
+          # NOTE: the script still reads/writes a single videos-manifest.json regardless
+          # of channel. Until generate-video.js is updated to key its manifest and
+          # community-post output per channel, running 3 channels through this will mix
+          # their histories together. See chat for details.
+          CHANNEL_ID: ${{ steps.resolve.outputs.channel }}
 
-      # Commits the manifest update AND today's community-post draft (image + caption text,
-      # written by community-post.js) even if the main step above exited non-zero — that step
-      # intentionally throws AFTER publishing (see VOICE_FAILURE_THRESHOLD in generate-video.js)
-      # just to redden the Actions check, so the video/manifest/post draft can all be live already.
       - name: Commit updated video manifest + community post draft
-        if: always()
+        if: always() && steps.resolve.outputs.proceed == 'true'
         run: |
           git config user.name "hdl-daily-video-bot"
           git config user.email "actions@users.noreply.github.com"
@@ -88,10 +131,10 @@ jobs:
           fi
 
       - name: Upload run artifacts (for debugging, kept 3 days)
-        if: always()
+        if: always() && steps.resolve.outputs.proceed == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: video-run-${{ github.run_number }}
+          name: video-run-${{ github.run_number }}-ch${{ steps.resolve.outputs.channel }}
           path: |
             build/
             community-posts/
