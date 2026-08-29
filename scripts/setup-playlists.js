@@ -4,7 +4,11 @@ import { CATALOG } from "./catalog.js";
 import { translateMeta, VIDEO_LANGS } from "./cf-ai.js";
 import { createPlaylist } from "./youtube.js";
 
-const PLAYLISTS_PATH = path.resolve("playlists.json");
+// CHANNEL_ID is passed in by the workflow (see hdl-setup-playlists.yml's workflow_dispatch
+// input). Channel 1 keeps the original unsuffixed filename so its existing playlist history
+// isn't disturbed; channels 2/3 get their own file so playlists don't overwrite each other.
+const CHANNEL_ID = process.env.CHANNEL_ID || "1";
+const PLAYLISTS_PATH = path.resolve(CHANNEL_ID === "1" ? "playlists.json" : `playlists-${CHANNEL_ID}.json`);
 
 // Same fix as generate-video.js: Cloudflare's m2m100 model uses short codes (zh, es, fr...),
 // but YouTube's localizations map requires proper BCP-47 tags and rejects some of them outright
@@ -29,6 +33,7 @@ async function loadPlaylists() {
 // Safe to re-run any time you add a new book to CATALOG — existing playlists are skipped, not
 // recreated, so this never spends quota or makes duplicates for books already set up.
 async function main() {
+  console.log(`Channel ${CHANNEL_ID} — using ${PLAYLISTS_PATH}`);
   const playlists = await loadPlaylists();
   let created = 0;
   let skipped = 0;
