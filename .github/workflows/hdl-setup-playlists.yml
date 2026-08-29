@@ -13,6 +13,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: hdl-setup-playlists
+  cancel-in-progress: false
+
 jobs:
   setup:
     name: Create per-book playlists with localizations
@@ -71,4 +75,8 @@ jobs:
           fi
           git add "$FILE"
           git diff --staged --quiet || git commit -m "Add/update $FILE (channel ${{ github.event.inputs.channel }})"
+          # Rebase onto the latest remote before pushing — a second run's commit
+          # (e.g. another channel finishing right before this one) can otherwise land
+          # in between checkout and push here, causing a rejected non-fast-forward push.
+          git pull --rebase origin "${{ github.ref_name }}"
           git push
