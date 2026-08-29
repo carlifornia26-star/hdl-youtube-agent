@@ -1,6 +1,18 @@
 {
   "videos": [
     {
+      "video_id": "u9j56cd8PS8",
+      "short_video_id": "WbnuNvIk7kI",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Science of Feeling Great — wellness & vitality | HDL Group",
+      "description": "Science of Feeling Great explores wellness & vitality. Available in English only, exclusively on Google Play Books.",
+      "thumbnail_url": "https://i.ytimg.com/vi/u9j56cd8PS8/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "duration_seconds": 642,
+      "published_at": "2026-08-29T21:08:23.311Z"
+    },
+    {
       "video_id": "eBlQiZcVKpk",
       "short_video_id": "D8vFUtGBgww",
       "book_slug": "science-of-feeling-great",
@@ -96,5 +108,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-08-29T02:07:32.661Z"
+  "updated_at": "2026-08-29T21:08:23.311Z"
 }
