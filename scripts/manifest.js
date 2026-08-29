@@ -5,7 +5,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-const MANIFEST_PATH = path.resolve("videos-manifest.json");
+// CHANNEL_ID is passed in by the workflow (see daily-video.yml). Channel 1 keeps the original
+// unsuffixed filename so the site's existing worker/sitemap references keep working untouched;
+// channels 2/3 get their own file so their video histories don't overwrite each other.
+const CHANNEL_ID = process.env.CHANNEL_ID || "1";
+const MANIFEST_PATH = path.resolve(CHANNEL_ID === "1" ? "videos-manifest.json" : `videos-manifest-${CHANNEL_ID}.json`);
 // Bounded so the file (and the site's per-request fetch of it) can't grow forever —
 // at 1 video/day this is well over a year of history, plenty for a sitemap/hub page.
 const MAX_ENTRIES = 500;
@@ -29,4 +33,4 @@ export async function appendVideoEntry(entry) {
   manifest.updated_at = new Date().toISOString();
   await fs.writeFile(MANIFEST_PATH, JSON.stringify(manifest, null, 2) + "\n");
   return manifest;
-  }
+      }
