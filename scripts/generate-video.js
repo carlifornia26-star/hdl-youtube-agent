@@ -143,8 +143,11 @@ async function main() {
     );
   }
 
-  const book = pickTodaysBook();
-  console.log(`Today's book: ${book.title}`);
+  // Each channel reads from a different offset in the daily rotation (see pickTodaysBook in
+  // catalog.js) so all 3 channels post different books/titles on the same calendar day instead
+  // of all picking the identical one.
+  const book = pickTodaysBook(new Date(), Number(CHANNEL_ID) - 1);
+  console.log(`Today's book (Channel ${CHANNEL_ID}): ${book.displayTitle}`);
 
   // One narrator voice for the ENTIRE video (main + Short), computed once here and passed into
   // every synthesizeVoice() call below — never mixed voices within one video. Tomorrow's video
@@ -385,7 +388,7 @@ async function main() {
   }
 
   // 4) English metadata
-  const enTitle = `${book.title} — ${book.angle} | HDL Group`;
+  const enTitle = `${book.displayTitle} — ${book.angle} | HDL Group`;
   // Only the plain descriptive sentence goes to the translation model. Everything else —
   // the URL, the hashtags, the chapters block, and (further below) the music/thumbnail credit
   // lines — is appended AFTER translation, untranslated, for every language including English.
@@ -534,7 +537,7 @@ async function main() {
         }
       }
 
-      const shortTitle = `${book.title} #Shorts`.slice(0, 100); // YouTube's 100-char title cap
+      const shortTitle = `${book.displayTitle} #Shorts`.slice(0, 100); // YouTube's 100-char title cap
       // Same URL-safety fix as the main video's description above: only the plain sentence goes
       // to the translation model. The two URLs (YouTube link + book link) and the hashtags are
       // appended after, untranslated, so they can't come back corrupted in any language.
