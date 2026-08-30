@@ -1,0 +1,15 @@
+{
+  "winner": null,
+  "decided_at": "2026-08-30T14:40:37.606Z",
+  "enough_data": false,
+  "summary": {
+    "A": {
+      "impressions": 0,
+      "ctr": 0
+    },
+    "B": {
+      "impressions": 0,
+      "ctr": 0
+    }
+  }
+}
