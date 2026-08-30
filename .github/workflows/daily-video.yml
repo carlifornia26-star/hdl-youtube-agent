@@ -6,13 +6,13 @@ on:
     - cron: "15 18 * * *" # EDT (UTC-4), Mar-Nov
     - cron: "15 19 * * *" # EST (UTC-5), Nov-Mar
 
-    # --- Channel 2 — 7:00 PM Eastern (ADJUST to your real peak time) ---
-    - cron: "0 23 * * *"  # EDT (UTC-4)
-    - cron: "0 0 * * *"   # EST (UTC-5) — lands 00:00 UTC the next calendar day
+    # --- Channel 2 — 6:20 PM Eastern (US audience) ---
+    - cron: "20 22 * * *" # EDT (UTC-4)
+    - cron: "20 23 * * *" # EST (UTC-5)
 
-    # --- Channel 3 — 9:00 AM Eastern (ADJUST to your real peak time) ---
-    - cron: "0 13 * * *"  # EDT (UTC-4)
-    - cron: "0 14 * * *"  # EST (UTC-5)
+    # --- Channel 3 — 8:00 PM Eastern (US audience) ---
+    - cron: "0 0 * * *"   # EDT (UTC-4) — lands 00:00 UTC the next calendar day
+    - cron: "0 1 * * *"   # EST (UTC-5)
 
   workflow_dispatch:
     inputs:
@@ -44,9 +44,9 @@ jobs:
       - name: Resolve channel + check DST alignment
         id: resolve
         run: |
-          # Maps this run's trigger (cron slot or manual input) to a channel + suffix,
-          # then confirms the US Eastern UTC offset actually matches the assumed one for
-          # the cron slot that fired — the non-matching twin of each pair exits here.
+          # Maps this run's trigger to a channel. All three channels target a US audience and
+          # are anchored to fixed US Eastern local times, so each needs both an EDT and EST
+          # cron entry — the offset check below picks whichever one actually matches today.
           OFFSET=$(TZ="America/New_York" date +%z)
           SCHEDULE="${{ github.event.schedule }}"
 
@@ -57,10 +57,10 @@ jobs:
             case "$SCHEDULE" in
               "15 18 * * *") CHANNEL=1; EXPECTED="-0400" ;;
               "15 19 * * *") CHANNEL=1; EXPECTED="-0500" ;;
-              "0 23 * * *")  CHANNEL=2; EXPECTED="-0400" ;;
-              "0 0 * * *")   CHANNEL=2; EXPECTED="-0500" ;;
-              "0 13 * * *")  CHANNEL=3; EXPECTED="-0400" ;;
-              "0 14 * * *")  CHANNEL=3; EXPECTED="-0500" ;;
+              "20 22 * * *") CHANNEL=2; EXPECTED="-0400" ;;
+              "20 23 * * *") CHANNEL=2; EXPECTED="-0500" ;;
+              "0 0 * * *")   CHANNEL=3; EXPECTED="-0400" ;;
+              "0 1 * * *")   CHANNEL=3; EXPECTED="-0500" ;;
             esac
 
             if [ "$OFFSET" = "$EXPECTED" ]; then
@@ -111,10 +111,6 @@ jobs:
           FISH_API_KEY: ${{ secrets.FISH_API_KEY }} # optional now — Kokoro (local) is primary; this is a fallback
           FISH_VOICE_ID: ${{ secrets.FISH_VOICE_ID }}
           DRY_RUN_PRIVATE: ${{ vars.DRY_RUN_PRIVATE }}
-          # NOTE: the script still reads/writes a single videos-manifest.json regardless
-          # of channel. Until generate-video.js is updated to key its manifest and
-          # community-post output per channel, running 3 channels through this will mix
-          # their histories together. See chat for details.
           CHANNEL_ID: ${{ steps.resolve.outputs.channel }}
 
       - name: Commit updated video manifest + community post draft
@@ -122,9 +118,13 @@ jobs:
         run: |
           git config user.name "hdl-daily-video-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add videos-manifest.json community-posts/ 2>/dev/null || true
-          if [ -n "$(git status --porcelain videos-manifest.json community-posts/ 2>/dev/null)" ]; then
-            git commit -m "Update videos-manifest.json + today's community post draft [skip ci]"
+          CH="${{ steps.resolve.outputs.channel }}"
+          MANIFEST="videos-manifest.json"
+          if [ "$CH" != "1" ]; then MANIFEST="videos-manifest-$CH.json"; fi
+          git add "$MANIFEST" community-posts/ 2>/dev/null || true
+          if [ -n "$(git status --porcelain "$MANIFEST" community-posts/ 2>/dev/null)" ]; then
+            git commit -m "Update $MANIFEST + today's community post draft (channel $CH) [skip ci]"
+            git pull --rebase origin "${{ github.ref_name }}"
             git push
           else
             echo "No manifest/community-post changes to commit."
