@@ -1,6 +1,18 @@
 {
   "videos": [
     {
+      "video_id": "dfucidZcn6Y",
+      "short_video_id": "-q2MTXawaRQ",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "Art of Joy: Feel Happiness — the science of happiness | HDL Group",
+      "description": "Art of Joy explores the science of happiness. Available in English only, exclusively on Google Play Books.",
+      "thumbnail_url": "https://i.ytimg.com/vi/dfucidZcn6Y/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "duration_seconds": 674,
+      "published_at": "2026-08-30T21:20:18.412Z"
+    },
+    {
       "video_id": "u9j56cd8PS8",
       "short_video_id": "WbnuNvIk7kI",
       "book_slug": "science-of-feeling-great",
@@ -108,5 +120,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-08-29T21:08:23.311Z"
+  "updated_at": "2026-08-30T21:20:18.418Z"
 }
