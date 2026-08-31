@@ -177,6 +177,37 @@ export async function getChannelLocalizations(channelId) {
   return channel.localizations || {};
 }
 
+// Sets the channel trailer shown to non-subscribers (Studio calls this "Channel trailer for
+// new visitors"). This is a REAL, long-standing API field — unlike the Studio homepage
+// "Featured video for returning subscribers" / Spotlight section, which has no Data API
+// exposure at all and has to be set by hand in Studio, once, per channel.
+//
+// channels.update with part=brandingSettings replaces the whole brandingSettings.channel
+// object, same overwrite trap as localizations (see updateChannelLocalizations above) — so
+// this merges into whatever branding is already there instead of sending only unsubscribedTrailer.
+export async function setChannelTrailer({ channelId, videoId, currentBranding }) {
+  const youtube = client();
+  const mergedChannelBranding = { ...(currentBranding?.channel || {}), unsubscribedTrailer: videoId };
+  try {
+    const res = await youtube.channels.update({
+      part: ["brandingSettings"],
+      requestBody: {
+        id: channelId,
+        brandingSettings: { channel: mergedChannelBranding },
+      },
+    });
+    return res.data;
+  } catch (err) {
+    explainIfAuthError(err);
+    const apiError = err?.response?.data?.error || err?.errors || null;
+    if (apiError) {
+      console.error("setChannelTrailer failed. API error detail:\n", JSON.stringify(apiError, null, 2));
+    }
+    err.isQuotaExceeded = isQuotaExceeded(err);
+    throw err;
+  }
+}
+
 export async function uploadThumbnail({ videoId, imagePath }) {
   const youtube = client();
   try {
@@ -261,4 +292,4 @@ export async function addVideoToPlaylist({ playlistId, videoId }) {
     err.isQuotaExceeded = isQuotaExceeded(err);
     throw err;
   }
-    }
+}
