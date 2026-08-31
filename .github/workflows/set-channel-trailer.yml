@@ -17,8 +17,8 @@ on:
         type: choice
         options: ["1", "2", "3"]
       video_id:
-        description: "Video ID to use as the trailer (the part after watch?v= in the URL)"
-        required: true
+        description: "Video ID to use as the trailer. Leave blank to use that channel's latest Art of Joy video (the default below)."
+        required: false
         type: string
 
 jobs:
@@ -35,26 +35,33 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Resolve channel secrets
+      - name: Resolve channel secrets + default video
         id: resolve
         run: |
           # Same secret-name mapping as daily-video.yml: channel 1 kept its original YT_ names,
           # channels 2/3 were saved as YOUTUBE_..._2 / _3.
+          #
+          # DEFAULT_VIDEO_ID is each channel's most recent "Art of Joy" upload, pulled from
+          # videos-manifest*.json on 2026-08-31. Update these three values any time you want a
+          # different default trailer video without touching the rest of this workflow.
           case "${{ github.event.inputs.channel }}" in
             1)
               echo "id_key=YT_CLIENT_ID" >> "$GITHUB_OUTPUT"
               echo "secret_key=YT_CLIENT_SECRET" >> "$GITHUB_OUTPUT"
               echo "token_key=YT_REFRESH_TOKEN" >> "$GITHUB_OUTPUT"
+              echo "default_video_id=dfucidZcn6Y" >> "$GITHUB_OUTPUT"
               ;;
             2)
               echo "id_key=YOUTUBE_CLIENT_ID_2" >> "$GITHUB_OUTPUT"
               echo "secret_key=YOUTUBE_CLIENT_SECRET_2" >> "$GITHUB_OUTPUT"
               echo "token_key=YOUTUBE_REFRESH_TOKEN_2" >> "$GITHUB_OUTPUT"
+              echo "default_video_id=yc1DhAagv1U" >> "$GITHUB_OUTPUT"
               ;;
             3)
               echo "id_key=YOUTUBE_CLIENT_ID_3" >> "$GITHUB_OUTPUT"
               echo "secret_key=YOUTUBE_CLIENT_SECRET_3" >> "$GITHUB_OUTPUT"
               echo "token_key=YOUTUBE_REFRESH_TOKEN_3" >> "$GITHUB_OUTPUT"
+              echo "default_video_id=U18jQhpWhqw" >> "$GITHUB_OUTPUT"
               ;;
           esac
 
@@ -64,4 +71,4 @@ jobs:
           YT_CLIENT_ID: ${{ secrets[steps.resolve.outputs.id_key] }}
           YT_CLIENT_SECRET: ${{ secrets[steps.resolve.outputs.secret_key] }}
           YT_REFRESH_TOKEN: ${{ secrets[steps.resolve.outputs.token_key] }}
-          VIDEO_ID: ${{ github.event.inputs.video_id }}
+          VIDEO_ID: ${{ github.event.inputs.video_id || steps.resolve.outputs.default_video_id }}
