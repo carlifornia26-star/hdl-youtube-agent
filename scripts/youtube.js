@@ -141,6 +141,18 @@ export function isQuotaExceeded(err) {
   return Number(status) === 403 && String(reason).toLowerCase() === "quotaexceeded";
 }
 
+// "failedPrecondition" / "Precondition check failed" is a well-documented flaky YouTube Data
+// API response (other developers report the identical error, with the identical unhelpful
+// message, on thumbnails.set — not specific to this endpoint or to anything actually wrong
+// with the request). It is not tied to a real eligibility problem with the channel or video;
+// simply retrying the same call is the commonly reported fix.
+export function isFailedPrecondition(err) {
+  const status = err?.response?.status ?? err?.code ?? err?.status;
+  const errors = err?.response?.data?.error?.errors ?? err?.errors ?? [];
+  const reason = errors?.[0]?.reason ?? "";
+  return Number(status) === 400 && String(reason).toLowerCase() === "failedprecondition";
+}
+
 export async function updateChannelLocalizations({ channelId, localizations }) {
   const youtube = client();
   try {
@@ -185,19 +197,39 @@ export async function getChannelLocalizations(channelId) {
 // channels.update with part=brandingSettings replaces the whole brandingSettings.channel
 // object, same overwrite trap as localizations (see updateChannelLocalizations above) — so
 // this merges into whatever branding is already there instead of sending only unsubscribedTrailer.
+//
+// Retries on isFailedPrecondition (see comment above that function) — this is the same known
+// flaky response reported on thumbnails.set, not a real problem with the request. 3 attempts
+// with a short backoff clears it in most reports; a real, persistent problem (bad video ID,
+// dead auth, quota) fails identically on every attempt and still surfaces after the retries.
 export async function setChannelTrailer({ channelId, videoId, currentBranding }) {
   const youtube = client();
   const mergedChannelBranding = { ...(currentBranding?.channel || {}), unsubscribedTrailer: videoId };
-  try {
-    const res = await youtube.channels.update({
-      part: ["brandingSettings"],
-      requestBody: {
-        id: channelId,
-        brandingSettings: { channel: mergedChannelBranding },
-      },
-    });
-    return res.data;
-  } catch (err) {
+  let lastErr;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await youtube.channels.update({
+        part: ["brandingSettings"],
+        requestBody: {
+          id: channelId,
+          brandingSettings: { channel: mergedChannelBranding },
+        },
+      });
+      if (attempt > 1) console.log(`setChannelTrailer succeeded on attempt ${attempt}/3.`);
+      return res.data;
+    } catch (err) {
+      lastErr = err;
+      const retryable = isFailedPrecondition(err) && attempt < 3;
+      if (retryable) {
+        console.warn(`setChannelTrailer: attempt ${attempt}/3 hit a failedPrecondition (known flaky response), retrying...`);
+        await new Promise((r) => setTimeout(r, 3000 * attempt)); // 3s, 6s
+        continue;
+      }
+      break;
+    }
+  }
+  const err = lastErr;
+  {
     explainIfAuthError(err);
     const apiError = err?.response?.data?.error || err?.errors || null;
     if (apiError) {
