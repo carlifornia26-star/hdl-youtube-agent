@@ -1,6 +1,18 @@
 {
   "videos": [
     {
+      "video_id": "lhew6SxqF7Y",
+      "short_video_id": "v0rFjQAlMyo",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "YouTube Algorithms: Grow Your Channel — growing a channel with the algorithm | HDL Group",
+      "description": "YouTube Algorithms explores growing a channel with the algorithm. Available in English only, exclusively on Google Play Books.",
+      "thumbnail_url": "https://i.ytimg.com/vi/lhew6SxqF7Y/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "duration_seconds": 600,
+      "published_at": "2026-08-31T23:04:47.866Z"
+    },
+    {
       "video_id": "dfucidZcn6Y",
       "short_video_id": "-q2MTXawaRQ",
       "book_slug": "art-of-joy",
@@ -120,5 +132,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-08-30T21:20:18.418Z"
+  "updated_at": "2026-08-31T23:04:47.867Z"
 }
