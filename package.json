@@ -8,6 +8,7 @@
     "generate": "node scripts/generate-video.js",
     "report:thumbnails": "node scripts/thumbnail-report.js",
     "customize-channel": "node scripts/customize-channel.js",
+    "set-channel-trailer": "node scripts/set-channel-trailer.js",
     "setup-playlists": "node scripts/setup-playlists.js"
   },
   "dependencies": {
