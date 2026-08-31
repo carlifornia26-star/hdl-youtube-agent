@@ -37,6 +37,7 @@ async function main() {
   const playlists = await loadPlaylists();
   let created = 0;
   let skipped = 0;
+  let failed = 0; // non-quota failures — see the exit-code check below
 
   for (const book of CATALOG) {
     if (playlists[book.slug]) {
@@ -72,11 +73,32 @@ async function main() {
         );
         break;
       }
+      // Any other failure (auth, missing scope, bad request, etc.) is NOT expected/recoverable
+      // the way a quota limit is — it means something is actually broken, and every remaining
+      // book will almost certainly fail the same way. Track it so the run fails loudly instead
+      // of silently reporting green with zero playlists created.
+      failed++;
     }
   }
 
   await fs.writeFile(PLAYLISTS_PATH, JSON.stringify(playlists, null, 2) + "\n");
-  console.log(`Done. ${created} created, ${skipped} skipped. Wrote ${PLAYLISTS_PATH}.`);
+  console.log(`Done. ${created} created, ${skipped} skipped, ${failed} failed. Wrote ${PLAYLISTS_PATH}.`);
+
+  // Previously this script always exited 0 as long as main() itself didn't throw — meaning a
+  // systemic problem (e.g. a refresh token minted with the wrong OAuth scope) that made EVERY
+  // createPlaylist() call fail still produced a green GitHub Actions check, because the
+  // per-book try/catch above swallows the error and just moves to the next book. If nothing
+  // got created and at least one attempt genuinely failed, fail the run so it shows red instead
+  // of silently doing nothing.
+  if (created === 0 && failed > 0) {
+    console.error(
+      `\n*** ALL ${failed} PLAYLIST CREATION ATTEMPT(S) FAILED — likely an auth/permission ` +
+        "issue (e.g. the refresh token for this channel was minted without the full YouTube " +
+        "write scope, not just the upload scope), not a fluke. See the per-book error(s) above " +
+        "for the actual API error detail. ***\n"
+    );
+    process.exitCode = 1;
+  }
 }
 
 main().catch((err) => {
