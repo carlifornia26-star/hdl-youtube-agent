@@ -6,7 +6,14 @@ name: HDL Channel Localization (manual)
 # channel's name + description into every language YouTube supports, or after you've edited
 # the default English name/description in Studio.
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Which channel to localize"
+        required: true
+        default: "1"
+        type: choice
+        options: ["1", "2", "3"]
 
 jobs:
   localize-channel:
@@ -22,11 +29,34 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Translate + set channel name/description in every supported language
+      - name: Resolve channel secrets
+        id: resolve
+        run: |
+          # Same secret-name mapping as daily-video.yml: channel 1 kept its original YT_ names,
+          # channels 2/3 were saved as YOUTUBE_..._2 / _3.
+          case "${{ github.event.inputs.channel }}" in
+            1)
+              echo "id_key=YT_CLIENT_ID" >> "$GITHUB_OUTPUT"
+              echo "secret_key=YT_CLIENT_SECRET" >> "$GITHUB_OUTPUT"
+              echo "token_key=YT_REFRESH_TOKEN" >> "$GITHUB_OUTPUT"
+              ;;
+            2)
+              echo "id_key=YOUTUBE_CLIENT_ID_2" >> "$GITHUB_OUTPUT"
+              echo "secret_key=YOUTUBE_CLIENT_SECRET_2" >> "$GITHUB_OUTPUT"
+              echo "token_key=YOUTUBE_REFRESH_TOKEN_2" >> "$GITHUB_OUTPUT"
+              ;;
+            3)
+              echo "id_key=YOUTUBE_CLIENT_ID_3" >> "$GITHUB_OUTPUT"
+              echo "secret_key=YOUTUBE_CLIENT_SECRET_3" >> "$GITHUB_OUTPUT"
+              echo "token_key=YOUTUBE_REFRESH_TOKEN_3" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Translate + set channel name/description in every supported language (Channel ${{ github.event.inputs.channel }})
         run: npm run customize-channel
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
-          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YT_CLIENT_ID: ${{ secrets[steps.resolve.outputs.id_key] }}
+          YT_CLIENT_SECRET: ${{ secrets[steps.resolve.outputs.secret_key] }}
+          YT_REFRESH_TOKEN: ${{ secrets[steps.resolve.outputs.token_key] }}
