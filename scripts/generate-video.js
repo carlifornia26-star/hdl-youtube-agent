@@ -20,6 +20,33 @@ const CHANNEL_ID = process.env.CHANNEL_ID || "1";
 const CHANNEL_CATEGORY_IDS = { 1: "28", 2: "24", 3: "27" };
 const CATEGORY_ID = CHANNEL_CATEGORY_IDS[CHANNEL_ID] || CHANNEL_CATEGORY_IDS[1];
 
+// SEO file-rename step: a widely-repeated (and unconfirmed by any official YouTube source)
+// claim is that the algorithm weighs the raw uploaded filename alongside title/description/
+// tags, and gives a small discovery boost to files whose name isn't a generic export string
+// like "VID_2026...mp4". There's no solid evidence this materially moves recommendations, but
+// it's free (no extra render cost, no API cost, no risk of rejection) — so it's applied on
+// every upload rather than skipped outright. Keep expectations calibrated: this is not the
+// "biggest secret", it's a zero-cost extra in case it helps at the margin.
+function slugifyForFilename(text) {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 80)
+    .replace(/-$/, "");
+}
+
+// Renames (copies, so the original render is untouched for debugging) the finished file to a
+// keyword-bearing name right before it's streamed to the Data API. Returns the new path.
+async function renameForUpload(sourcePath, keywordText) {
+  const slug = slugifyForFilename(keywordText) || "hdl-group-video";
+  const destPath = path.join(BUILD_DIR, `${slug}.mp4`);
+  if (destPath !== sourcePath) await fs.copyFile(sourcePath, destPath);
+  return destPath;
+}
+
 const BUILD_DIR = path.resolve("build");
 const SITE_URL = "https://highdefinitionlearning.pages.dev/"; // every description link points here, not the per-book page
 const PADDING_SECONDS = 0.8; // per-scene buffer after the voice line finishes, before the next scene cuts in
@@ -436,7 +463,8 @@ async function main() {
   const baseTags = [book.title, "HDL Group", book.angle, "ebook"];
   const tags = [...baseTags, ...buildMultilingualTags(localizations, baseTags)];
 
-  // 6) Upload video
+  // 6) Upload video — rename to a keyword-bearing filename first (see renameForUpload above)
+  uploadPath = await renameForUpload(uploadPath, `${book.title} ${book.angle} HDL Group`);
   const uploaded = await uploadVideo({
     videoPath: uploadPath,
     title: enTitle,
@@ -574,6 +602,8 @@ async function main() {
       // with YouTube's generic invalidVideoMetadata error (see YT_LOCALE_MAP note above) — so a
       // single mistranslated title can cost the whole Short instead of just that one language.
       // Retry once with localizations stripped: an English-only Short beats no Short at all.
+      shortUploadPath = await renameForUpload(shortUploadPath, `${book.title} ${book.angle} Shorts HDL Group`);
+
       let uploadedShort;
       try {
         uploadedShort = await uploadVideo({
