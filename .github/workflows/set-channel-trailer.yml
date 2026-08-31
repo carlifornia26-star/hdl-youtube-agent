@@ -1,0 +1,67 @@
+name: HDL Channel Trailer (manual)
+
+# Manual only — run from the Actions tab (or GitHub mobile app: repo -> Actions -> this
+# workflow -> Run workflow) whenever you want to set or change which video plays automatically
+# for visitors who land on a channel and are NOT yet subscribed.
+#
+# This is the "Channel trailer for new visitors" field (Studio: Customization -> Basic info).
+# It does NOT set the separate "Spotlight for returning subscribers" homepage section — that
+# one has no API and has to be turned on by hand in Studio, once, per channel (see SETUP.md).
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Which channel to set the trailer for"
+        required: true
+        default: "1"
+        type: choice
+        options: ["1", "2", "3"]
+      video_id:
+        description: "Video ID to use as the trailer (the part after watch?v= in the URL)"
+        required: true
+        type: string
+
+jobs:
+  set-trailer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Resolve channel secrets
+        id: resolve
+        run: |
+          # Same secret-name mapping as daily-video.yml: channel 1 kept its original YT_ names,
+          # channels 2/3 were saved as YOUTUBE_..._2 / _3.
+          case "${{ github.event.inputs.channel }}" in
+            1)
+              echo "id_key=YT_CLIENT_ID" >> "$GITHUB_OUTPUT"
+              echo "secret_key=YT_CLIENT_SECRET" >> "$GITHUB_OUTPUT"
+              echo "token_key=YT_REFRESH_TOKEN" >> "$GITHUB_OUTPUT"
+              ;;
+            2)
+              echo "id_key=YOUTUBE_CLIENT_ID_2" >> "$GITHUB_OUTPUT"
+              echo "secret_key=YOUTUBE_CLIENT_SECRET_2" >> "$GITHUB_OUTPUT"
+              echo "token_key=YOUTUBE_REFRESH_TOKEN_2" >> "$GITHUB_OUTPUT"
+              ;;
+            3)
+              echo "id_key=YOUTUBE_CLIENT_ID_3" >> "$GITHUB_OUTPUT"
+              echo "secret_key=YOUTUBE_CLIENT_SECRET_3" >> "$GITHUB_OUTPUT"
+              echo "token_key=YOUTUBE_REFRESH_TOKEN_3" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Set channel trailer (Channel ${{ github.event.inputs.channel }})
+        run: npm run set-channel-trailer
+        env:
+          YT_CLIENT_ID: ${{ secrets[steps.resolve.outputs.id_key] }}
+          YT_CLIENT_SECRET: ${{ secrets[steps.resolve.outputs.secret_key] }}
+          YT_REFRESH_TOKEN: ${{ secrets[steps.resolve.outputs.token_key] }}
+          VIDEO_ID: ${{ github.event.inputs.video_id }}
