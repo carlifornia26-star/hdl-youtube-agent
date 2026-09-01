@@ -137,6 +137,7 @@ This video has a spoken AI narrator voice reading each scene's line aloud, with 
 Strict rules:
 - This is a TEASER, not a summary. Never reveal specific chapters, frameworks, numbered steps, or concrete conclusions from the book.
 - Build curiosity: pose the problem the book addresses, why it matters right now, and what kind of reader it's for — without giving away the answers.
+- Scene 1 is the single highest-leverage moment in the whole video for whether a viewer keeps watching past the first 15-22 seconds — most of the video's session-time performance is decided right there. Open with a genuine pattern-interrupt: a sharp, specific question the target reader would recognize themselves in, a surprising or counter-intuitive claim, or a vivid concrete scenario — something that could not be swapped into a generic video on a different topic. Do NOT open with throat-clearing, a generic greeting, scene-setting, or a soft, overused opener like "Have you ever wondered..." or "In today's fast-paced world...". Get to the hook in the very first sentence; the book's title mention (see below) can land in scene 1 or scene 2 — it doesn't have to be the first sentence itself.
 - Explicitly mention once, naturally, that the book is available in English only.
 - End with a call to action to read the full book on the High Definition Learning Group website.
 - Do not use quotation marks of any kind inside a line's text — rephrase instead of quoting anything.
@@ -230,4 +231,4 @@ export async function translateMeta(title, description, targetLang) {
     title: (tTitle || title).slice(0, YT_TITLE_MAX),
     description: (tDesc || description).slice(0, YT_DESCRIPTION_MAX),
   };
-    }
+}
