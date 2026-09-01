@@ -1,5 +1,6 @@
 import { translateMeta } from "./cf-ai.js";
-import { listSupportedLanguages, getMyChannelBranding, updateChannelLocalizations, getChannelLocalizations } from "./youtube.js";
+import { listSupportedLanguages, getMyChannelBranding, updateChannelLocalizations, getChannelLocalizations, setChannelKeywords } from "./youtube.js";
+import { CATALOG } from "./catalog.js";
 
 // One-off / on-demand script (run via the "HDL Channel Localization" workflow_dispatch, not on
 // a daily cron — the channel name and description don't change often, so there's no reason to
@@ -14,6 +15,46 @@ import { listSupportedLanguages, getMyChannelBranding, updateChannelLocalization
 // reports as supported.
 
 const CHANNEL_DESCRIPTION_MAX = 1000; // YouTube channel "About" description hard cap (videos allow 5000; channels don't)
+const KEYWORDS_MAX = 500; // brandingSettings.channel.keywords hard cap (Studio's Keywords box) — includes the quote characters below
+
+// Channel keywords are ONE field, not localizable per-language (unlike name/description above),
+// so this builds a single combined list covering the brand plus every book's topic — all 3
+// channels rotate through the same 7-book catalog (see catalog.js), so the same keyword set
+// applies to every channel. Multi-word phrases are quoted, same convention YouTube's own Studio
+// UI uses, so "artificial intelligence" is kept together instead of matching as two loose words.
+function buildChannelKeywords() {
+  const seen = new Set();
+  const phrases = [];
+
+  function add(term) {
+    const t = term.trim();
+    const key = t.toLowerCase();
+    if (!t || seen.has(key)) return;
+    seen.add(key);
+    phrases.push(t);
+  }
+
+  // Brand terms first — highest priority, always kept even if later terms get cut for length.
+  ["HDL Group", "High Definition Learning", "digital textbooks", "ebooks"].forEach(add);
+
+  // One topic term per book (the `angle`, which is already a concise phrase) plus the book's
+  // own title, so both the subject and the searchable book name are covered.
+  for (const book of CATALOG) {
+    add(book.angle);
+    add(book.title);
+  }
+
+  const quoted = phrases.map((p) => (p.includes(" ") ? `"${p}"` : p));
+
+  // Build up to the cap without cutting a phrase in half — add whole phrases only while they fit.
+  let result = "";
+  for (const p of quoted) {
+    const next = result ? `${result} ${p}` : p;
+    if (next.length > KEYWORDS_MAX) break;
+    result = next;
+  }
+  return result;
+}
 
 // m2m100 (Cloudflare's translation model) doesn't recognize YouTube's regional/script subtags
 // (pt-BR, zh-Hans, es-419, etc.) — strip to the base language for the TRANSLATION call only.
@@ -170,6 +211,40 @@ async function main() {
       console.log(`Verified: ${appliedCount} language(s) from the bisection recovery are confirmed present on YouTube.`);
     }
 
+    process.exitCode = 1;
+  }
+
+  // Channel keywords (Studio: Settings -> Channel -> Basic info -> Keywords). Runs regardless of
+  // whether the localizations block above succeeded or failed bisection — it's a separate API
+  // field, so one failing shouldn't block the other from being set.
+  console.log("\nSetting channel keywords...");
+  const keywords = buildChannelKeywords();
+  console.log(`Keywords (${keywords.length}/${KEYWORDS_MAX} chars): ${keywords}`);
+  try {
+    await setChannelKeywords({ channelId, keywords, currentBranding: channel.brandingSettings });
+    console.log("API accepted the keywords update — verifying by reading the channel back from YouTube...");
+    const verifyChannel = await getMyChannelBranding();
+    const saved = verifyChannel.brandingSettings?.channel?.keywords || "";
+    if (saved !== keywords) {
+      console.error(
+        "VERIFICATION FAILURE: YouTube accepted the keywords update response, but the value read " +
+          `back doesn't match what was sent. Sent: "${keywords}" | Read back: "${saved}". ` +
+          "Do not trust the update call's own success response alone."
+      );
+      process.exitCode = 1;
+    } else {
+      console.log("SUCCESS: Channel keywords set and verified on YouTube.");
+      console.log("Check it: Studio -> Settings -> Channel -> Basic info -> Keywords.");
+    }
+  } catch (e) {
+    if (e.isQuotaExceeded) {
+      console.error(
+        "QUOTA FAILURE: Keywords were not changed because YouTube Data API quotaExceeded. " +
+          "Wait for quota reset (midnight Pacific Time) and re-run this workflow."
+      );
+    } else {
+      console.error("Keywords update failed:", e?.response?.data?.error || e.message);
+    }
     process.exitCode = 1;
   }
 }
