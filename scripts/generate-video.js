@@ -1,11 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pickTodaysBook } from "./catalog.js";
-import { generateScript, generateBonusScenes, translateMeta, VIDEO_LANGS } from "./cf-ai.js";
+import { generateScript, generateBonusScenes, translateMeta, VIDEO_LANGS, pickTodaysFormat } from "./cf-ai.js";
 import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./assets.js";
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
 import { fetchBackgroundMusic, attributionLine } from "./music.js";
-import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic, normalizeLoudness } from "./render.js";
+import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic, normalizeLoudness, pickTodaysCaptionStyle } from "./render.js";
 import { uploadVideo, uploadCaptionTrack, uploadThumbnail, addVideoToPlaylist } from "./youtube.js";
 import { appendVideoEntry } from "./manifest.js";
 import { buildDailyCommunityPost } from "./community-post.js";
@@ -181,8 +181,20 @@ async function main() {
   const narratorVoice = pickTodaysVoice();
   console.log(`Today's narrator voice: ${narratorVoice}`);
 
+  // Same per-channel-offset rotation pattern as pickTodaysBook — see FORMAT_POOL in cf-ai.js.
+  // Directly targets "every video is shaped the same way" (the core inauthentic-content risk):
+  // content already varies daily via the book; this makes the script's structural shape vary too.
+  const format = pickTodaysFormat(new Date(), Number(CHANNEL_ID) - 1);
+  console.log(`Today's script format: ${format.label}`);
+
+  // Own independent rotation (4 styles) — see CAPTION_STYLE_POOL in render.js. Captions are
+  // the most visually dominant, most-of-the-runtime element in every video, so this is the
+  // highest-leverage remaining "every video looks identical" gap after the script-format fix.
+  const captionStyle = pickTodaysCaptionStyle(new Date(), Number(CHANNEL_ID) - 1);
+  console.log(`Today's caption style: ${captionStyle.label}`);
+
   // 1) Script (teaser-only, scene count set by the model within the schema's range)
-  const scenes = await generateScript(book);
+  const scenes = await generateScript(book, format);
   console.log(`Generated ${scenes.length} scenes`);
 
   // 2) Per-scene: stock clip + Kokoro narration + burned caption -> scene_N.mp4.
@@ -215,7 +227,7 @@ async function main() {
       duration = Math.min(MAX_SCENE_SECONDS, Math.max(MIN_SCENE_SECONDS, words / 2.3 + PADDING_SECONDS));
     }
 
-    const built_scene = await buildScene({ clipPath, duration, text: scene.line, outPath, voicePath: usableVoicePath });
+    const built_scene = await buildScene({ clipPath, duration, text: scene.line, outPath, voicePath: usableVoicePath, captionStyle });
     return { ...scene, duration, outPath: built_scene.outPath, clipPath, voicePath: usableVoicePath };
   }
 
@@ -531,6 +543,7 @@ async function main() {
           outPath,
           voicePath: s.voicePath, // null is fine — buildScene falls back to captions-only
           orientation: "vertical",
+          captionStyle,
         });
         shortBuilt.push(built_scene.outPath);
       }
@@ -653,6 +666,8 @@ async function main() {
       description: translatableDescription,
       thumbnail_url: `https://i.ytimg.com/vi/${uploaded.id}/maxresdefault.jpg`,
       thumbnail_variant: thumbnailVariant,
+      script_format: format.id,
+      caption_style: captionStyle.id,
       duration_seconds: Math.round(totalSeconds),
       published_at: new Date().toISOString(),
     });
