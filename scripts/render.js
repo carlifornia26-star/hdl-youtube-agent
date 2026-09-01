@@ -43,9 +43,28 @@ const OUTPUT_CHANNELS = 2;
 // (fonts-dejavu-core). If a runner is missing it: `apt-get install -y fonts-dejavu-core`
 // in the workflow, or drop the `fontfile=` clause to fall back to ffmpeg's default font.
 const CAPTION_FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
-const WORDS_PER_CHUNK = 3;
-const CHUNK_COLORS = ["white", "yellow"];
 const POP_IN_SECONDS = 0.08;
+
+// Rotates the burned-caption LOOK day to day — same reasoning as FORMAT_POOL in cf-ai.js:
+// captions are the single most visually dominant, most-of-the-runtime element in every video,
+// so a fixed caption style is one of the strongest "every video looks identical" signals a
+// reviewer (human or automated) can spot at a glance, independent of the actual footage.
+// Own independent day-of-year cycle (4 styles) so it drifts against the script-format pool
+// (5) and voice pool (11) instead of always landing on the same combination.
+// wordsPerChunk changes the pop-in rhythm/pacing; colors is the alternating chunk-color
+// sequence; yFrac is the vertical caption position as a fraction of frame height.
+const CAPTION_STYLE_POOL = [
+  { id: "classic-pop", label: "Classic Pop (mid, white/yellow, 3-word)", wordsPerChunk: 3, colors: ["white", "yellow"], yFrac: 0.38 },
+  { id: "punchy-duo", label: "Punchy Duo (mid, white/cyan, 2-word)", wordsPerChunk: 2, colors: ["white", "cyan"], yFrac: 0.38 },
+  { id: "lower-third", label: "Lower Third (low, white/yellow, 3-word)", wordsPerChunk: 3, colors: ["white", "yellow"], yFrac: 0.78 },
+  { id: "wide-orange", label: "Wide Orange (mid, white/orange, 4-word)", wordsPerChunk: 4, colors: ["white", "orange"], yFrac: 0.4 },
+];
+
+export function pickTodaysCaptionStyle(date = new Date(), channelOffset = 0) {
+  const start = new Date(date.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((date - start) / 86400000);
+  return CAPTION_STYLE_POOL[(dayOfYear + channelOffset) % CAPTION_STYLE_POOL.length];
+}
 
 function escapeDrawtext(str) {
   return str
@@ -55,12 +74,12 @@ function escapeDrawtext(str) {
     .replace(/'/g, "\u2019");
 }
 
-function buildCaptionChunks(text, duration) {
+function buildCaptionChunks(text, duration, style) {
   const words = text.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return [];
   const chunkTexts = [];
-  for (let i = 0; i < words.length; i += WORDS_PER_CHUNK) {
-    chunkTexts.push(words.slice(i, i + WORDS_PER_CHUNK).join(" ").toUpperCase());
+  for (let i = 0; i < words.length; i += style.wordsPerChunk) {
+    chunkTexts.push(words.slice(i, i + style.wordsPerChunk).join(" ").toUpperCase());
   }
   const totalWords = words.length;
   let t = 0;
@@ -70,7 +89,7 @@ function buildCaptionChunks(text, duration) {
     const start = t;
     const end = isLast ? duration : t + (chunkWords / totalWords) * duration;
     t = end;
-    return { text: chunkText, start, end, color: CHUNK_COLORS[i % CHUNK_COLORS.length] };
+    return { text: chunkText, start, end, color: style.colors[i % style.colors.length] };
   });
 }
 
@@ -83,12 +102,13 @@ const AMBIENT_DUCK_VOLUME = 0.12;
 // (720->1080 ratio) so burned captions keep the same visual proportion on the larger frame
 // rather than looking small relative to it.
 const DIMENSIONS = {
-  landscape: { w: 1920, h: 1080, fontsize: 96, captionY: "h*0.38" },
-  vertical: { w: 1080, h: 1920, fontsize: 78, captionY: "h*0.42" },
+  landscape: { w: 1920, h: 1080, fontsize: 96 },
+  vertical: { w: 1080, h: 1920, fontsize: 78 },
 };
 
-export async function buildScene({ clipPath, duration, text, outPath, voicePath, orientation = "landscape" }) {
+export async function buildScene({ clipPath, duration, text, outPath, voicePath, orientation = "landscape", captionStyle = CAPTION_STYLE_POOL[0] }) {
   const dim = DIMENSIONS[orientation] || DIMENSIONS.landscape;
+  const captionY = `h*${captionStyle.yFrac}`;
   const clipHasAudio = await hasAudioStream(clipPath);
   const hasVoice = Boolean(voicePath);
 
@@ -121,7 +141,7 @@ export async function buildScene({ clipPath, duration, text, outPath, voicePath,
     audioMap = ["-map", "1:a"];
   }
 
-  const chunks = buildCaptionChunks(text, duration);
+  const chunks = buildCaptionChunks(text, duration, captionStyle);
   const captionFilters = chunks
     .map(({ text: chunkText, start, end, color }) => {
       const safe = escapeDrawtext(chunkText);
@@ -129,7 +149,7 @@ export async function buildScene({ clipPath, duration, text, outPath, voicePath,
       const fadeEnd = Math.min(start + POP_IN_SECONDS, end).toFixed(3);
       return (
         `drawtext=fontfile=${CAPTION_FONT}:text='${safe}':fontcolor=${color}:fontsize=${dim.fontsize}:` +
-        `box=1:boxcolor=black@0.6:boxborderw=18:x=(w-text_w)/2:y=${dim.captionY}-text_h/2:` +
+        `box=1:boxcolor=black@0.6:boxborderw=18:x=(w-text_w)/2:y=${captionY}-text_h/2:` +
         `alpha='if(lt(t,${s}),0,if(lt(t,${fadeEnd}),(t-${s})/${POP_IN_SECONDS},1))':` +
         `enable='between(t,${s},${end.toFixed(3)})'`
       );
@@ -280,4 +300,4 @@ export function buildSrt(scenesWithDurations, translatedLines) {
     const ms = String(Math.floor((sec % 1) * 1000)).padStart(3, "0");
     return `${h}:${m}:${s},${ms}`;
   }
-  }
+      }
