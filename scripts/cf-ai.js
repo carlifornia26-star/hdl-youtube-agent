@@ -129,7 +129,56 @@ async function requestSceneScript(prompt, minItems, maxItems, maxTokens) {
   return scenes.map((s) => ({ line: s.line }));
 }
 
-export async function generateScript(book) {
+// Rotates which STRUCTURAL opening technique each day's script uses — this is the direct fix
+// for "every video is shaped the same way," which is the core thing YouTube's 2026 inauthentic-
+// content review looks for (same template, minimal variation, replicable at scale). Content
+// (book/topic) already varies daily; this makes the SHAPE of the script vary too.
+//
+// Own independent cycle (5 formats) so it drifts against both the 11-voice pool and the 7-book
+// pool instead of always lining up with either — same reasoning as VOICE_POOL in voice.js.
+const FORMAT_POOL = [
+  {
+    id: "direct-hook",
+    label: "Direct Hook",
+    opening:
+      "Open with a sharp, specific question the target reader would recognize themselves in, or a surprising, counter-intuitive claim about their situation — something that could not be swapped into a generic video on a different topic.",
+  },
+  {
+    id: "myth-bust",
+    label: "Myth-Bust",
+    opening:
+      "Open by stating a common belief or piece of advice related to this topic that most people accept as true — then, within that same opening scene, sharply contradict it. The contradiction itself is the hook; do not soften it or hedge it.",
+  },
+  {
+    id: "cold-open",
+    label: "Cold-Open Scene",
+    opening:
+      "Open mid-scene: describe one vivid, specific, relatable moment a reader in this situation might recognize from their own life (a specific time of day, a specific feeling, a specific small detail) — as if the video started partway through a story, not with an introduction. Only pull back to explain the topic generally in scene 2.",
+  },
+  {
+    id: "stat-hook",
+    label: "Surprising Stat/Fact",
+    opening:
+      "Open with a single striking, specific number, statistic, or lesser-known fact related to the topic — stated plainly, with no preamble before it. Follow immediately with why that number should matter to the viewer personally.",
+  },
+  {
+    id: "direct-address",
+    label: "Direct Address",
+    opening:
+      "Open by speaking directly to the viewer in second person about the exact frustration, fear, or want that brought them here — as if the narrator already knows what's on their mind. No scene-setting, no throat-clearing.",
+  },
+];
+
+// Same day-of-year rotation as pickTodaysVoice/pickTodaysBook, with the same per-channel
+// offset pattern as pickTodaysBook (see catalog.js) so the 3 channels don't all use the
+// identical structural format on the same calendar day.
+export function pickTodaysFormat(date = new Date(), channelOffset = 0) {
+  const start = new Date(date.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((date - start) / 86400000);
+  return FORMAT_POOL[(dayOfYear + channelOffset) % FORMAT_POOL.length];
+}
+
+export async function generateScript(book, format = FORMAT_POOL[0]) {
   const prompt = `You are writing a 10-minute YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group.
 
 This video has a spoken AI narrator voice reading each scene's line aloud, with the same words also burned in on screen as fast-paced flowing captions timed to the narration. Write each line to sound natural when spoken aloud — short, punchy, declarative sentences work best both for narration pacing and for the on-screen caption bursts.
@@ -137,7 +186,7 @@ This video has a spoken AI narrator voice reading each scene's line aloud, with 
 Strict rules:
 - This is a TEASER, not a summary. Never reveal specific chapters, frameworks, numbered steps, or concrete conclusions from the book.
 - Build curiosity: pose the problem the book addresses, why it matters right now, and what kind of reader it's for — without giving away the answers.
-- Scene 1 is the single highest-leverage moment in the whole video for whether a viewer keeps watching past the first 15-22 seconds — most of the video's session-time performance is decided right there. Open with a genuine pattern-interrupt: a sharp, specific question the target reader would recognize themselves in, a surprising or counter-intuitive claim, or a vivid concrete scenario — something that could not be swapped into a generic video on a different topic. Do NOT open with throat-clearing, a generic greeting, scene-setting, or a soft, overused opener like "Have you ever wondered..." or "In today's fast-paced world...". Get to the hook in the very first sentence; the book's title mention (see below) can land in scene 1 or scene 2 — it doesn't have to be the first sentence itself.
+- Scene 1 is the single highest-leverage moment in the whole video for whether a viewer keeps watching past the first 15-22 seconds — most of the video's session-time performance is decided right there. Today's opening technique (${format.label}): ${format.opening} Do NOT open with throat-clearing, a generic greeting, or a soft, overused opener like "Have you ever wondered..." or "In today's fast-paced world...". The book's title mention (see below) can land in scene 1 or scene 2 — it doesn't have to be the first sentence itself.
 - Explicitly mention once, naturally, that the book is available in English only.
 - End with a call to action to read the full book on the High Definition Learning Group website.
 - Do not use quotation marks of any kind inside a line's text — rephrase instead of quoting anything.
@@ -231,4 +280,4 @@ export async function translateMeta(title, description, targetLang) {
     title: (tTitle || title).slice(0, YT_TITLE_MAX),
     description: (tDesc || description).slice(0, YT_DESCRIPTION_MAX),
   };
-}
+  }
