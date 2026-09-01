@@ -30,18 +30,17 @@ const CATEGORY_ID = CHANNEL_CATEGORY_IDS[CHANNEL_ID] || CHANNEL_CATEGORY_IDS[1];
 function slugifyForFilename(text) {
   return text
     .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/[^a-z0-9\s]/g, "")
     .trim()
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
+    .replace(/\s+/g, " ")
     .slice(0, 80)
-    .replace(/-$/, "");
+    .trim();
 }
 
 // Renames (copies, so the original render is untouched for debugging) the finished file to a
 // keyword-bearing name right before it's streamed to the Data API. Returns the new path.
 async function renameForUpload(sourcePath, keywordText) {
-  const slug = slugifyForFilename(keywordText) || "hdl-group-video";
+  const slug = slugifyForFilename(keywordText) || "hdl group video";
   const destPath = path.join(BUILD_DIR, `${slug}.mp4`);
   if (destPath !== sourcePath) await fs.copyFile(sourcePath, destPath);
   return destPath;
