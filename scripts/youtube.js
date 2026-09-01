@@ -73,6 +73,11 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
       selfDeclaredMadeForKids: false,
       license: "youtube", // matches Studio's "Licence: Standard YouTube licence" (the other
       // option, "creativeCommon", is a separate CC BY licence you'd opt into explicitly)
+      containsSyntheticMedia: true, // Required disclosure for altered/synthetic content (this
+      // pipeline's voiceover is fully AI-generated). Added Oct 2024 to the Data API and backed
+      // by YouTube's 2026 "inauthentic content" enforcement, which leans on synthetic-media
+      // disclosure as a compliance signal — leaving this unset doesn't hide anything from
+      // review, it just means the disclosure YouTube expects is missing.
     },
     localizations: cleanLocalizations,
   };
@@ -324,4 +329,4 @@ export async function addVideoToPlaylist({ playlistId, videoId }) {
     err.isQuotaExceeded = isQuotaExceeded(err);
     throw err;
   }
-}
+                                 }
