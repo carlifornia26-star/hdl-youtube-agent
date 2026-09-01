@@ -1,6 +1,18 @@
 {
   "videos": [
     {
+      "video_id": "35SbAUlwYB0",
+      "short_video_id": "ma65VKzWsZQ",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "AGE ONE — Advanced Edition — advanced AI business strategy | HDL Group",
+      "description": "AGE ONE: Premium Edition explores advanced AI business strategy. Available in English only, exclusively on Google Play Books.",
+      "thumbnail_url": "https://i.ytimg.com/vi/35SbAUlwYB0/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "duration_seconds": 544,
+      "published_at": "2026-09-01T05:01:33.690Z"
+    },
+    {
       "video_id": "s1y1s1i_TsE",
       "short_video_id": "dqDCa896ijY",
       "book_slug": "age-one",
@@ -25,5 +37,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-08-31T05:33:36.755Z"
+  "updated_at": "2026-09-01T05:01:33.691Z"
 }
