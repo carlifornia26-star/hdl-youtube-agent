@@ -245,6 +245,55 @@ export async function setChannelTrailer({ channelId, videoId, currentBranding })
   }
 }
 
+// Sets the channel's "Keywords" field (Studio: Settings -> Channel -> Basic info -> Keywords).
+// This is a single plain-text field on brandingSettings.channel — NOT localizable per-language
+// like name/description (there's no per-locale keywords map in the API), so one combined string
+// is what shows for every viewer regardless of their YouTube language.
+//
+// Same overwrite trap as setChannelTrailer above: channels.update with part=brandingSettings
+// replaces the whole brandingSettings.channel object, so this merges into whatever branding is
+// already there (trailer, description, etc.) instead of wiping it out.
+//
+// Retries on isFailedPrecondition for the same reason as setChannelTrailer — known flaky
+// response on channel/video mutation endpoints, not a real problem with the request.
+export async function setChannelKeywords({ channelId, keywords, currentBranding }) {
+  const youtube = client();
+  const mergedChannelBranding = { ...(currentBranding?.channel || {}), keywords };
+  let lastErr;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await youtube.channels.update({
+        part: ["brandingSettings"],
+        requestBody: {
+          id: channelId,
+          brandingSettings: { channel: mergedChannelBranding },
+        },
+      });
+      if (attempt > 1) console.log(`setChannelKeywords succeeded on attempt ${attempt}/3.`);
+      return res.data;
+    } catch (err) {
+      lastErr = err;
+      const retryable = isFailedPrecondition(err) && attempt < 3;
+      if (retryable) {
+        console.warn(`setChannelKeywords: attempt ${attempt}/3 hit a failedPrecondition (known flaky response), retrying...`);
+        await new Promise((r) => setTimeout(r, 3000 * attempt)); // 3s, 6s
+        continue;
+      }
+      break;
+    }
+  }
+  const err = lastErr;
+  {
+    explainIfAuthError(err);
+    const apiError = err?.response?.data?.error || err?.errors || null;
+    if (apiError) {
+      console.error("setChannelKeywords failed. API error detail:\n", JSON.stringify(apiError, null, 2));
+    }
+    err.isQuotaExceeded = isQuotaExceeded(err);
+    throw err;
+  }
+}
+
 export async function uploadThumbnail({ videoId, imagePath }) {
   const youtube = client();
   try {
@@ -329,4 +378,4 @@ export async function addVideoToPlaylist({ playlistId, videoId }) {
     err.isQuotaExceeded = isQuotaExceeded(err);
     throw err;
   }
-                                 }
+}
