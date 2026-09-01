@@ -1,10 +1,10 @@
-name: HDL Channel Localization (manual)
+name: HDL Channel Localization + Keywords (manual)
 
-# Manual only — the channel name/description don't change often, so this doesn't need a daily
-# cron like the video pipeline. Trigger it from the Actions tab (or the GitHub mobile app:
-# repo -> Actions -> this workflow -> Run workflow) whenever you want to (re)translate the
-# channel's name + description into every language YouTube supports, or after you've edited
-# the default English name/description in Studio.
+# Manual only — the channel name/description/keywords don't change often, so this doesn't need
+# a daily cron like the video pipeline. Trigger it from the Actions tab (or the GitHub mobile
+# app: repo -> Actions -> this workflow -> Run workflow) whenever you want to (re)translate the
+# channel's name + description into every language YouTube supports and refresh the channel
+# Keywords field, or after you've edited the default English name/description in Studio.
 on:
   workflow_dispatch:
     inputs:
@@ -52,7 +52,7 @@ jobs:
               ;;
           esac
 
-      - name: Translate + set channel name/description in every supported language (Channel ${{ github.event.inputs.channel }})
+      - name: Translate name/description + set channel keywords (Channel ${{ github.event.inputs.channel }})
         run: npm run customize-channel
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
