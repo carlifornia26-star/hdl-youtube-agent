@@ -6,7 +6,7 @@ import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./a
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
 import { fetchBackgroundMusic, attributionLine } from "./music.js";
 import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic, normalizeLoudness, pickTodaysCaptionStyle } from "./render.js";
-import { uploadVideo, uploadCaptionTrack, uploadThumbnail, addVideoToPlaylist } from "./youtube.js";
+import { uploadVideo, uploadCaptionTrack, uploadThumbnail, addVideoToPlaylist, publishVideo } from "./youtube.js";
 import { appendVideoEntry } from "./manifest.js";
 import { buildDailyCommunityPost } from "./community-post.js";
 
@@ -476,6 +476,11 @@ async function main() {
 
   // 6) Upload video — rename to a keyword-bearing filename first (see renameForUpload above)
   uploadPath = await renameForUpload(uploadPath, `${book.title} ${book.angle} HDL Group`);
+  // Uploaded PRIVATE on purpose — thumbnail, playlist, and captions all get attached below
+  // while it's still private, and only publishVideo() at the very end (step 8) flips it
+  // public. This keeps YouTube from ever indexing a bare, caption-less, auto-thumbnail
+  // version of the video. See publishVideo() in youtube.js for why auto-dubbing specifically
+  // can't be part of this gate.
   const uploaded = await uploadVideo({
     videoPath: uploadPath,
     title: enTitle,
@@ -483,15 +488,17 @@ async function main() {
     tags,
     localizations,
     categoryId: CATEGORY_ID,
+    privacyStatus: "private",
   });
-  console.log(`Uploaded: https://youtube.com/watch?v=${uploaded.id}`);
+  console.log(`Uploaded (private, not yet public): https://youtube.com/watch?v=${uploaded.id}`);
 
   // 6b) Upload the thumbnail generated back in step 3c
   await uploadThumbnail({ videoId: uploaded.id, imagePath: thumbPath });
 
   // 6b2) Add today's video to its book's playlist (if one exists — see setup-playlists.js).
   // Non-fatal: a missing or failed playlist add should never take down an otherwise-successful
-  // publish — the video is already live on the channel either way.
+  // publish. The video is still private at this point (see step 8), so this is safe to attach
+  // before anyone can see it.
   try {
     const playlistsPath = path.resolve(CHANNEL_ID === "1" ? "playlists.json" : `playlists-${CHANNEL_ID}.json`);
     const playlistsRaw = await fs.readFile(playlistsPath, "utf8");
@@ -508,7 +515,8 @@ async function main() {
   }
 
   // Tracked across the Short block below (stays null if the Short fails/skips) so the
-  // manifest entry written in 6d can still record it when it succeeds, without blocking on it.
+  // publish step (8) and manifest entry (8b) can still record it when it succeeds, without
+  // blocking on it.
   let shortVideoId = null;
   let shortSceneCount = 0; // how many of `built`'s leading scenes the Short used — set below, read by the Short-caption block in step 7
 
@@ -625,6 +633,7 @@ async function main() {
           tags: shortTags,
           localizations: shortLocalizations,
           categoryId: CATEGORY_ID,
+          privacyStatus: "private", // see main video's upload comment above — same reasoning
         });
       } catch (e) {
         console.warn(
@@ -638,51 +647,17 @@ async function main() {
           tags: shortBaseTags,
           localizations: {},
           categoryId: CATEGORY_ID,
+          privacyStatus: "private",
         });
         console.log("Short uploaded English-only after localizations retry.");
       }
-      console.log(`Uploaded Short (~${Math.round(shortTotal)}s): https://youtube.com/watch?v=${uploadedShort.id}`);
+      console.log(`Uploaded Short (private, not yet public, ~${Math.round(shortTotal)}s): https://youtube.com/watch?v=${uploadedShort.id}`);
       shortVideoId = uploadedShort.id;
       shortSceneCount = shortScenes.length;
     }
   } catch (e) {
     // A failed Short should never take down the main video, which has already uploaded successfully.
     console.warn("Short build/upload failed, continuing without it:", e.message);
-  }
-
-  // 6d) Record today's video in videos-manifest.json — this is what the website reads (via
-  // raw.githubusercontent.com, see the site's _worker.js) to embed the video on book's page,
-  // list it on /videos.html, and include it in /sitemap-videos.xml. Written AFTER upload
-  // succeeds, using the same real title/description/thumbnail already sent to YouTube, so the
-  // site never shows anything that isn't actually live. A failure here should never take down
-  // an otherwise-successful publish — logged and swallowed, same pattern as the Short above.
-  try {
-    await appendVideoEntry({
-      video_id: uploaded.id,
-      short_video_id: shortVideoId,
-      book_slug: book.slug,
-      page_url: book.pageUrl,
-      title: enTitle,
-      description: translatableDescription,
-      thumbnail_url: `https://i.ytimg.com/vi/${uploaded.id}/maxresdefault.jpg`,
-      thumbnail_variant: thumbnailVariant,
-      script_format: format.id,
-      caption_style: captionStyle.id,
-      duration_seconds: Math.round(totalSeconds),
-      published_at: new Date().toISOString(),
-    });
-    console.log("videos-manifest.json updated.");
-  } catch (e) {
-    console.warn("Failed to update videos-manifest.json (video is still live on YouTube):", e.message);
-  }
-
-  // 6e) Daily Community-tab post draft (image + 16-language caption) — NOT auto-published,
-  // the YouTube API has no endpoint for that. See community-post.js for why and what this
-  // produces instead. A failure here should never take down the run.
-  try {
-    await buildDailyCommunityPost(book, BUILD_DIR);
-  } catch (e) {
-    console.warn("Community post draft failed, continuing:", e.message);
   }
 
   // 7) Caption tracks — English first, then translated languages (reusing the same scene lines).
@@ -759,6 +734,52 @@ async function main() {
         console.warn(`Short caption upload failed for ${lang}, skipping:`, e.message);
       }
     }
+  }
+
+  // 8) Publish — flip both videos from private to public now that thumbnail, playlist, and
+  // every caption track are already attached. This is the actual "go live" moment; everything
+  // above happened while the video(s) were still private. If this throws, the run fails loudly
+  // (GitHub Actions red X) rather than silently leaving a finished, fully-captioned video stuck
+  // private forever — that's worse than the old bare-upload behavior, not better, so it's not
+  // wrapped in try/catch like the non-critical steps above.
+  await publishVideo({ videoId: uploaded.id });
+  if (shortVideoId) {
+    await publishVideo({ videoId: shortVideoId });
+  }
+
+  // 8b) Record today's video in videos-manifest.json — this is what the website reads (via
+  // raw.githubusercontent.com, see the site's _worker.js) to embed the video on book's page,
+  // list it on /videos.html, and include it in /sitemap-videos.xml. Written AFTER publish, so
+  // the site never links to/embeds a video that isn't actually public yet. A failure here
+  // should never take down an otherwise-successful publish — logged and swallowed, same
+  // pattern as the Short and playlist steps above.
+  try {
+    await appendVideoEntry({
+      video_id: uploaded.id,
+      short_video_id: shortVideoId,
+      book_slug: book.slug,
+      page_url: book.pageUrl,
+      title: enTitle,
+      description: translatableDescription,
+      thumbnail_url: `https://i.ytimg.com/vi/${uploaded.id}/maxresdefault.jpg`,
+      thumbnail_variant: thumbnailVariant,
+      script_format: format.id,
+      caption_style: captionStyle.id,
+      duration_seconds: Math.round(totalSeconds),
+      published_at: new Date().toISOString(),
+    });
+    console.log("videos-manifest.json updated.");
+  } catch (e) {
+    console.warn("Failed to update videos-manifest.json (video is still live on YouTube):", e.message);
+  }
+
+  // 8c) Daily Community-tab post draft (image + 16-language caption) — NOT auto-published,
+  // the YouTube API has no endpoint for that. See community-post.js for why and what this
+  // produces instead. A failure here should never take down the run.
+  try {
+    await buildDailyCommunityPost(book, BUILD_DIR);
+  } catch (e) {
+    console.warn("Community post draft failed, continuing:", e.message);
   }
 
   console.log("Done.");
