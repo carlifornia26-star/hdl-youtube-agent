@@ -43,7 +43,7 @@ function explainIfAuthError(err) {
   }
 }
 
-export async function uploadVideo({ videoPath, title, description, tags, localizations, categoryId }) {
+export async function uploadVideo({ videoPath, title, description, tags, localizations, categoryId, privacyStatus }) {
   const youtube = client();
   const isPrivate = process.env.DRY_RUN_PRIVATE === "true";
 
@@ -69,7 +69,11 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
       // text (title/description) is English; this is the field for the spoken audio track.
     },
     status: {
-      privacyStatus: isPrivate ? "private" : "public",
+      // Callers now upload as "private" by default and flip to public themselves via
+      // publishVideo() below, once thumbnail/playlist/captions are all attached — see
+      // publishVideo's comment for why. DRY_RUN_PRIVATE still overrides everything to
+      // private, same as before, for review runs that should never go public at all.
+      privacyStatus: isPrivate ? "private" : (privacyStatus || "public"),
       selfDeclaredMadeForKids: false,
       license: "youtube", // matches Studio's "Licence: Standard YouTube licence" (the other
       // option, "creativeCommon", is a separate CC BY licence you'd opt into explicitly)
@@ -101,6 +105,46 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
       console.error("uploadVideo failed. API error detail:\n", JSON.stringify(apiError, null, 2));
     }
     console.error("uploadVideo failed. requestBody was:\n", JSON.stringify(requestBody, null, 2));
+    throw err;
+  }
+}
+
+// Flips a video from private to public. Called once everything this pipeline controls —
+// thumbnail, playlist membership, and every caption track — has already been attached, so
+// YouTube never gets a chance to index/rank the video in its bare, caption-less,
+// auto-generated-thumbnail state. NOTE: this does NOT wait for YouTube's automatic dubbing —
+// that feature has no Data API surface at all (nothing to poll or trigger), and it typically
+// only starts processing AFTER a video is public anyway, so gating on it is impossible by
+// construction. Auto-dub remains YouTube's own async step that happens after this call, same
+// as it always has. Skipped in DRY_RUN_PRIVATE mode, matching uploadVideo's own override —
+// a dry run should stay private, not get published at the end.
+export async function publishVideo({ videoId }) {
+  if (process.env.DRY_RUN_PRIVATE === "true") {
+    console.log(`DRY_RUN_PRIVATE set — leaving ${videoId} private, not publishing.`);
+    return;
+  }
+  const youtube = client();
+  try {
+    await youtube.videos.update({
+      part: ["status"],
+      requestBody: {
+        id: videoId,
+        status: {
+          privacyStatus: "public",
+          selfDeclaredMadeForKids: false,
+          license: "youtube",
+          containsSyntheticMedia: true,
+        },
+      },
+    });
+    console.log(`Published (now public): https://youtube.com/watch?v=${videoId}`);
+  } catch (err) {
+    explainIfAuthError(err);
+    const apiError = err?.response?.data?.error || err?.errors || null;
+    if (apiError) {
+      console.error("publishVideo failed. API error detail:\n", JSON.stringify(apiError, null, 2));
+    }
+    console.error(`publishVideo failed for videoId ${videoId} — it is still PRIVATE on YouTube.`);
     throw err;
   }
 }
@@ -378,4 +422,4 @@ export async function addVideoToPlaylist({ playlistId, videoId }) {
     err.isQuotaExceeded = isQuotaExceeded(err);
     throw err;
   }
-}
+  }
