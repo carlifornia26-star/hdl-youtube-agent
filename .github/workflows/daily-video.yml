@@ -112,6 +112,7 @@ jobs:
           FISH_VOICE_ID: ${{ secrets.FISH_VOICE_ID }}
           DRY_RUN_PRIVATE: ${{ vars.DRY_RUN_PRIVATE }}
           CHANNEL_ID: ${{ steps.resolve.outputs.channel }}
+          YT_VIDEO_LOCATION_DESCRIPTION: ${{ vars.YT_VIDEO_LOCATION_DESCRIPTION }}
 
       - name: Commit updated video manifest + community post draft
         if: always() && steps.resolve.outputs.proceed == 'true'
