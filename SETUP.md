@@ -58,12 +58,36 @@ Optional: Settings → Secrets and variables → Actions → **Variables** tab �
 for your first few test runs, so videos upload as Private instead of Public while you check quality.
 Switch it to `false` (or delete it) once you're happy.
 
+Optional (SEO file/metadata pass — see "SEO file & metadata pass" below): repo Variables
+`CHANNEL_COUNTRY` (default `US`) and `YT_VIDEO_LOCATION_DESCRIPTION` (default `United States`,
+set to `off` to turn video location off entirely).
+
 ## 7. Test it
 Repo → Actions tab → "HDL Daily YouTube Teaser" → Run workflow (manual trigger button) — don't wait
 for tomorrow's cron. Watch the run log; if it fails, the error will point at which step (script
 generation, stock footage, voiceover, render, or upload).
 
 ---
+
+## SEO file & metadata pass
+Added to cover a YouTube file/metadata SEO checklist (renaming, container metadata, video
+location, channel country). What's real vs. cosmetic, so expectations stay calibrated:
+- **Real, Data-API-level (actually affects ranking):** `defaultLanguage`/`defaultAudioLanguage`,
+  the 15-language `localizations` map, multilingual tags, chapters — all pre-existing.
+  `recordingDetails` (video location) and channel `country` are also real API fields, newly
+  added (`youtube.js`: `uploadVideo`'s `location` param, `setChannelCountry`; run via
+  `customize-channel.js` for country, per-video for location).
+- **Cosmetic/best-effort, not a ranking lever:** the keyword-bearing filename rename (now
+  applied to the thumbnail too, not just the video) and the embedded container/IPTC/XMP
+  metadata (`render.js`: `tagVideoMetadata`, `tagThumbnailMetadata`, using `exiftool-vendored` —
+  no apt-get step needed). YouTube strips essentially all of this on ingest; it's applied
+  because it's free and harmless, not because it moves search/recommendations.
+- **Deliberately not done:** 4K export and 60fps. Source clips are 1080p-class stock footage, so
+  4K would just be upscaled with no real quality gain, at ~4x the render time/file size on
+  timeboxed GitHub Actions runners. Video quality was bumped instead via an explicit `-crf 18`
+  encode (near-visually-lossless at 1080p).
+- **Out of scope for this repo:** VideoObject schema markup for embeds — that's a
+  highdefinitionlearning.com (website) change, not this pipeline.
 
 ## Honest limits to know about
 - **Background music, real and licensed.** Every video/Short mixes in a quiet bed (`MUSIC_VOLUME`
