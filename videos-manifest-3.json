@@ -1,6 +1,20 @@
 {
   "videos": [
     {
+      "video_id": "AE2IrtZzo50",
+      "short_video_id": "NkeYnwvWBKM",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "Bitcoin Standard: Digital Money Explained — Bitcoin & digital finance | HDL Group",
+      "description": "Bitcoin Standard explores Bitcoin & digital finance. Available in English only, exclusively on Google Play Books.",
+      "thumbnail_url": "https://i.ytimg.com/vi/AE2IrtZzo50/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "script_format": "cold-open",
+      "caption_style": "wide-orange",
+      "duration_seconds": 511,
+      "published_at": "2026-09-02T04:43:19.338Z"
+    },
+    {
       "video_id": "ubSablr1K-E",
       "short_video_id": "MCHSmog36Qk",
       "book_slug": "age-one-premium",
@@ -51,5 +65,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-09-01T06:09:21.869Z"
+  "updated_at": "2026-09-02T04:43:19.339Z"
 }
