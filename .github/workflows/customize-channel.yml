@@ -60,3 +60,4 @@ jobs:
           YT_CLIENT_ID: ${{ secrets[steps.resolve.outputs.id_key] }}
           YT_CLIENT_SECRET: ${{ secrets[steps.resolve.outputs.secret_key] }}
           YT_REFRESH_TOKEN: ${{ secrets[steps.resolve.outputs.token_key] }}
+          CHANNEL_COUNTRY: ${{ vars.CHANNEL_COUNTRY }}
