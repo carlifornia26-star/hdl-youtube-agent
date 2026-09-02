@@ -1,0 +1,23 @@
+name: Fix Private Videos
+
+# Manual button only — Actions tab -> Fix Private Videos -> Run workflow.
+# Publishes every currently-private video on the channel tied to the secrets below.
+# If you run more than one channel, duplicate this file per channel (different filename,
+# e.g. fix-private-videos-channel2.yml) pointing at that channel's own YT_* secrets, the
+# same way daily-video.yml resolves CHANNEL_ID per channel.
+on: workflow_dispatch
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: node scripts/fix-private-videos.js
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
