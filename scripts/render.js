@@ -1,6 +1,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
+import fs from "node:fs/promises";
+import { exiftool } from "exiftool-vendored";
 
 const execFileAsync = promisify(execFile);
 const MAX_BUFFER = 64 * 1024 * 1024; // 64MB
@@ -176,6 +178,12 @@ export async function buildScene({ clipPath, duration, text, outPath, voicePath,
     "-ac", String(OUTPUT_CHANNELS),
     "-c:v", "libx264",
     "-preset", "veryfast",
+    "-crf", "18", // near-visually-lossless / "high-bitrate" export target (PDF's Resolution &
+    // Visual Badges item). Left at 1080p rather than jumping to 4K: this content is a narrated
+    // stock-clip slideshow, not native 4K footage (Unsplash/Pexels source clips top out around
+    // 1080p-1440p anyway, so exporting at 4K would just be 1080p upscaled — no real quality gain,
+    // just ~4x the render time and file size on runners that are already timeboxed). If you
+    // later want the 4K badge specifically, the source clip pool needs to support it too.
     "-c:a", "aac",
     "-shortest",
     outPath,
@@ -229,7 +237,6 @@ export async function normalizeLoudness({ videoPath, outPath }) {
 }
 
 export async function concatScenes(sceneOutPaths, listFile, outPath) {
-  const fs = await import("node:fs/promises");
   const content = sceneOutPaths.map((p) => `file '${path.resolve(p)}'`).join("\n");
   await fs.writeFile(listFile, content);
   await run("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", outPath]);
@@ -263,6 +270,7 @@ function wrapTitle(text, maxCharsPerLine = 18, maxLines = 2) {
 // fallback video frame), cropped to YouTube's 1280x720 thumbnail size — no overlay burned in.
 // With titleText: same photo, plus a bold white-on-black-stroke title across the top, MrBeast-
 // thumbnail style — this is "variant B", compared against the plain "variant A" over time.
+const THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024; // YouTube's hard cap on thumbnails.set
 export async function generateThumbnail({ imagePath, outPath, titleText }) {
   const vf = [`scale=1280:720:force_original_aspect_ratio=increase`, `crop=1280:720`];
   if (titleText) {
@@ -272,14 +280,60 @@ export async function generateThumbnail({ imagePath, outPath, titleText }) {
         `bordercolor=black:borderw=10:line_spacing=14:x=(w-text_w)/2:y=50`
     );
   }
+  // qscale 2 = ffmpeg's near-max JPEG quality (scale is 2-31, lower is better). At 1280x720
+  // this normally lands well under the 2MB cap on its own; the loop below is a safety net for
+  // the rare source photo that doesn't (busy/high-entropy image), stepping quality down until
+  // it fits rather than silently uploading a thumbnail YouTube would reject.
+  for (const q of [2, 4, 8, 14]) {
+    await run("ffmpeg", ["-y", "-i", imagePath, "-vf", vf.join(","), "-frames:v", "1", "-q:v", String(q), outPath]);
+    const { size } = await fs.stat(outPath);
+    if (size <= THUMBNAIL_MAX_BYTES) break;
+    console.warn(`Thumbnail is ${(size / 1024 / 1024).toFixed(2)}MB at q=${q}, over the 2MB cap — trying lower quality.`);
+  }
+  return outPath;
+}
+
+// Embeds descriptive container metadata into the finished mp4 (PDF checklist item: "Container &
+// File Metadata Optimization"). Re-muxes only (-c copy), no re-encode, so this costs a few
+// seconds regardless of video length. Worth calibrating expectations on this one: YouTube
+// strips essentially all embedded container metadata on ingest and ranks off the Data API
+// fields this pipeline already sets on videos.insert (title/description/tags/defaultLanguage/
+// defaultAudioLanguage — see youtube.js), not off file-level tags. This doesn't hurt and gives
+// the raw file itself useful metadata for anywhere else it might end up, but it isn't a real
+// YouTube ranking lever the way the Data API fields are.
+export async function tagVideoMetadata({ videoPath, title, comment, keywords, language = "eng" }) {
+  const tmpPath = videoPath.replace(/(\.[^./]+)$/, "-tagged$1");
   await run("ffmpeg", [
     "-y",
-    "-i", imagePath,
-    "-vf", vf.join(","),
-    "-frames:v", "1",
-    outPath,
+    "-i", videoPath,
+    "-map", "0",
+    "-map_metadata", "-1",
+    "-c", "copy",
+    "-metadata", `title=${title}`,
+    "-metadata", `comment=${comment}`,
+    "-metadata", `keywords=${keywords}`,
+    "-metadata:s:v:0", `language=${language}`,
+    "-metadata:s:a:0", `language=${language}`,
+    tmpPath,
   ]);
-  return outPath;
+  await fs.rename(tmpPath, videoPath);
+  return videoPath;
+}
+
+// Same idea as tagVideoMetadata, applied to the thumbnail JPEG (IPTC/EXIF/XMP keywords + title —
+// the other half of the PDF's "Container & File Metadata Optimization" item). Uses
+// exiftool-vendored, which bundles its own exiftool binary via npm, so no apt-get step is
+// needed in the workflow. Same caveat as above: thumbnails.set reads the pixels, not the file's
+// embedded metadata, so this doesn't move YouTube ranking — it's for completeness/anywhere else
+// the file gets reused (the website, social posts, etc).
+export async function tagThumbnailMetadata({ imagePath, title, keywords }) {
+  await exiftool.write(imagePath, {
+    "IPTC:ObjectName": title.slice(0, 64), // IPTC ObjectName has a real 64-char field limit
+    "IPTC:Keywords": keywords,
+    "XMP:Title": title,
+    "XMP:Subject": keywords,
+  });
+  return imagePath;
 }
 
 export function buildSrt(scenesWithDurations, translatedLines) {
@@ -300,4 +354,4 @@ export function buildSrt(scenesWithDurations, translatedLines) {
     const ms = String(Math.floor((sec % 1) * 1000)).padStart(3, "0");
     return `${h}:${m}:${s},${ms}`;
   }
-      }
+  }
