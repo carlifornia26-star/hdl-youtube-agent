@@ -1,5 +1,5 @@
 import { translateMeta } from "./cf-ai.js";
-import { listSupportedLanguages, getMyChannelBranding, updateChannelLocalizations, getChannelLocalizations, setChannelKeywords } from "./youtube.js";
+import { listSupportedLanguages, getMyChannelBranding, updateChannelLocalizations, getChannelLocalizations, setChannelKeywords, setChannelCountry } from "./youtube.js";
 import { CATALOG } from "./catalog.js";
 
 // One-off / on-demand script (run via the "HDL Channel Localization" workflow_dispatch, not on
@@ -244,6 +244,35 @@ async function main() {
       );
     } else {
       console.error("Keywords update failed:", e?.response?.data?.error || e.message);
+    }
+    process.exitCode = 1;
+  }
+
+  // Channel country (PDF checklist item: "Channel Country Setting"). Defaults to US since all
+  // three channels are scheduled around US Eastern time slots targeting a US audience (see
+  // daily-video.yml's cron comments) — override with a CHANNEL_COUNTRY repo variable (ISO
+  // 3166-1 alpha-2, e.g. "GB", "CA") if that's ever not the right default for a given channel.
+  console.log("\nSetting channel country...");
+  const country = (process.env.CHANNEL_COUNTRY || "US").toUpperCase();
+  try {
+    await setChannelCountry({ channelId, country, currentBranding: channel.brandingSettings });
+    const verifyChannel = await getMyChannelBranding();
+    const savedCountry = verifyChannel.brandingSettings?.channel?.country || "";
+    if (savedCountry !== country) {
+      console.error(
+        `VERIFICATION FAILURE: sent country "${country}", read back "${savedCountry}". ` +
+          "Do not trust the update call's own success response alone."
+      );
+      process.exitCode = 1;
+    } else {
+      console.log(`SUCCESS: Channel country set to "${country}" and verified on YouTube.`);
+      console.log("Check it: Studio -> Settings -> Channel -> Basic info -> Country.");
+    }
+  } catch (e) {
+    if (e.isQuotaExceeded) {
+      console.error("QUOTA FAILURE: Country was not changed because YouTube Data API quotaExceeded. Wait for quota reset and re-run.");
+    } else {
+      console.error("Country update failed:", e?.response?.data?.error || e.message);
     }
     process.exitCode = 1;
   }
