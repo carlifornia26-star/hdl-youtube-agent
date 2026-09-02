@@ -12,6 +12,7 @@
     "setup-playlists": "node scripts/setup-playlists.js"
   },
   "dependencies": {
+    "exiftool-vendored": "^35.0.0",
     "googleapis": "^140.0.0",
     "kokoro-js": "^1.2.1",
     "node-fetch": "^3.3.2"
