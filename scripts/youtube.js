@@ -11,6 +11,12 @@ function client() {
   return google.youtube({ version: "v3", auth: oauth2Client() });
 }
 
+// Exposed so one-off maintenance scripts (e.g. fix-private-videos.js) can talk to the API
+// directly without duplicating the OAuth setup above.
+export function getYoutubeClient() {
+  return client();
+}
+
 // Separate client for the YouTube Analytics API (thumbnail-report.js) — same refresh token,
 // but only works if it was minted with the yt-analytics.readonly scope added (see SETUP.md).
 // A missing-scope call fails with a 403 "insufficient authentication scopes" error, which
@@ -41,6 +47,31 @@ function explainIfAuthError(err) {
         "publish it (or add yourself as a permanent test user) so this stops recurring.\n"
     );
   }
+}
+
+// "failedPrecondition" / "Precondition check failed" is a well-documented flaky YouTube Data
+// API response (other developers report the identical error, with the identical unhelpful
+// message, on thumbnails.set — not specific to this endpoint or to anything actually wrong
+// with the request). It is not tied to a real eligibility problem with the channel or video;
+// simply retrying the same call is the commonly reported fix. Declared up top (moved from
+// further down in the file) so publishVideo() can use it too.
+export function isFailedPrecondition(err) {
+  const status = err?.response?.status ?? err?.code ?? err?.status;
+  const errors = err?.response?.data?.error?.errors ?? err?.errors ?? [];
+  const reason = errors?.[0]?.reason ?? "";
+  return Number(status) === 400 && String(reason).toLowerCase() === "failedprecondition";
+}
+
+// Checks BOTH the HTTP status and the reason string, and looks in every shape googleapis is
+// known to put them in across versions (err.response.data.error.errors[0].reason is the modern
+// gaxios shape; err.errors[0].reason is the older/alternate shape) — a mismatch in either would
+// silently fall through to the "treat it like a bad locale" bisection path, which is exactly the
+// bug this exists to prevent.
+export function isQuotaExceeded(err) {
+  const status = err?.response?.status ?? err?.code ?? err?.status;
+  const errors = err?.response?.data?.error?.errors ?? err?.errors ?? [];
+  const reason = errors?.[0]?.reason ?? "";
+  return Number(status) === 403 && String(reason).toLowerCase() === "quotaexceeded";
 }
 
 export async function uploadVideo({ videoPath, title, description, tags, localizations, categoryId, privacyStatus }) {
@@ -89,6 +120,11 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
   try {
     const res = await youtube.videos.insert({
       part: ["snippet", "status", "localizations"],
+      // notifySubscribers defaults to true on this endpoint. It's set to false explicitly here
+      // (rather than relying on the fact that the video uploads private, where it wouldn't fire
+      // anyway) so behaviour stays correct even if a caller ever passes privacyStatus: "public"
+      // directly — subscribers should never be pinged by this pipeline, upload or publish.
+      notifySubscribers: false,
       requestBody,
       media: { body: fs.createReadStream(videoPath) },
     });
@@ -118,35 +154,83 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
 // construction. Auto-dub remains YouTube's own async step that happens after this call, same
 // as it always has. Skipped in DRY_RUN_PRIVATE mode, matching uploadVideo's own override —
 // a dry run should stay private, not get published at the end.
+//
+// This is deliberately more defensive than a plain videos.update call, for two reasons found
+// from real runs:
+//   1) videos.update on this endpoint has the same documented flaky "failedPrecondition" (400)
+//      behaviour that thumbnails.set and channels.update already retry on elsewhere in this
+//      file — a transient rejection with nothing actually wrong with the request. Retried up
+//      to 3 times with a short backoff, same pattern as setChannelTrailer/setChannelKeywords.
+//   2) A 200 OK from videos.update only means YouTube ACCEPTED the request — it does not
+//      guarantee privacyStatus was actually persisted as "public". This reads the video back
+//      afterward and throws a clear, specific error if it's still private, instead of logging
+//      "Published" and moving on while the video quietly stays private on YouTube.
+// videos.update never notifies subscribers (notifySubscribers only exists on videos.insert),
+// so no notification flag is needed here — this call is silent by construction.
 export async function publishVideo({ videoId }) {
   if (process.env.DRY_RUN_PRIVATE === "true") {
     console.log(`DRY_RUN_PRIVATE set — leaving ${videoId} private, not publishing.`);
     return;
   }
   const youtube = client();
-  try {
-    await youtube.videos.update({
-      part: ["status"],
-      requestBody: {
-        id: videoId,
-        status: {
-          privacyStatus: "public",
-          selfDeclaredMadeForKids: false,
-          license: "youtube",
-          containsSyntheticMedia: true,
+
+  let lastErr;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await youtube.videos.update({
+        part: ["status"],
+        requestBody: {
+          id: videoId,
+          status: {
+            privacyStatus: "public",
+            selfDeclaredMadeForKids: false,
+            license: "youtube",
+            containsSyntheticMedia: true,
+          },
         },
-      },
-    });
-    console.log(`Published (now public): https://youtube.com/watch?v=${videoId}`);
-  } catch (err) {
-    explainIfAuthError(err);
-    const apiError = err?.response?.data?.error || err?.errors || null;
-    if (apiError) {
-      console.error("publishVideo failed. API error detail:\n", JSON.stringify(apiError, null, 2));
+      });
+
+      // Read back the real, current status directly from YouTube rather than trusting the
+      // update call's own success response — this is the check that catches a silent no-op.
+      const check = await youtube.videos.list({ part: ["status"], id: [videoId] });
+      const liveStatus = check.data.items?.[0]?.status?.privacyStatus;
+
+      if (liveStatus === "public") {
+        console.log(`Published (confirmed public): https://youtube.com/watch?v=${videoId}`);
+        return;
+      }
+
+      // Accepted (200 OK) but did not actually take — this is the failure mode that looks
+      // like success in logs but leaves the video private. Treat it as retryable.
+      lastErr = new Error(
+        `videos.update for ${videoId} returned 200 OK but privacyStatus is still "${liveStatus}", not "public".`
+      );
+      console.warn(`publishVideo: attempt ${attempt}/3 did not stick (still ${liveStatus}), retrying...`);
+    } catch (err) {
+      lastErr = err;
+      const retryable = isFailedPrecondition(err) && attempt < 3;
+      if (retryable) {
+        console.warn(`publishVideo: attempt ${attempt}/3 hit a failedPrecondition (known flaky response), retrying...`);
+      } else if (attempt < 3) {
+        // Not the known-flaky error, but still worth one immediate retry before giving up —
+        // transient network/5xx errors from Google's side are common on this endpoint.
+        console.warn(`publishVideo: attempt ${attempt}/3 failed (${err.message}), retrying...`);
+      } else {
+        break;
+      }
     }
-    console.error(`publishVideo failed for videoId ${videoId} — it is still PRIVATE on YouTube.`);
-    throw err;
+    await new Promise((r) => setTimeout(r, 3000 * attempt)); // 3s, 6s
   }
+
+  const err = lastErr;
+  explainIfAuthError(err);
+  const apiError = err?.response?.data?.error || err?.errors || null;
+  if (apiError) {
+    console.error("publishVideo failed. API error detail:\n", JSON.stringify(apiError, null, 2));
+  }
+  console.error(`publishVideo failed for videoId ${videoId} after 3 attempts — it is still PRIVATE on YouTube.`);
+  err.isQuotaExceeded = isQuotaExceeded(err);
+  throw err;
 }
 
 // Returns every application language YouTube itself supports (used by customize-channel.js to
@@ -177,31 +261,6 @@ export async function getMyChannelBranding() {
 // nothing to do with which locale keys were sent, it will fail identically no matter what's in
 // the request, and retrying (or bisecting) just burns more of an already-empty quota. Tag it so
 // callers can tell "the whole account is out of quota" apart from "one specific key is invalid."
-//
-// Checks BOTH the HTTP status and the reason string, and looks in every shape googleapis is
-// known to put them in across versions (err.response.data.error.errors[0].reason is the modern
-// gaxios shape; err.errors[0].reason is the older/alternate shape) — a mismatch in either would
-// silently fall through to the "treat it like a bad locale" bisection path, which is exactly the
-// bug this exists to prevent.
-export function isQuotaExceeded(err) {
-  const status = err?.response?.status ?? err?.code ?? err?.status;
-  const errors = err?.response?.data?.error?.errors ?? err?.errors ?? [];
-  const reason = errors?.[0]?.reason ?? "";
-  return Number(status) === 403 && String(reason).toLowerCase() === "quotaexceeded";
-}
-
-// "failedPrecondition" / "Precondition check failed" is a well-documented flaky YouTube Data
-// API response (other developers report the identical error, with the identical unhelpful
-// message, on thumbnails.set — not specific to this endpoint or to anything actually wrong
-// with the request). It is not tied to a real eligibility problem with the channel or video;
-// simply retrying the same call is the commonly reported fix.
-export function isFailedPrecondition(err) {
-  const status = err?.response?.status ?? err?.code ?? err?.status;
-  const errors = err?.response?.data?.error?.errors ?? err?.errors ?? [];
-  const reason = errors?.[0]?.reason ?? "";
-  return Number(status) === 400 && String(reason).toLowerCase() === "failedprecondition";
-}
-
 export async function updateChannelLocalizations({ channelId, localizations }) {
   const youtube = client();
   try {
@@ -422,4 +481,4 @@ export async function addVideoToPlaylist({ playlistId, videoId }) {
     err.isQuotaExceeded = isQuotaExceeded(err);
     throw err;
   }
-  }
+    }
