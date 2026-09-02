@@ -74,9 +74,23 @@ export function isQuotaExceeded(err) {
   return Number(status) === 403 && String(reason).toLowerCase() === "quotaexceeded";
 }
 
-export async function uploadVideo({ videoPath, title, description, tags, localizations, categoryId, privacyStatus }) {
+export async function uploadVideo({ videoPath, title, description, tags, localizations, categoryId, privacyStatus, location }) {
   const youtube = client();
   const isPrivate = process.env.DRY_RUN_PRIVATE === "true";
+  const parts = ["snippet", "status", "localizations"];
+
+  // Optional "Video Location" (PDF checklist item). Off unless a caller actually passes one —
+  // a locationDescription-only value (no lat/lng) targets a named place without pinning the
+  // video to exact coordinates, which fits a digital product sold globally on Google Play
+  // better than a specific point would.
+  let recordingDetails;
+  if (location?.description || (location?.latitude != null && location?.longitude != null)) {
+    recordingDetails = { locationDescription: location.description };
+    if (location.latitude != null && location.longitude != null) {
+      recordingDetails.location = { latitude: location.latitude, longitude: location.longitude };
+    }
+    parts.push("recordingDetails");
+  }
 
   // Drop any localization entries with an empty/blank title — an empty or malformed
   // localization entry is enough to make YouTube reject the whole request with the
@@ -115,11 +129,12 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
       // review, it just means the disclosure YouTube expects is missing.
     },
     localizations: cleanLocalizations,
+    ...(recordingDetails ? { recordingDetails } : {}),
   };
 
   try {
     const res = await youtube.videos.insert({
-      part: ["snippet", "status", "localizations"],
+      part: parts,
       // notifySubscribers defaults to true on this endpoint. It's set to false explicitly here
       // (rather than relying on the fact that the video uploads private, where it wouldn't fire
       // anyway) so behaviour stays correct even if a caller ever passes privacyStatus: "public"
@@ -391,6 +406,49 @@ export async function setChannelKeywords({ channelId, keywords, currentBranding 
     const apiError = err?.response?.data?.error || err?.errors || null;
     if (apiError) {
       console.error("setChannelKeywords failed. API error detail:\n", JSON.stringify(apiError, null, 2));
+    }
+    err.isQuotaExceeded = isQuotaExceeded(err);
+    throw err;
+  }
+}
+
+// Sets the channel's "Country" field (Studio: Settings -> Channel -> Basic info -> Country of
+// residence — the PDF calls this "Channel Country Setting"). Same brandingSettings.channel
+// object as setChannelKeywords/setChannelTrailer above, and the same overwrite trap, so this
+// merges in rather than replacing the whole thing. One-off setting (channel country doesn't
+// change), so it's called from customize-channel.js rather than the daily pipeline.
+export async function setChannelCountry({ channelId, country, currentBranding }) {
+  const youtube = client();
+  const mergedChannelBranding = { ...(currentBranding?.channel || {}), country };
+  let lastErr;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await youtube.channels.update({
+        part: ["brandingSettings"],
+        requestBody: {
+          id: channelId,
+          brandingSettings: { channel: mergedChannelBranding },
+        },
+      });
+      if (attempt > 1) console.log(`setChannelCountry succeeded on attempt ${attempt}/3.`);
+      return res.data;
+    } catch (err) {
+      lastErr = err;
+      const retryable = isFailedPrecondition(err) && attempt < 3;
+      if (retryable) {
+        console.warn(`setChannelCountry: attempt ${attempt}/3 hit a failedPrecondition (known flaky response), retrying...`);
+        await new Promise((r) => setTimeout(r, 3000 * attempt)); // 3s, 6s
+        continue;
+      }
+      break;
+    }
+  }
+  const err = lastErr;
+  {
+    explainIfAuthError(err);
+    const apiError = err?.response?.data?.error || err?.errors || null;
+    if (apiError) {
+      console.error("setChannelCountry failed. API error detail:\n", JSON.stringify(apiError, null, 2));
     }
     err.isQuotaExceeded = isQuotaExceeded(err);
     throw err;
