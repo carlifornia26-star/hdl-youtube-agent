@@ -5,7 +5,8 @@ import { generateScript, generateBonusScenes, translateMeta, VIDEO_LANGS, pickTo
 import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./assets.js";
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
 import { fetchBackgroundMusic, attributionLine } from "./music.js";
-import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic, normalizeLoudness, pickTodaysCaptionStyle } from "./render.js";
+import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic, normalizeLoudness, pickTodaysCaptionStyle, tagVideoMetadata, tagThumbnailMetadata } from "./render.js";
+import { exiftool } from "exiftool-vendored";
 import { uploadVideo, uploadCaptionTrack, uploadThumbnail, addVideoToPlaylist, publishVideo } from "./youtube.js";
 import { appendVideoEntry } from "./manifest.js";
 import { buildDailyCommunityPost } from "./community-post.js";
@@ -19,6 +20,17 @@ const CHANNEL_ID = process.env.CHANNEL_ID || "1";
 // 1 = Science & Technology, 2 = Entertainment, 3 = Education.
 const CHANNEL_CATEGORY_IDS = { 1: "28", 2: "24", 3: "27" };
 const CATEGORY_ID = CHANNEL_CATEGORY_IDS[CHANNEL_ID] || CHANNEL_CATEGORY_IDS[1];
+
+// Optional "Video Location" (PDF checklist item), sent via videos.insert's recordingDetails.
+// Defaults to a locationDescription-only value of "United States" — no lat/lng, so it names a
+// region without pinning to one point, matching all three channels' US-Eastern-scheduled, US-
+// audience targeting (see daily-video.yml). GitHub Actions always sets the env var (as an empty
+// string) even when the repo `vars.YT_VIDEO_LOCATION_DESCRIPTION` itself is unset, so `??` alone
+// can't tell "unset" from "explicitly cleared" — an empty string is treated as "use the default"
+// here; set it to the literal word "off" in repo variables to turn video location off entirely.
+const rawLocationEnv = process.env.YT_VIDEO_LOCATION_DESCRIPTION;
+const VIDEO_LOCATION_DESCRIPTION =
+  rawLocationEnv === "off" ? "" : (rawLocationEnv || "United States");
 
 // SEO file-rename step: a widely-repeated (and unconfirmed by any official YouTube source)
 // claim is that the algorithm weighs the raw uploaded filename alongside title/description/
@@ -39,9 +51,11 @@ function slugifyForFilename(text) {
 
 // Renames (copies, so the original render is untouched for debugging) the finished file to a
 // keyword-bearing name right before it's streamed to the Data API. Returns the new path.
-async function renameForUpload(sourcePath, keywordText) {
+// extension covers both the video (.mp4) and, since the PDF's file-naming item explicitly
+// calls out the thumbnail too, the thumbnail (.jpg).
+async function renameForUpload(sourcePath, keywordText, extension = "mp4") {
   const slug = slugifyForFilename(keywordText) || "hdl group video";
-  const destPath = path.join(BUILD_DIR, `${slug}.mp4`);
+  const destPath = path.join(BUILD_DIR, `${slug}.${extension}`);
   if (destPath !== sourcePath) await fs.copyFile(sourcePath, destPath);
   return destPath;
 }
@@ -474,8 +488,14 @@ async function main() {
   const baseTags = [book.title, "HDL Group", book.angle, "ebook"];
   const tags = [...baseTags, ...buildMultilingualTags(localizations, baseTags)];
 
-  // 6) Upload video — rename to a keyword-bearing filename first (see renameForUpload above)
+  // 6) Upload video — rename to a keyword-bearing filename first (see renameForUpload above),
+  // then embed container metadata (title/keywords/comment/language) into the renamed file.
   uploadPath = await renameForUpload(uploadPath, `${book.title} ${book.angle} HDL Group`);
+  try {
+    await tagVideoMetadata({ videoPath: uploadPath, title: enTitle, comment: translatableDescription, keywords: tags.join(", ") });
+  } catch (e) {
+    console.warn("Video metadata tagging failed, uploading untagged:", e.message);
+  }
   // Uploaded PRIVATE on purpose — thumbnail, playlist, and captions all get attached below
   // while it's still private, and only publishVideo() at the very end (step 8) flips it
   // public. This keeps YouTube from ever indexing a bare, caption-less, auto-thumbnail
@@ -489,11 +509,20 @@ async function main() {
     localizations,
     categoryId: CATEGORY_ID,
     privacyStatus: "private",
+    location: VIDEO_LOCATION_DESCRIPTION ? { description: VIDEO_LOCATION_DESCRIPTION } : undefined,
   });
   console.log(`Uploaded (private, not yet public): https://youtube.com/watch?v=${uploaded.id}`);
 
-  // 6b) Upload the thumbnail generated back in step 3c
-  await uploadThumbnail({ videoId: uploaded.id, imagePath: thumbPath });
+  // 6b) Upload the thumbnail generated back in step 3c — rename to a keyword-bearing filename
+  // and embed IPTC/XMP metadata first, same as the video above (PDF's file-naming and
+  // container-metadata items apply to the thumbnail file too, not just the video).
+  const thumbUploadPath = await renameForUpload(thumbPath, `${book.title} ${book.angle} thumbnail HDL Group`, "jpg");
+  try {
+    await tagThumbnailMetadata({ imagePath: thumbUploadPath, title: enTitle, keywords: tags });
+  } catch (e) {
+    console.warn("Thumbnail metadata tagging failed, uploading untagged:", e.message);
+  }
+  await uploadThumbnail({ videoId: uploaded.id, imagePath: thumbUploadPath });
 
   // 6b2) Add today's video to its book's playlist (if one exists — see setup-playlists.js).
   // Non-fatal: a missing or failed playlist add should never take down an otherwise-successful
@@ -623,6 +652,11 @@ async function main() {
       // single mistranslated title can cost the whole Short instead of just that one language.
       // Retry once with localizations stripped: an English-only Short beats no Short at all.
       shortUploadPath = await renameForUpload(shortUploadPath, `${book.title} ${book.angle} Shorts HDL Group`);
+      try {
+        await tagVideoMetadata({ videoPath: shortUploadPath, title: shortTitle, comment: shortTranslatableDescription, keywords: shortTags.join(", ") });
+      } catch (e) {
+        console.warn("Short metadata tagging failed, uploading untagged:", e.message);
+      }
 
       let uploadedShort;
       try {
@@ -634,6 +668,7 @@ async function main() {
           localizations: shortLocalizations,
           categoryId: CATEGORY_ID,
           privacyStatus: "private", // see main video's upload comment above — same reasoning
+          location: VIDEO_LOCATION_DESCRIPTION ? { description: VIDEO_LOCATION_DESCRIPTION } : undefined,
         });
       } catch (e) {
         console.warn(
@@ -648,6 +683,7 @@ async function main() {
           localizations: {},
           categoryId: CATEGORY_ID,
           privacyStatus: "private",
+          location: VIDEO_LOCATION_DESCRIPTION ? { description: VIDEO_LOCATION_DESCRIPTION } : undefined,
         });
         console.log("Short uploaded English-only after localizations retry.");
       }
@@ -796,7 +832,15 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error(err);
+    process.exitCode = 1;
+  })
+  .finally(() =>
+    // exiftool-vendored keeps its own child process running (that's how it's fast across
+    // multiple calls) — without this the Node process never exits on its own and the GitHub
+    // Actions step just hangs until the job timeout. Returned (not fire-and-forget) so the
+    // process actually waits for the child to terminate before exiting.
+    exiftool.end()
+  );
