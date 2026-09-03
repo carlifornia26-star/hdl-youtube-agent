@@ -39,6 +39,15 @@ const VIDEO_LOCATION_DESCRIPTION =
 // it's free (no extra render cost, no API cost, no risk of rejection) — so it's applied on
 // every upload rather than skipped outright. Keep expectations calibrated: this is not the
 // "biggest secret", it's a zero-cost extra in case it helps at the margin.
+// Capitalizes just the first letter — the catalog's `angle` strings are a mix of
+// ("AI & the information economy") and lowercase-first ("the science of happiness") since they
+// were originally only ever used mid-sentence in descriptions/tags. Now that `angle` alone
+// drives the public-facing title (no more book name in titles/filenames — see below), this
+// keeps every title starting with a capital letter without hand-fixing each catalog entry.
+function capitalizeFirst(text) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 function slugifyForFilename(text) {
   return text
     .toLowerCase()
@@ -440,7 +449,10 @@ async function main() {
   }
 
   // 4) English metadata
-  const enTitle = `${book.displayTitle} — ${book.angle} | HDL Group`;
+  // Title deliberately does NOT include the book name (e.g. "Art of Joy", "Bitcoin Standard")
+  // anymore — just the topic/angle. Anyone who wants the book name gets it from the
+  // description (translatableDescription below) and the spoken/captioned narration.
+  const enTitle = `${capitalizeFirst(book.angle)} | HDL Group`;
   // Only the plain descriptive sentence goes to the translation model. Everything else —
   // the URL, the hashtags, the chapters block, and (further below) the music/thumbnail credit
   // lines — is appended AFTER translation, untranslated, for every language including English.
@@ -490,7 +502,7 @@ async function main() {
 
   // 6) Upload video — rename to a keyword-bearing filename first (see renameForUpload above),
   // then embed container metadata (title/keywords/comment/language) into the renamed file.
-  uploadPath = await renameForUpload(uploadPath, `${book.title} ${book.angle} HDL Group`);
+  uploadPath = await renameForUpload(uploadPath, `${book.angle} HDL Group`);
   try {
     await tagVideoMetadata({ videoPath: uploadPath, title: enTitle, comment: translatableDescription, keywords: tags.join(", ") });
   } catch (e) {
@@ -516,7 +528,7 @@ async function main() {
   // 6b) Upload the thumbnail generated back in step 3c — rename to a keyword-bearing filename
   // and embed IPTC/XMP metadata first, same as the video above (PDF's file-naming and
   // container-metadata items apply to the thumbnail file too, not just the video).
-  const thumbUploadPath = await renameForUpload(thumbPath, `${book.title} ${book.angle} thumbnail HDL Group`, "jpg");
+  const thumbUploadPath = await renameForUpload(thumbPath, `${book.angle} thumbnail HDL Group`, "jpg");
   try {
     await tagThumbnailMetadata({ imagePath: thumbUploadPath, title: enTitle, keywords: tags });
   } catch (e) {
@@ -614,7 +626,8 @@ async function main() {
         }
       }
 
-      const shortTitle = `${book.displayTitle} #Shorts`.slice(0, 100); // YouTube's 100-char title cap
+      // No book name here either — same reasoning as enTitle above.
+      const shortTitle = `${capitalizeFirst(book.angle)} #Shorts`.slice(0, 100); // YouTube's 100-char title cap
       // Same URL-safety fix as the main video's description above: only the plain sentence goes
       // to the translation model. The two URLs (YouTube link + book link) and the hashtags are
       // appended after, untranslated, so they can't come back corrupted in any language.
@@ -651,7 +664,7 @@ async function main() {
       // with YouTube's generic invalidVideoMetadata error (see YT_LOCALE_MAP note above) — so a
       // single mistranslated title can cost the whole Short instead of just that one language.
       // Retry once with localizations stripped: an English-only Short beats no Short at all.
-      shortUploadPath = await renameForUpload(shortUploadPath, `${book.title} ${book.angle} Shorts HDL Group`);
+      shortUploadPath = await renameForUpload(shortUploadPath, `${book.angle} Shorts HDL Group`);
       try {
         await tagVideoMetadata({ videoPath: shortUploadPath, title: shortTitle, comment: shortTranslatableDescription, keywords: shortTags.join(", ") });
       } catch (e) {
