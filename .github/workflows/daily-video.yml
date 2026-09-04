@@ -33,7 +33,12 @@ permissions:
 jobs:
   build-and-upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Was 60. The per-scene x per-language caption translation loop in generate-video.js
+    # (46 scenes x 15 langs = ~690 sequential Workers AI calls, more on a day with retries)
+    # can silently exceed 60 min after the video/Short have already uploaded private —
+    # which then never get flipped public since that's the last step. 120 gives real headroom
+    # even with the loop now running in parallel batches (see generate-video.js).
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
