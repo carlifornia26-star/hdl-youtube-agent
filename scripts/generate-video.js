@@ -11,6 +11,23 @@ import { uploadVideo, uploadCaptionTrack, uploadThumbnail, addVideoToPlaylist, p
 import { appendVideoEntry } from "./manifest.js";
 import { buildDailyCommunityPost } from "./community-post.js";
 
+// Runs `items` through `fn` with at most `limit` in flight at once, preserving output order.
+// Used for the per-scene caption translation loop below, which previously awaited each of
+// ~690 (scenes x languages) Workers AI calls one at a time — a single slow/retried call could
+// silently stall the whole run for minutes with nothing printed to the log.
+async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 // Passed in by the workflow (see daily-video.yml). Channel 1 keeps unsuffixed filenames so
 // its existing history isn't disturbed; channels 2/3 get their own suffixed files so their
 // playlists/manifest don't overwrite each other.
@@ -732,16 +749,19 @@ async function main() {
   // just the first shortSceneCount of them, re-timed to start at 0) instead of re-calling
   // translateMeta for lines it already has.
   const translatedCaptionLines = {};
+  const captionLangsStart = Date.now();
+  let captionLangsDone = 0;
   for (const lang of VIDEO_LANGS) {
     const ytLang = YT_LOCALE_MAP[lang] ?? lang;
     if (!localizations[ytLang]) continue;
     try {
-      // Translate each scene line individually for caption timing accuracy
-      const lines = [];
-      for (const scene of built) {
+      // Translate each scene line individually for caption timing accuracy, up to 5 scenes
+      // in flight at once (order preserved) instead of one at a time — was the main reason a
+      // run could silently burn 20+ minutes here with nothing in the log.
+      const lines = await mapWithConcurrency(built, 5, async (scene) => {
         const t = await translateMeta(scene.line, "", lang);
-        lines.push(t.title);
-      }
+        return t.title;
+      });
       translatedCaptionLines[lang] = lines;
       const srt = buildSrt(built, lines);
       const srtPath = path.join(BUILD_DIR, `captions_${lang}.srt`);
@@ -750,6 +770,9 @@ async function main() {
     } catch (e) {
       console.warn(`Caption upload failed for ${lang}, skipping:`, e.message);
     }
+    captionLangsDone++;
+    const elapsedMin = ((Date.now() - captionLangsStart) / 60000).toFixed(1);
+    console.log(`Captions: ${captionLangsDone}/${VIDEO_LANGS.length} languages done (${elapsedMin} min elapsed).`);
   }
 
   // 7b) Short captions — previously the Short had NO caption track at all (only the burned-in
@@ -783,6 +806,7 @@ async function main() {
         console.warn(`Short caption upload failed for ${lang}, skipping:`, e.message);
       }
     }
+    console.log("Short captions: done (reused translated lines, no extra API calls).");
   }
 
   // 8) Publish — flip both videos from private to public now that thumbnail, playlist, and
