@@ -6,6 +6,13 @@
 // appearance of the same book (which happens every ~CATALOG.length days per channel) doesn't
 // upload with the literal same title text as last time. `slug`, `title` (the canonical/first
 // variant), `angle`, and `pageUrl` stay fixed — only the displayed video title rotates.
+// `categoryId` is the YouTube video category for THIS BOOK's content — not the channel. Since
+// pickTodaysBook() rotates every channel through the full catalog (just offset by a day), a
+// category tied to the channel instead of the book would be wrong on ~6 of every 7 uploads per
+// channel (e.g. a Bitcoin teaser tagged "Entertainment" because it happened to render on the
+// channel whose fallback category was set for something else). Tying it to the book instead
+// means the tag is correct every time, on every channel, regardless of the day's rotation.
+// Reference IDs: Education=27, Science & Technology=28, Howto & Style=26, Pets & Animals=15.
 export const CATALOG = [
   {
     slug: "age-one",
@@ -14,6 +21,7 @@ export const CATALOG = [
     angle: "AI & the information economy",
     pageUrl: "https://highdefinitionlearning.pages.dev/age-one-complete-ai-business-mastery",
     stockKeywords: ["artificial intelligence", "futuristic city", "digital network", "businessman technology", "computer coding", "robot technology"],
+    categoryId: "28", // Science & Technology
   },
   {
     slug: "age-one-premium",
@@ -22,6 +30,7 @@ export const CATALOG = [
     angle: "advanced AI business strategy",
     pageUrl: "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
     stockKeywords: ["boardroom", "data analytics", "future technology", "strategy meeting", "office team", "graph chart"],
+    categoryId: "28", // Science & Technology
   },
   {
     slug: "bitcoin-standard",
@@ -30,6 +39,7 @@ export const CATALOG = [
     angle: "Bitcoin & digital finance",
     pageUrl: "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
     stockKeywords: ["bitcoin", "cryptocurrency", "blockchain", "digital finance", "stock market", "gold coins"],
+    categoryId: "27", // Education
   },
   {
     slug: "science-of-feeling-great",
@@ -38,6 +48,7 @@ export const CATALOG = [
     angle: "wellness & vitality",
     pageUrl: "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
     stockKeywords: ["healthy lifestyle", "morning routine", "wellness", "sunrise nature", "yoga meditation", "healthy food"],
+    categoryId: "26", // Howto & Style
   },
   {
     slug: "art-of-joy",
@@ -46,6 +57,7 @@ export const CATALOG = [
     angle: "the science of happiness",
     pageUrl: "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
     stockKeywords: ["happiness", "joyful people", "sunshine", "smiling", "friends laughing", "nature walk"],
+    categoryId: "27", // Education
   },
   {
     slug: "youtube-algorithms",
@@ -54,6 +66,7 @@ export const CATALOG = [
     angle: "growing a channel with the algorithm",
     pageUrl: "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
     stockKeywords: ["content creator", "video editing", "camera studio", "social media growth", "smartphone screen", "podcast studio"],
+    categoryId: "26", // Howto & Style
   },
   {
     slug: "pet-friendly",
@@ -62,6 +75,7 @@ export const CATALOG = [
     angle: "responsible, modern pet care",
     pageUrl: "https://highdefinitionlearning.pages.dev/pet-friendly", // TODO: confirm real slug — not present in this batch
     stockKeywords: ["happy dog", "cat owner", "pet care", "puppy", "kitten playing", "dog walking park"],
+    categoryId: "15", // Pets & Animals
   },
 ];
 
@@ -85,4 +99,4 @@ export function pickTodaysBook(date = new Date(), channelOffset = 0) {
   const variants = book.titleVariants?.length ? book.titleVariants : [book.title];
   const displayTitle = variants[lap % variants.length];
   return { ...book, displayTitle };
-                    }
+    }
