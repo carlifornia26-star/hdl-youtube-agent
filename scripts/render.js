@@ -272,7 +272,14 @@ function wrapTitle(text, maxCharsPerLine = 18, maxLines = 2) {
 // thumbnail style — this is "variant B", compared against the plain "variant A" over time.
 const THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024; // YouTube's hard cap on thumbnails.set
 export async function generateThumbnail({ imagePath, outPath, titleText }) {
-  const vf = [`scale=1280:720:force_original_aspect_ratio=increase`, `crop=1280:720`];
+  const vf = [
+    `scale=1280:720:force_original_aspect_ratio=increase`,
+    `crop=1280:720`,
+    `eq=saturation=1.3`, // +30% color saturation — thumbnails were coming out visually flat/
+    // washed out straight from the source photo; this punches up color richness without
+    // touching brightness/contrast. Applied before the title overlay below so the white/
+    // black-stroke text itself isn't affected (it has no chroma to boost either way).
+  ];
   if (titleText) {
     const wrapped = escapeDrawtext(wrapTitle(titleText.toUpperCase()));
     vf.push(
@@ -354,4 +361,4 @@ export function buildSrt(scenesWithDurations, translatedLines) {
     const ms = String(Math.floor((sec % 1) * 1000)).padStart(3, "0");
     return `${h}:${m}:${s},${ms}`;
   }
-  }
+}
