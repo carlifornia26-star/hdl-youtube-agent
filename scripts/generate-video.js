@@ -33,10 +33,13 @@ async function mapWithConcurrency(items, limit, fn) {
 // playlists/manifest don't overwrite each other.
 const CHANNEL_ID = process.env.CHANNEL_ID || "1";
 
-// YouTube's official video category IDs (snippet.categoryId) per channel.
-// 1 = Science & Technology, 2 = Entertainment, 3 = Education.
-const CHANNEL_CATEGORY_IDS = { 1: "28", 2: "24", 3: "27" };
-const CATEGORY_ID = CHANNEL_CATEGORY_IDS[CHANNEL_ID] || CHANNEL_CATEGORY_IDS[1];
+// categoryId now comes from the BOOK being featured today (book.categoryId, set per-title in
+// catalog.js), not the channel. pickTodaysBook() rotates every channel through the full 7-book
+// catalog (just offset by a day), so a channel-level category was wrong on ~6 of every 7
+// uploads per channel — e.g. a Bitcoin teaser tagged "Entertainment" just because it landed on
+// whichever channel's fallback happened to be set that way. This fallback ("28") only fires if
+// a catalog entry is somehow missing its own categoryId.
+const FALLBACK_CATEGORY_ID = "28";
 
 // Optional "Video Location" (PDF checklist item), sent via videos.insert's recordingDetails.
 // Defaults to a locationDescription-only value of "United States" — no lat/lng, so it names a
@@ -536,7 +539,7 @@ async function main() {
     description: enDescription,
     tags,
     localizations,
-    categoryId: CATEGORY_ID,
+    categoryId: book.categoryId || FALLBACK_CATEGORY_ID,
     privacyStatus: "private",
     location: VIDEO_LOCATION_DESCRIPTION ? { description: VIDEO_LOCATION_DESCRIPTION } : undefined,
   });
@@ -696,7 +699,7 @@ async function main() {
           description: shortDescription,
           tags: shortTags,
           localizations: shortLocalizations,
-          categoryId: CATEGORY_ID,
+          categoryId: book.categoryId || FALLBACK_CATEGORY_ID,
           privacyStatus: "private", // see main video's upload comment above — same reasoning
           location: VIDEO_LOCATION_DESCRIPTION ? { description: VIDEO_LOCATION_DESCRIPTION } : undefined,
         });
@@ -711,7 +714,7 @@ async function main() {
           description: shortDescription,
           tags: shortBaseTags,
           localizations: {},
-          categoryId: CATEGORY_ID,
+          categoryId: book.categoryId || FALLBACK_CATEGORY_ID,
           privacyStatus: "private",
           location: VIDEO_LOCATION_DESCRIPTION ? { description: VIDEO_LOCATION_DESCRIPTION } : undefined,
         });
