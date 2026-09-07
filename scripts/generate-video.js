@@ -572,7 +572,18 @@ async function main() {
   } catch (e) {
     console.warn("Thumbnail metadata tagging failed, uploading untagged:", e.message);
   }
-  await uploadThumbnail({ videoId: uploaded.id, imagePath: thumbUploadPath });
+  // Wrapped like every other non-critical step above/below — a thumbnail upload failure (most
+  // commonly: the channel isn't phone-verified, which YouTube requires for custom thumbnails)
+  // must never take down the whole run. Before this fix, uploadThumbnail was the ONE step in
+  // this entire private->public window with no try/catch, so a failure here killed the script
+  // before it ever reached publishVideo() at the end — leaving an otherwise-finished, fully
+  // uploaded video stuck private forever. YouTube will just use an auto-generated thumbnail
+  // instead if this fails.
+  try {
+    await uploadThumbnail({ videoId: uploaded.id, imagePath: thumbUploadPath });
+  } catch (e) {
+    console.warn("Thumbnail upload failed, publishing with YouTube's auto-generated thumbnail instead:", e.message);
+  }
 
   // 6b2) Add today's video to its book's playlist (if one exists — see setup-playlists.js).
   // Non-fatal: a missing or failed playlist add should never take down an otherwise-successful
