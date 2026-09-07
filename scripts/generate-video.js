@@ -3,6 +3,7 @@ import path from "node:path";
 import { pickTodaysBook } from "./catalog.js";
 import { generateScript, generateBonusScenes, translateMeta, VIDEO_LANGS, pickTodaysFormat } from "./cf-ai.js";
 import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./assets.js";
+import { loadUsedClipIds, saveUsedClipIds } from "./scene-history.js";
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
 import { fetchBackgroundMusic, attributionLine } from "./music.js";
 import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic, normalizeLoudness, pickTodaysCaptionStyle, tagVideoMetadata, tagThumbnailMetadata } from "./render.js";
@@ -240,6 +241,14 @@ async function main() {
   const scenes = await generateScript(book, format);
   console.log(`Generated ${scenes.length} scenes`);
 
+  // Pexels video IDs used across recent runs (any channel-scoped history file), so a repeat
+  // keyword doesn't deterministically re-download the exact same clip every time this book comes
+  // back around in the rotation — see scene-history.js. `newlyUsedIds` also gets checked so
+  // scenes WITHIN this same video don't double up on a clip either.
+  const recentlyUsedIds = await loadUsedClipIds();
+  const avoidIds = new Set(recentlyUsedIds);
+  const newlyUsedIds = [];
+
   // 2) Per-scene: stock clip + Kokoro narration + burned caption -> scene_N.mp4.
   // Scene duration comes from the ACTUAL narration length (probed after synthesis), not an
   // estimate — captions and the video cut are timed to the real voice track.
@@ -253,8 +262,13 @@ async function main() {
     const voicePath = path.join(BUILD_DIR, `voice_${index}.mp3`);
     const outPath = path.join(BUILD_DIR, `scene_${index}.mp4`);
 
-    const keyword = book.stockKeywords[index % book.stockKeywords.length];
-    await fetchStockClip(keyword, clipPath, index);
+    // Prefer the LLM's per-scene `visual` description (matches what's actually being said) over
+    // the book's generic, fixed stockKeywords list — falls back to the old cycling behavior only
+    // if a scene is somehow missing one (e.g. an older cached script shape).
+    const keyword = scene.visual?.trim() || book.stockKeywords[index % book.stockKeywords.length];
+    const { id: clipId } = await fetchStockClip(keyword, clipPath, { index, avoidIds });
+    avoidIds.add(clipId);
+    newlyUsedIds.push(clipId);
 
     let usableVoicePath = null;
     let duration = MIN_SCENE_SECONDS;
@@ -315,6 +329,10 @@ async function main() {
       `Still under the ${Math.round(TARGET_MIN_SECONDS / 60)}-min target after ${MAX_TOPUP_ROUNDS} top-up rounds — publishing anyway.`
     );
   }
+
+  // Persist today's clip choices so tomorrow's (and future) runs avoid re-downloading the same
+  // Pexels clips for the same recurring keywords — see scene-history.js.
+  await saveUsedClipIds([...recentlyUsedIds, ...newlyUsedIds]);
 
   // Track how many scenes had no narration at all — checked at the very end of the run (see
   // VOICE_FAILURE_THRESHOLD above), after everything has already been uploaded.
