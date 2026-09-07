@@ -2,17 +2,22 @@ name: HDL Daily YouTube Teaser
 
 on:
   schedule:
-    # --- Channel 1 — 2:15 PM Eastern (existing) ---
+    # Evenly spaced 2 hours apart (previously uneven: ~4h05m then ~1h40m) — now that each run
+    # does more work (larger Pexels search, repetition-check retry, more scenes), consecutive
+    # channels need enough buffer that one run finishing late doesn't push into the next
+    # channel's start and get queued behind it (concurrency group below serializes runs rather
+    # than letting them overlap).
+    # --- Channel 1 — 2:15 PM Eastern (existing, kept as the anchor) ---
     - cron: "15 18 * * *" # EDT (UTC-4), Mar-Nov
     - cron: "15 19 * * *" # EST (UTC-5), Nov-Mar
 
-    # --- Channel 2 — 6:20 PM Eastern (US audience) ---
-    - cron: "20 22 * * *" # EDT (UTC-4)
-    - cron: "20 23 * * *" # EST (UTC-5)
+    # --- Channel 2 — 4:15 PM Eastern (2h after Channel 1) ---
+    - cron: "15 20 * * *" # EDT (UTC-4)
+    - cron: "15 21 * * *" # EST (UTC-5)
 
-    # --- Channel 3 — 8:00 PM Eastern (US audience) ---
-    - cron: "0 0 * * *"   # EDT (UTC-4) — lands 00:00 UTC the next calendar day
-    - cron: "0 1 * * *"   # EST (UTC-5)
+    # --- Channel 3 — 6:15 PM Eastern (2h after Channel 2) ---
+    - cron: "15 22 * * *" # EDT (UTC-4)
+    - cron: "15 23 * * *" # EST (UTC-5)
 
   workflow_dispatch:
     inputs:
@@ -62,10 +67,10 @@ jobs:
             case "$SCHEDULE" in
               "15 18 * * *") CHANNEL=1; EXPECTED="-0400" ;;
               "15 19 * * *") CHANNEL=1; EXPECTED="-0500" ;;
-              "20 22 * * *") CHANNEL=2; EXPECTED="-0400" ;;
-              "20 23 * * *") CHANNEL=2; EXPECTED="-0500" ;;
-              "0 0 * * *")   CHANNEL=3; EXPECTED="-0400" ;;
-              "0 1 * * *")   CHANNEL=3; EXPECTED="-0500" ;;
+              "15 20 * * *") CHANNEL=2; EXPECTED="-0400" ;;
+              "15 21 * * *") CHANNEL=2; EXPECTED="-0500" ;;
+              "15 22 * * *") CHANNEL=3; EXPECTED="-0400" ;;
+              "15 23 * * *") CHANNEL=3; EXPECTED="-0500" ;;
             esac
 
             if [ "$OFFSET" = "$EXPECTED" ]; then
@@ -126,14 +131,15 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           CH="${{ steps.resolve.outputs.channel }}"
           MANIFEST="videos-manifest.json"
-          if [ "$CH" != "1" ]; then MANIFEST="videos-manifest-$CH.json"; fi
-          git add "$MANIFEST" community-posts/ 2>/dev/null || true
-          if [ -n "$(git status --porcelain "$MANIFEST" community-posts/ 2>/dev/null)" ]; then
-            git commit -m "Update $MANIFEST + today's community post draft (channel $CH) [skip ci]"
+          CLIP_HISTORY="used-clips.json"
+          if [ "$CH" != "1" ]; then MANIFEST="videos-manifest-$CH.json"; CLIP_HISTORY="used-clips-$CH.json"; fi
+          git add "$MANIFEST" "$CLIP_HISTORY" community-posts/ 2>/dev/null || true
+          if [ -n "$(git status --porcelain "$MANIFEST" "$CLIP_HISTORY" community-posts/ 2>/dev/null)" ]; then
+            git commit -m "Update $MANIFEST + $CLIP_HISTORY + today's community post draft (channel $CH) [skip ci]"
             git pull --rebase origin "${{ github.ref_name }}"
             git push
           else
-            echo "No manifest/community-post changes to commit."
+            echo "No manifest/clip-history/community-post changes to commit."
           fi
 
       - name: Upload run artifacts (for debugging, kept 3 days)
