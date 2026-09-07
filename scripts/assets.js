@@ -4,20 +4,32 @@ import fs from "node:fs/promises";
 // Pexels license permits commercial use, including monetized YouTube videos, without attribution
 // (attribution appreciated but not required) — https://www.pexels.com/license/
 //
-// `index` picks which result to use (index % results returned) instead of always the top hit.
-// Keywords repeat across a day's scenes (there are only a handful per book), so without this
-// every scene sharing a keyword downloaded the exact same clip — pass the scene index in so
-// repeats of the same keyword still land on a different clip.
-export async function fetchStockClip(keyword, outPath, index = 0) {
+// per_page=80 (Pexels' max) instead of 15: a fixed query against Pexels' search returns a
+// STABLE ranking, so with only 15 candidates and a deterministic `index % results.length` pick,
+// the same keyword resolved to the exact same top clip on every single day a book came back
+// around in the rotation — this is the "every AGE ONE video reuses the same familiar scenes"
+// bug. A bigger pool plus `avoidIds` (recently-used Pexels video IDs, persisted across runs via
+// scene-history.js) means a repeat keyword only lands on a clip actually not used recently,
+// instead of deterministically re-picking the same one.
+//
+// `index` still seeds which candidate is tried first within the (unused, or full if all are
+// recently used) pool, so multiple scenes sharing a keyword in the SAME video still tend to land
+// on different clips from each other, same as before.
+export async function fetchStockClip(keyword, outPath, { index = 0, avoidIds = new Set() } = {}) {
   const res = await fetch(
-    `https://api.pexels.com/videos/search?query=${encodeURIComponent(keyword)}&orientation=landscape&size=medium&per_page=15`,
+    `https://api.pexels.com/videos/search?query=${encodeURIComponent(keyword)}&orientation=landscape&size=medium&per_page=80`,
     { headers: { Authorization: process.env.PEXELS_API_KEY } }
   );
   if (!res.ok) throw new Error(`Pexels search failed: ${res.status}`);
   const data = await res.json();
   const results = data.videos || [];
   if (results.length === 0) throw new Error(`No Pexels results for "${keyword}"`);
-  const video = results[index % results.length];
+
+  const unused = results.filter((v) => !avoidIds.has(String(v.id)));
+  // If every result for this keyword has been used recently (a narrow niche keyword with few
+  // Pexels matches), fall back to the full pool rather than fail the scene outright.
+  const pool = unused.length > 0 ? unused : results;
+  const video = pool[index % pool.length];
 
   // pick a moderate-resolution file (keeps ffmpeg + upload fast on a free GitHub runner)
   const file =
@@ -27,7 +39,7 @@ export async function fetchStockClip(keyword, outPath, index = 0) {
   const clip = await fetch(file.link);
   const buf = Buffer.from(await clip.arrayBuffer());
   await fs.writeFile(outPath, buf);
-  return outPath;
+  return { outPath, id: String(video.id) };
 }
 
 // Unsplash: free forever, 50 requests/hour on the demo tier — plenty for the ~1 call/day this
@@ -70,4 +82,4 @@ export async function fetchUnsplashPhoto(keyword, outPath, index = 0) {
 
 export function unsplashAttributionLine({ photographerName, photographerProfileUrl }) {
   return `Thumbnail photo by ${photographerName} on Unsplash (${photographerProfileUrl})`;
-                          }
+}
