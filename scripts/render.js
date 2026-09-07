@@ -55,11 +55,16 @@ const POP_IN_SECONDS = 0.08;
 // (5) and voice pool (11) instead of always landing on the same combination.
 // wordsPerChunk changes the pop-in rhythm/pacing; colors is the alternating chunk-color
 // sequence; yFrac is the vertical caption position as a fraction of frame height.
+// All styles now sit in the lower third of the frame (yFrac 0.80-0.90) instead of mid-screen —
+// mid-screen captions were sitting right on top of the stock footage's main subject, blocking
+// the exact visual the caption was supposed to reinforce. Kept 4 distinct yFrac values so the
+// styles still look visually different from each other, just all low rather than 3 of the 4
+// being centered.
 const CAPTION_STYLE_POOL = [
-  { id: "classic-pop", label: "Classic Pop (mid, white/yellow, 3-word)", wordsPerChunk: 3, colors: ["white", "yellow"], yFrac: 0.38 },
-  { id: "punchy-duo", label: "Punchy Duo (mid, white/cyan, 2-word)", wordsPerChunk: 2, colors: ["white", "cyan"], yFrac: 0.38 },
-  { id: "lower-third", label: "Lower Third (low, white/yellow, 3-word)", wordsPerChunk: 3, colors: ["white", "yellow"], yFrac: 0.78 },
-  { id: "wide-orange", label: "Wide Orange (mid, white/orange, 4-word)", wordsPerChunk: 4, colors: ["white", "orange"], yFrac: 0.4 },
+  { id: "classic-pop", label: "Classic Pop (low, white/yellow, 3-word)", wordsPerChunk: 3, colors: ["white", "yellow"], yFrac: 0.82 },
+  { id: "punchy-duo", label: "Punchy Duo (low, white/cyan, 2-word)", wordsPerChunk: 2, colors: ["white", "cyan"], yFrac: 0.84 },
+  { id: "lower-third", label: "Lower Third (lowest, white/yellow, 3-word)", wordsPerChunk: 3, colors: ["white", "yellow"], yFrac: 0.88 },
+  { id: "wide-orange", label: "Wide Orange (low, white/orange, 4-word)", wordsPerChunk: 4, colors: ["white", "orange"], yFrac: 0.8 },
 ];
 
 export function pickTodaysCaptionStyle(date = new Date(), channelOffset = 0) {
@@ -159,7 +164,9 @@ export async function buildScene({ clipPath, duration, text, outPath, voicePath,
     .join(",");
 
   const filterComplex =
-    `[0:v]scale=${dim.w}:${dim.h}:force_original_aspect_ratio=increase,crop=${dim.w}:${dim.h}` +
+    `[0:v]scale=${dim.w}:${dim.h}:force_original_aspect_ratio=increase,crop=${dim.w}:${dim.h},` +
+    `eq=saturation=1.3` + // +30% color saturation — same bump already used for thumbnails below,
+    // applied here too so the actual video footage (not just the thumbnail) isn't visually flat.
     (captionFilters ? `,${captionFilters}` : "") +
     `[v]` +
     (audioFilter ? `;${audioFilter}` : "");
