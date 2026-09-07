@@ -75,58 +75,116 @@ const SCRIPT_MAX_SCENES = 46;
 // Shared by generateScript and generateBonusScenes — requests a `{ scenes: [{line}] }` array
 // via Workers AI's JSON Schema mode (validated/parsed server-side, so no manual JSON.parse
 // tripping over an unescaped quote in a sentence) and normalizes the response shape.
+// Detects two kinds of retention-killing repetition across a script's scenes:
+//  - openingDupes: two+ scenes starting with the same first few words ("The algorithm is a
+//    complex system...", "The algorithm is a powerful tool...") — the exact pattern that made
+//    the YouTube Algorithms teaser feel like it was looping.
+//  - phraseDupes: a scene-length chunk of text (6+ words) that reappears verbatim in another
+//    scene, even mid-sentence ("You'll learn how to create content" showing up 3 times).
+// Returns a count, not a boolean, so callers can log how bad it was even after the retry.
+function countRepetition(scenes) {
+  const openings = new Map();
+  const sixGrams = new Map();
+  let dupes = 0;
+  for (const s of scenes) {
+    const words = s.line.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const opening = words.slice(0, 4).join(" ");
+    if (opening) {
+      openings.set(opening, (openings.get(opening) || 0) + 1);
+    }
+    for (let i = 0; i + 6 <= words.length; i++) {
+      const gram = words.slice(i, i + 6).join(" ");
+      sixGrams.set(gram, (sixGrams.get(gram) || 0) + 1);
+    }
+  }
+  for (const c of openings.values()) if (c > 1) dupes += c - 1;
+  for (const c of sixGrams.values()) if (c > 1) dupes += c - 1;
+  return dupes;
+}
+
+// Shared by generateScript and generateBonusScenes — requests a `{ scenes: [{line, visual}] }`
+// array via Workers AI's JSON Schema mode (validated/parsed server-side, so no manual JSON.parse
+// tripping over an unescaped quote in a sentence) and normalizes the response shape.
+//
+// If the model still produces repeated phrasing/openings despite the prompt's rules against it,
+// this retries ONCE with an extra, sharper reminder appended — an LLM given the same prompt
+// twice usually varies enough on the second pass to break out of the repeated pattern, and one
+// retry is cheap compared to shipping a script that repeats itself on camera.
 async function requestSceneScript(prompt, minItems, maxItems, maxTokens) {
-  const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
-    messages: [{ role: "user", content: prompt }],
-    max_tokens: maxTokens,
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        type: "object",
-        properties: {
-          scenes: {
-            type: "array",
-            minItems,
-            maxItems,
-            items: {
-              type: "object",
-              properties: { line: { type: "string" } },
-              required: ["line"],
+  async function attempt(promptText) {
+    const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
+      messages: [{ role: "user", content: promptText }],
+      max_tokens: maxTokens,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          type: "object",
+          properties: {
+            scenes: {
+              type: "array",
+              minItems,
+              maxItems,
+              items: {
+                type: "object",
+                properties: {
+                  line: { type: "string" },
+                  // A short, concrete, literally-filmable phrase (people/places/actions only —
+                  // no abstract nouns) describing what should be ON SCREEN while this line is
+                  // spoken. Used as the stock-footage search query, so it has to match the line's
+                  // actual content instead of a generic keyword unrelated to what's being said.
+                  visual: { type: "string" },
+                },
+                required: ["line", "visual"],
+              },
             },
           },
+          required: ["scenes"],
         },
-        required: ["scenes"],
       },
-    },
-  });
+    });
 
-  // In JSON Schema mode, result.response is already a parsed object: { scenes: [...] }.
-  // Fall back to treating it as a JSON string (older behavior / other model configs) for safety.
-  let scenes;
-  if (result?.response && typeof result.response === "object" && Array.isArray(result.response.scenes)) {
-    scenes = result.response.scenes;
-  } else {
-    let text = result?.response;
-    if (typeof text !== "string") {
-      text = result?.choices?.[0]?.message?.content ?? result?.choices?.[0]?.text;
+    // In JSON Schema mode, result.response is already a parsed object: { scenes: [...] }.
+    // Fall back to treating it as a JSON string (older behavior / other model configs) for safety.
+    let scenes;
+    if (result?.response && typeof result.response === "object" && Array.isArray(result.response.scenes)) {
+      scenes = result.response.scenes;
+    } else {
+      let text = result?.response;
+      if (typeof text !== "string") {
+        text = result?.choices?.[0]?.message?.content ?? result?.choices?.[0]?.text;
+      }
+      if (typeof text !== "string") {
+        console.error("Unexpected Workers AI result shape:", JSON.stringify(result));
+        throw new Error("Script generation: could not find scenes in Workers AI response — see logged result shape above");
+      }
+      const raw = text.trim().replace(/^```json|```$/g, "").trim();
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (err) {
+        console.error("Script generation: failed to parse model output as JSON. Raw text was:\n", raw);
+        throw err;
+      }
+      scenes = Array.isArray(parsed) ? parsed : parsed?.scenes;
     }
-    if (typeof text !== "string") {
-      console.error("Unexpected Workers AI result shape:", JSON.stringify(result));
-      throw new Error("Script generation: could not find scenes in Workers AI response — see logged result shape above");
-    }
-    const raw = text.trim().replace(/^```json|```$/g, "").trim();
-    let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (err) {
-      console.error("Script generation: failed to parse model output as JSON. Raw text was:\n", raw);
-      throw err;
-    }
-    scenes = Array.isArray(parsed) ? parsed : parsed?.scenes;
+
+    if (!Array.isArray(scenes) || scenes.length === 0) throw new Error("Script generation returned no scenes");
+    return scenes.map((s) => ({ line: s.line, visual: s.visual || "" }));
   }
 
-  if (!Array.isArray(scenes) || scenes.length === 0) throw new Error("Script generation returned no scenes");
-  return scenes.map((s) => ({ line: s.line }));
+  let scenes = await attempt(prompt);
+  const dupes = countRepetition(scenes);
+  if (dupes > 0) {
+    console.warn(`Script generation: detected ${dupes} repeated opening(s)/phrase(s) across scenes, retrying once with a stronger anti-repetition reminder.`);
+    const retryPrompt =
+      prompt +
+      `\n\nIMPORTANT CORRECTION: your previous attempt at this reused the same sentence opening or the same phrase (6+ words) in more than one scene. Every scene must start differently from every other scene, and no phrase of 6 or more words may appear in more than one scene anywhere in the script. Re-write the whole script from scratch with this fixed.`;
+    const retryScenes = await attempt(retryPrompt);
+    // Only keep the retry if it actually improved things — a worse or equal retry isn't worth
+    // discarding the first (still-usable) attempt over.
+    if (countRepetition(retryScenes) < dupes) scenes = retryScenes;
+  }
+  return scenes;
 }
 
 // Rotates which STRUCTURAL opening technique each day's script uses — this is the direct fix
@@ -191,7 +249,10 @@ Strict rules:
 - End with a call to action to read the full book on the High Definition Learning Group website.
 - Do not use quotation marks of any kind inside a line's text — rephrase instead of quoting anything.
 - Mention the book's exact title, "${book.title}", naturally exactly 3 times across the whole script — once early to introduce it, once in the middle to reinforce it, and once in the closing call to action. Do not use the title any other number of times; refer to it as "the book," "this guide," or similar in between.
-- Produce between ${SCRIPT_MIN_SCENES} and ${SCRIPT_MAX_SCENES} scenes — more, shorter scenes than a typical script, so the visuals cut more often. Each scene's line is 3-4 sentences (roughly 40-55 words) written to be spoken naturally in about 15-22 seconds — the total script across all scenes should land around 2000-2300 words so the finished narration runs close to 10 minutes.`;
+- Produce between ${SCRIPT_MIN_SCENES} and ${SCRIPT_MAX_SCENES} scenes — more, shorter scenes than a typical script, so the visuals cut more often. Each scene's line is 3-4 sentences (roughly 40-55 words) written to be spoken naturally in about 15-22 seconds — the total script across all scenes should land around 2000-2300 words so the finished narration runs close to 10 minutes.
+- RETENTION RULE — no two scenes may start the same way or make the same point twice. Every single scene must open with a different sentence structure than every other scene: do not let more than one scene begin with the same few words (e.g. never open two scenes with "The algorithm is...", "You'll learn how to...", "But to do so, you need...", or any other repeated template). If you notice yourself about to reuse an opening or restate a point already made earlier in the script, rewrite it as a genuinely new angle, a new example, or skip it.
+- Avoid vague marketing filler that could apply to literally any topic — phrases like "a powerful tool," "a complex system," "a comprehensive approach," "valuable insights," "the ever-changing landscape," "take control of," "unlock your potential." Every line should say something SPECIFIC to this exact book's angle — a concrete scenario, a specific kind of person, a specific consequence — not an abstract claim that could be pasted into a script about any other topic.
+- For every scene, also write a "visual" field: a short, concrete, literally-filmable phrase (3-8 words) describing exactly what should be shown on screen while that line is spoken, matching the line's actual content. Only describe things a camera could actually film — a specific kind of person doing a specific action in a specific setting (e.g. "exhausted creator staring at laptop at night", "crowded city street rush hour", "person smiling reading book on couch"). Never describe an abstract concept, a graph, an icon, or anything not physically filmable. Vary the people/settings/actions across scenes — do not describe the same visual twice.`;
 
   return requestSceneScript(prompt, SCRIPT_MIN_SCENES, SCRIPT_MAX_SCENES, 6000);
 }
@@ -212,7 +273,9 @@ Strict rules:
 - Do NOT restate that it's available in English only — that's already covered elsewhere.
 - Do NOT use quotation marks of any kind inside a line's text.
 - Each scene's line is 3-4 sentences (roughly 40-55 words), written to be spoken naturally in about 15-22 seconds.
-- Produce exactly ${count} scenes building curiosity about who this book helps, what problem it solves, and why it matters right now — varied angles, no two scenes making the same point.`;
+- Produce exactly ${count} scenes building curiosity about who this book helps, what problem it solves, and why it matters right now — varied angles, no two scenes making the same point.
+- RETENTION RULE — no two scenes may start the same way or make the same point twice, and avoid vague filler ("a powerful tool," "a complex system," "valuable insights," "the ever-changing landscape") in favor of specific scenarios and consequences.
+- For every scene, also write a "visual" field: a short, concrete, literally-filmable phrase (3-8 words) describing exactly what should be shown on screen while that line is spoken — a specific person doing a specific action in a specific setting. Never an abstract concept, graph, or icon. Vary it across scenes.`;
 
   return requestSceneScript(prompt, count, count, 3000);
 }
@@ -280,4 +343,4 @@ export async function translateMeta(title, description, targetLang) {
     title: (tTitle || title).slice(0, YT_TITLE_MAX),
     description: (tDesc || description).slice(0, YT_DESCRIPTION_MAX),
   };
-  }
+                                                                }
