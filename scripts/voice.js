@@ -140,8 +140,29 @@ async function synthesizeVoiceFishAudio(text, outPath) {
 // first; falls back to Fish Audio only if Kokoro fails after retries. Throws only if BOTH fail —
 // the caller (generate-video.js) already treats that as "no narration for this scene" and falls
 // back to captions-only, so this function doesn't need its own final fallback.
+// Kokoro's phonemizer front-end treats a fully-uppercase word as an initialism and spells it
+// letter by letter — correct for a real acronym ("AI" -> "A-I"), but wrong for a title written
+// in all caps that's actually meant to be READ as a word, like the book title "AGE ONE" coming
+// out as "A-G-E O-N-E" instead of "Age One". Real acronyms are kept as-is (via the whitelist
+// below); every other all-caps word of 2+ letters is Title-Cased for speech only — this never
+// touches the on-screen captions, which already force everything to uppercase independently in
+// render.js's buildCaptionChunks, so this only changes what's spoken, not what's shown.
+const ACRONYM_WHITELIST = new Set([
+  "AI", "CEO", "CTO", "CFO", "COO", "ID", "IT", "PC", "TV", "US", "UK", "EU", "USA",
+  "API", "SEO", "FAQ", "DIY", "ASAP", "ATM", "PDF", "URL", "CPU", "GPU", "RAM", "ROM",
+  "USB", "WIFI", "GPS", "DNA", "HDL", "OK",
+]);
+
+function prepareNarrationText(text) {
+  return text.replace(/\b[A-Z]{2,}\b/g, (word) => {
+    if (ACRONYM_WHITELIST.has(word)) return word;
+    return word.charAt(0) + word.slice(1).toLowerCase();
+  });
+}
+
 let engineAnnounced = false; // logs which engine narrated the video exactly once per run, not once per scene
-export async function synthesizeVoice(text, outPath, voice = pickTodaysVoice()) {
+export async function synthesizeVoice(rawText, outPath, voice = pickTodaysVoice()) {
+  const text = prepareNarrationText(rawText);
   try {
     const result = await withRetry("Kokoro TTS (local)", () => synthesizeVoiceKokoro(text, outPath, voice), 2, 1000);
     if (!engineAnnounced) {
