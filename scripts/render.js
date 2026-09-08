@@ -165,8 +165,8 @@ export async function buildScene({ clipPath, duration, text, outPath, voicePath,
 
   const filterComplex =
     `[0:v]scale=${dim.w}:${dim.h}:force_original_aspect_ratio=increase,crop=${dim.w}:${dim.h},` +
-    `eq=saturation=1.3` + // +30% color saturation — same bump already used for thumbnails below,
-    // applied here too so the actual video footage (not just the thumbnail) isn't visually flat.
+    `eq=saturation=1.4` + // +40% color saturation — applied here to the actual video/Short
+    // footage (buildScene renders both, via the orientation param) so it isn't visually flat.
     (captionFilters ? `,${captionFilters}` : "") +
     `[v]` +
     (audioFilter ? `;${audioFilter}` : "");
@@ -282,7 +282,7 @@ export async function generateThumbnail({ imagePath, outPath, titleText }) {
   const vf = [
     `scale=1280:720:force_original_aspect_ratio=increase`,
     `crop=1280:720`,
-    `eq=saturation=1.3`, // +30% color saturation — thumbnails were coming out visually flat/
+    `eq=saturation=1.5`, // +50% color saturation — thumbnails were coming out visually flat/
     // washed out straight from the source photo; this punches up color richness without
     // touching brightness/contrast. Applied before the title overlay below so the white/
     // black-stroke text itself isn't affected (it has no chroma to boost either way).
@@ -368,4 +368,4 @@ export function buildSrt(scenesWithDurations, translatedLines) {
     const ms = String(Math.floor((sec % 1) * 1000)).padStart(3, "0");
     return `${h}:${m}:${s},${ms}`;
   }
-}
+      }
