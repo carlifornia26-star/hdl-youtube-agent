@@ -807,14 +807,18 @@ async function main() {
     console.log(`Captions: ${captionLangsDone}/${VIDEO_LANGS.length} languages done (${elapsedMin} min elapsed).`);
   }
 
-  // 7b) Short captions — previously the Short had NO caption track at all (only the burned-in
-  // MrBeast-style text), leaving it with no real CC/subtitle track for viewers who toggle
-  // captions on. shortScenes is always the leading shortSceneCount entries of `built` (see the
-  // Short block above), so its lines and translations are just a slice of what was already
-  // computed above — zero extra translateMeta calls needed. Re-timed from 0 since the Short is
-  // its own, shorter file.
+  // 7b) Short captions, part 1 — English (part of the Short's baseline setup) plus the first
+  // SHORT_CAPTIONS_BEFORE_PUBLISH translated languages. Logs from real runs show quota reliably
+  // running out mid-way through the Short's caption loop (around caption #9-10 of 15/16) — right
+  // before the old publishVideo() call, leaving an otherwise fully-uploaded, fully-captioned
+  // video+Short pair stuck private. 7 is comfortably below where it's been observed to run out.
+  // shortScenes is always the leading shortSceneCount entries of `built` (see the Short block
+  // above), so its lines/translations are just a slice of what step 7 already computed — zero
+  // extra translateMeta calls needed. Re-timed from 0 since the Short is its own, shorter file.
+  const SHORT_CAPTIONS_BEFORE_PUBLISH = 7;
+  let shortBuiltScenes = [];
   if (shortVideoId && shortSceneCount > 0) {
-    const shortBuiltScenes = built.slice(0, shortSceneCount);
+    shortBuiltScenes = built.slice(0, shortSceneCount);
 
     const shortEnSrt = buildSrt(shortBuiltScenes, shortBuiltScenes.map((b) => b.line));
     const shortEnSrtPath = path.join(BUILD_DIR, "captions_short_en.srt");
@@ -825,7 +829,7 @@ async function main() {
       console.warn("Short English caption upload failed:", e.message);
     }
 
-    for (const lang of VIDEO_LANGS) {
+    for (const lang of VIDEO_LANGS.slice(0, SHORT_CAPTIONS_BEFORE_PUBLISH)) {
       const ytLang = YT_LOCALE_MAP[lang] ?? lang;
       const lines = translatedCaptionLines[lang];
       if (!lines) continue;
@@ -838,18 +842,43 @@ async function main() {
         console.warn(`Short caption upload failed for ${lang}, skipping:`, e.message);
       }
     }
-    console.log("Short captions: done (reused translated lines, no extra API calls).");
+    console.log(
+      `Short captions: ${Math.min(SHORT_CAPTIONS_BEFORE_PUBLISH, VIDEO_LANGS.length)}/${VIDEO_LANGS.length} languages done before publish.`
+    );
   }
 
-  // 8) Publish — flip both videos from private to public now that thumbnail, playlist, and
-  // every caption track are already attached. This is the actual "go live" moment; everything
-  // above happened while the video(s) were still private. If this throws, the run fails loudly
-  // (GitHub Actions red X) rather than silently leaving a finished, fully-captioned video stuck
-  // private forever — that's worse than the old bare-upload behavior, not better, so it's not
-  // wrapped in try/catch like the non-critical steps above.
+  // 8) Publish — flip both videos from private to public now that thumbnail, playlist, the main
+  // video's full caption set, and the Short's first batch of captions are all attached. Runs
+  // BEFORE the Short's remaining captions (7c, below) on purpose: that loop used to run right
+  // before this call and was consistently where daily quota ran out, leaving a fully-finished
+  // video/Short pair stuck private. Publishing here means quota exhaustion in 7c can only ever
+  // cost a few missing Short caption languages, never a stuck-private video again. If this
+  // throws, the run still fails loudly (GitHub Actions red X) rather than silently leaving
+  // anything stuck private — not wrapped in try/catch, same as before.
   await publishVideo({ videoId: uploaded.id });
   if (shortVideoId) {
     await publishVideo({ videoId: shortVideoId });
+  }
+
+  // 7c) Short captions, part 2 — the remaining languages, attempted only after both videos are
+  // already public. Fully best-effort: if quota runs out here (the most likely place, on a
+  // tight-quota day), it just means a few Short caption languages are missing, not a stuck-private
+  // video — everything is already live regardless of how this loop goes.
+  if (shortVideoId && shortSceneCount > 0) {
+    for (const lang of VIDEO_LANGS.slice(SHORT_CAPTIONS_BEFORE_PUBLISH)) {
+      const ytLang = YT_LOCALE_MAP[lang] ?? lang;
+      const lines = translatedCaptionLines[lang];
+      if (!lines) continue;
+      try {
+        const shortSrt = buildSrt(shortBuiltScenes, lines.slice(0, shortSceneCount));
+        const shortSrtPath = path.join(BUILD_DIR, `captions_short_${lang}.srt`);
+        await fs.writeFile(shortSrtPath, shortSrt);
+        await uploadCaptionTrack({ videoId: shortVideoId, language: ytLang, srtPath: shortSrtPath, name: lang });
+      } catch (e) {
+        console.warn(`Short caption upload failed for ${lang}, skipping (video already public):`, e.message);
+      }
+    }
+    console.log("Short captions: remaining languages attempted (video already public regardless of outcome).");
   }
 
   // 8b) Record today's video in videos-manifest.json — this is what the website reads (via
