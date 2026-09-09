@@ -1,309 +1,191 @@
 name: HDL Weekly Keyword Update
 
+# Every Monday 5:00 AM Africa/Johannesburg (SAST, UTC+2 all year — no DST) = 03:00 UTC.
+# If you're running this from a different timezone, change the cron below to (your 5am) minus
+# your UTC offset.
+#
+# Two phases:
+#   1) compute-keywords — runs ONCE: fetches worldwide Google Trends (aggregated approximation
+#      across major markets — see scripts/update-keywords.js for why there's no single official
+#      "worldwide" feed) + YouTube's own trending chart in the top 10 populous countries with a
+#      working chart, combines them with the 5 fixed keywords, and commits keywords-weekly.json.
+#   2) apply-channel-keywords — runs 3x (one per channel, matrix) right after phase 1, reading
+#      that committed file and pushing it to each channel's Keywords field via the YouTube API.
+#      generate-video.js also reads the same file every day going forward and folds its trending
+#      terms into that day's video/Short tags — the closest available equivalent to a per-upload
+#      "default keywords" setting, since the YouTube Data API has no such field (Studio's Upload
+#      Defaults page is UI-only, not exposed via the API at all).
 on:
   schedule:
-    # 05:00 South Africa Standard Time (UTC+2) every Monday
-    - cron: "0 3 * * 1"
-  workflow_dispatch:
+    - cron: "0 3 * * 1" # Monday 03:00 UTC = 05:00 SAST (Africa/Johannesburg)
+  workflow_dispatch: {} # manual trigger — Actions tab -> this workflow -> Run workflow
 
 permissions:
-  contents: write
+  contents: write # needed to commit keyword state/history/health back to the repo
 
+# Never allow two weekly keyword runs to mutate the same active file at once. Manual runs
+# are allowed, but a second run waits rather than cancelling the first.
 concurrency:
-  group: hdl-weekly-keyword-update
+  group: hdl-weekly-keywords
   cancel-in-progress: false
 
 jobs:
-  generate-keywords:
-    name: Generate weekly keywords
+  compute-keywords:
     runs-on: ubuntu-latest
-    outputs:
-      changed: ${{ steps.generate.outputs.changed }}
-      keyword_file_valid: ${{ steps.validate.outputs.valid }}
-
+    timeout-minutes: 15
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
+          node-version: "20"
       - name: Install dependencies
-        run: npm ci
-
-      - name: Generate weekly keywords
-        id: generate
+        run: npm install
+      - name: Fetch trends + write keywords-weekly.json
+        run: npm run update-keywords
+        env:
+          KEYWORDS_MODE: compute
+          # Needed now for translateTermToEnglish (cf-ai.js) — the same Cloudflare Workers AI
+          # credentials every other script here already uses for translation.
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          # Channel 1's credentials are used for the YouTube trending-chart lookups (videos.list
+          # is a read of PUBLIC data — any authenticated channel works, this just reuses the
+          # existing channel-1 secrets rather than adding new ones for a read-only call).
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+      - name: Commit weekly keyword state
         run: |
-          set -euo pipefail
-          node scripts/update-keywords.js
+          set -e
+          git config user.name "hdl-keyword-update-bot"
+          git config user.email "actions@users.noreply.github.com"
 
-      - name: Validate weekly keyword file
-        id: validate
-        run: |
-          set -euo pipefail
-          node scripts/validate-weekly-keywords.js
+          # The compute script writes BOTH the active file and a dated history snapshot.
+          git add keywords-weekly.json keyword-history/ 2>/dev/null || true
 
-      - name: Show generated keyword information
-        run: |
-          set -euo pipefail
-
-          echo "=========================================="
-          echo "HDL WEEKLY KEYWORD UPDATE"
-          echo "=========================================="
-
-          if [ -f keywords-weekly.json ]; then
-            node - <<'NODE'
-            const fs = require("fs");
-
-            const data = JSON.parse(
-              fs.readFileSync("keywords-weekly.json", "utf8")
-            );
-
-            console.log("updatedAt:", data.updatedAt || "N/A");
-            console.log("week:", data.week || data.weekStart || "N/A");
-
-            const channelKeywords =
-              data.channelKeywords ||
-              data.finalChannelKeywords ||
-              data.keywords ||
-              "";
-
-            console.log(
-              "channel keyword characters:",
-              String(channelKeywords).length
-            );
-
-            if (Array.isArray(data.googleTrends)) {
-              console.log(
-                "Google Trends terms:",
-                data.googleTrends.length
-              );
-            }
-
-            if (Array.isArray(data.youtubeTrending)) {
-              console.log(
-                "YouTube trending terms:",
-                data.youtubeTrending.length
-              );
-            }
-
-            if (Array.isArray(data.finalVideoTags)) {
-              console.log(
-                "Final video tags:",
-                data.finalVideoTags.length
-              );
-            }
-
-            if (Array.isArray(data.finalShortTags)) {
-              console.log(
-                "Final Short tags:",
-                data.finalShortTags.length
-              );
-            }
-            NODE
-          fi
-
-      - name: Create weekly keyword history snapshot
-        run: |
-          set -euo pipefail
-
-          mkdir -p keyword-history
-
-          DATE="$(date -u +'%Y-%m-%d')"
-          DEST="keyword-history/${DATE}.json"
-
-          if [ -e "$DEST" ]; then
-            DEST="keyword-history/${DATE}-${GITHUB_RUN_ID}.json"
-          fi
-
-          cp keywords-weekly.json "$DEST"
-
-          echo "Created keyword history:"
-          echo "$DEST"
-
-      - name: Commit keyword state
-        id: commit
-        run: |
-          set -euo pipefail
-
-          git config user.name "HDL YouTube Automation"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add keywords-weekly.json keyword-history/
-
-          if git diff --cached --quiet; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "No keyword repository changes detected."
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No weekly keyword state changes to commit."
             exit 0
           fi
 
-          git commit \
-            -m "chore: update weekly YouTube keywords $(date -u +'%Y-%m-%d')"
-
-          echo "changed=true" >> "$GITHUB_OUTPUT"
+          git commit -m "Update weekly trending keyword state [skip ci]"
 
           for attempt in 1 2 3; do
-            echo "Push attempt $attempt..."
-
-            if git push; then
-              echo "Push succeeded."
+            if git pull --rebase origin "${{ github.ref_name }}" && git push; then
+              echo "Weekly keyword state pushed successfully on attempt $attempt/3."
               exit 0
             fi
-
-            if [ "$attempt" -lt 3 ]; then
-              echo "Push failed; synchronizing before retry..."
-              git fetch origin main
-              git rebase origin/main || {
-                echo "Rebase failed."
-                exit 1
-              }
-            fi
+            echo "Push attempt $attempt/3 failed; retrying..."
+            sleep $((attempt * 5))
           done
 
-          echo "Unable to push after 3 attempts."
+          echo "Unable to push weekly keyword state after 3 attempts."
           exit 1
 
   apply-channel-keywords:
-    name: Update Channel ${{ matrix.channel }}
-    needs: generate-keywords
-    if: needs.generate-keywords.result == 'success'
+    needs: compute-keywords
     runs-on: ubuntu-latest
-
+    timeout-minutes: 10
     strategy:
-      fail-fast: false
-      max-parallel: 3
       matrix:
         channel: ["1", "2", "3"]
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4 # picks up the commit compute-keywords just pushed
+      - uses: actions/setup-node@v4
         with:
-          fetch-depth: 1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
+          node-version: "20"
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
-      - name: Validate keyword file
+      - name: Resolve channel secrets
+        id: resolve
         run: |
-          set -euo pipefail
-          node scripts/validate-weekly-keywords.js
+          # Same secret-name mapping as every other multi-channel workflow in this repo.
+          case "${{ matrix.channel }}" in
+            1)
+              echo "id_key=YT_CLIENT_ID" >> "$GITHUB_OUTPUT"
+              echo "secret_key=YT_CLIENT_SECRET" >> "$GITHUB_OUTPUT"
+              echo "token_key=YT_REFRESH_TOKEN" >> "$GITHUB_OUTPUT"
+              ;;
+            2)
+              echo "id_key=YOUTUBE_CLIENT_ID_2" >> "$GITHUB_OUTPUT"
+              echo "secret_key=YOUTUBE_CLIENT_SECRET_2" >> "$GITHUB_OUTPUT"
+              echo "token_key=YOUTUBE_REFRESH_TOKEN_2" >> "$GITHUB_OUTPUT"
+              ;;
+            3)
+              echo "id_key=YOUTUBE_CLIENT_ID_3" >> "$GITHUB_OUTPUT"
+              echo "secret_key=YOUTUBE_CLIENT_SECRET_3" >> "$GITHUB_OUTPUT"
+              echo "token_key=YOUTUBE_REFRESH_TOKEN_3" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
 
-      - name: Update and verify Channel ${{ matrix.channel }}
+      - name: Apply channel keywords (Channel ${{ matrix.channel }})
+        run: npm run update-keywords
         env:
-          CHANNEL: ${{ matrix.channel }}
-          YOUTUBE_CLIENT_ID: ${{ matrix.channel == '1' && secrets.YOUTUBE_CLIENT_ID || matrix.channel == '2' && secrets.YOUTUBE_CLIENT_ID_2 || secrets.YOUTUBE_CLIENT_ID_3 }}
-          YOUTUBE_CLIENT_SECRET: ${{ matrix.channel == '1' && secrets.YOUTUBE_CLIENT_SECRET || matrix.channel == '2' && secrets.YOUTUBE_CLIENT_SECRET_2 || secrets.YOUTUBE_CLIENT_SECRET_3 }}
-          YOUTUBE_REFRESH_TOKEN: ${{ matrix.channel == '1' && secrets.YOUTUBE_REFRESH_TOKEN || matrix.channel == '2' && secrets.YOUTUBE_REFRESH_TOKEN_2 || secrets.YOUTUBE_REFRESH_TOKEN_3 }}
+          KEYWORDS_MODE: apply
+          YT_CLIENT_ID: ${{ secrets[steps.resolve.outputs.id_key] }}
+          YT_CLIENT_SECRET: ${{ secrets[steps.resolve.outputs.secret_key] }}
+          YT_REFRESH_TOKEN: ${{ secrets[steps.resolve.outputs.token_key] }}
+
+
+  finalize-weekly-health:
+    if: always()
+    needs: [compute-keywords, apply-channel-keywords]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Record weekly automation health
         run: |
-          set -euo pipefail
-
-          echo "Updating YouTube Channel ${CHANNEL}..."
-
-          node scripts/customize-channel.js --channel "$CHANNEL"
-
-          echo "Channel ${CHANNEL}: SUCCESS — update command completed."
-
-      - name: Write channel health record
-        if: always()
-        env:
-          CHANNEL: ${{ matrix.channel }}
-          JOB_STATUS: ${{ job.status }}
-        run: |
-          set -euo pipefail
-
+          set -e
           mkdir -p automation-health
+          NOW="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          SHA="$(git rev-parse HEAD)"
+          KEYWORDS_STATUS="unknown"
+          UPDATED_AT=""
+          if [ -f keywords-weekly.json ]; then
+            UPDATED_AT="$(node -e 'const fs=require("fs"); const d=JSON.parse(fs.readFileSync("keywords-weekly.json","utf8")); process.stdout.write(d.updatedAt || "")' 2>/dev/null || true)"
+            KEYWORDS_STATUS="present"
+          else
+            KEYWORDS_STATUS="missing"
+          fi
 
-          node - <<'NODE'
-          const fs = require("fs");
+          cat > automation-health/weekly.json <<EOF
+          {
+            "checkedAt": "$NOW",
+            "overallStatus": "${{ needs['compute-keywords'].result == 'success' && needs['apply-channel-keywords'].result == 'success' && 'success' || 'failed' }}",
+            "computeStatus": "${{ needs['compute-keywords'].result }}",
+            "applyChannelsStatus": "${{ needs['apply-channel-keywords'].result }}",
+            "keywordsFileStatus": "$KEYWORDS_STATUS",
+            "keywordsUpdatedAt": "$UPDATED_AT",
+            "repositorySha": "$SHA",
+            "workflowRunId": "${{ github.run_id }}",
+            "workflowRunNumber": "${{ github.run_number }}"
+          }
+          EOF
 
-          const channel = process.env.CHANNEL;
-          const status = process.env.JOB_STATUS;
+          echo "Weekly health:"
+          cat automation-health/weekly.json
 
-          const file = `automation-health/channel-${channel}.json`;
-
-          const record = {
-            channel,
-            status,
-            checkedAt: new Date().toISOString(),
-            workflow: process.env.GITHUB_WORKFLOW,
-            runId: process.env.GITHUB_RUN_ID,
-            commitSha: process.env.GITHUB_SHA
-          };
-
-          fs.writeFileSync(
-            file,
-            JSON.stringify(record, null, 2) + "\n"
-          );
-
-          console.log(JSON.stringify(record, null, 2));
-          NODE
-
-      - name: Commit channel health record
-        if: always()
+      - name: Commit weekly health
         run: |
-          set -euo pipefail
-
-          git config user.name "HDL YouTube Automation"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add automation-health/
-
-          if git diff --cached --quiet; then
-            echo "No health changes."
+          set -e
+          git config user.name "hdl-keyword-update-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add automation-health/weekly.json
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No health-state change."
             exit 0
           fi
-
-          git commit \
-            -m "chore: record Channel ${{ matrix.channel }} keyword update health"
-
+          git commit -m "Record weekly keyword automation health [skip ci]"
           for attempt in 1 2 3; do
-            if git push; then
+            if git pull --rebase origin "${{ github.ref_name }}" && git push; then
+              echo "Weekly health pushed successfully on attempt $attempt/3."
               exit 0
             fi
-
-            if [ "$attempt" -lt 3 ]; then
-              git fetch origin main
-              git rebase origin/main || exit 1
-            fi
+            echo "Health push attempt $attempt/3 failed; retrying..."
+            sleep $((attempt * 5))
           done
-
+          echo "Unable to push weekly health after 3 attempts."
           exit 1
-
-  weekly-summary:
-    name: Weekly keyword update summary
-    needs: apply-channel-keywords
-    if: always()
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Print final summary
-        env:
-          RESULT: ${{ needs.apply-channel-keywords.result }}
-        run: |
-          echo "=========================================="
-          echo "HDL WEEKLY KEYWORD UPDATE COMPLETE"
-          echo "=========================================="
-          echo "Channel jobs result: ${RESULT}"
-          echo "Channel 1: check the Channel 1 job"
-          echo "Channel 2: check the Channel 2 job"
-          echo "Channel 3: check the Channel 3 job"
-          echo "=========================================="
-
-          if [ "${RESULT}" != "success" ]; then
-            echo "Overall status: FAILED"
-            exit 1
-          fi
-
-          echo "Overall status: SUCCESS"
