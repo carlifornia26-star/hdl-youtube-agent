@@ -1,0 +1,107 @@
+name: HDL Weekly Keyword Update
+
+# Every Monday 5:00 AM Africa/Johannesburg (SAST, UTC+2 all year — no DST) = 03:00 UTC.
+# If you're running this from a different timezone, change the cron below to (your 5am) minus
+# your UTC offset.
+#
+# Two phases:
+#   1) compute-keywords — runs ONCE: fetches worldwide Google Trends (aggregated approximation
+#      across major markets — see scripts/update-keywords.js for why there's no single official
+#      "worldwide" feed) + YouTube's own trending chart in the top 10 populous countries with a
+#      working chart, combines them with the 5 fixed keywords, and commits keywords-weekly.json.
+#   2) apply-channel-keywords — runs 3x (one per channel, matrix) right after phase 1, reading
+#      that committed file and pushing it to each channel's Keywords field via the YouTube API.
+#      generate-video.js also reads the same file every day going forward and folds its trending
+#      terms into that day's video/Short tags — the closest available equivalent to a per-upload
+#      "default keywords" setting, since the YouTube Data API has no such field (Studio's Upload
+#      Defaults page is UI-only, not exposed via the API at all).
+on:
+  schedule:
+    - cron: "0 3 * * 1" # Monday 03:00 UTC = 05:00 SAST (Africa/Johannesburg)
+  workflow_dispatch: {} # manual trigger — Actions tab -> this workflow -> Run workflow
+
+permissions:
+  contents: write # needed to commit keywords-weekly.json back to the repo
+
+jobs:
+  compute-keywords:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install dependencies
+        run: npm install
+      - name: Fetch trends + write keywords-weekly.json
+        run: npm run update-keywords
+        env:
+          KEYWORDS_MODE: compute
+          # Needed now for translateTermToEnglish (cf-ai.js) — the same Cloudflare Workers AI
+          # credentials every other script here already uses for translation.
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          # Channel 1's credentials are used for the YouTube trending-chart lookups (videos.list
+          # is a read of PUBLIC data — any authenticated channel works, this just reuses the
+          # existing channel-1 secrets rather than adding new ones for a read-only call).
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+      - name: Commit keywords-weekly.json
+        run: |
+          git config user.name "hdl-keyword-update-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add keywords-weekly.json
+          if [ -n "$(git status --porcelain keywords-weekly.json)" ]; then
+            git commit -m "Update this week's trending keywords [skip ci]"
+            git pull --rebase origin "${{ github.ref_name }}"
+            git push
+          else
+            echo "No change to keywords-weekly.json."
+          fi
+
+  apply-channel-keywords:
+    needs: compute-keywords
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        channel: ["1", "2", "3"]
+    steps:
+      - uses: actions/checkout@v4 # picks up the commit compute-keywords just pushed
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install dependencies
+        run: npm install
+
+      - name: Resolve channel secrets
+        id: resolve
+        run: |
+          # Same secret-name mapping as every other multi-channel workflow in this repo.
+          case "${{ matrix.channel }}" in
+            1)
+              echo "id_key=YT_CLIENT_ID" >> "$GITHUB_OUTPUT"
+              echo "secret_key=YT_CLIENT_SECRET" >> "$GITHUB_OUTPUT"
+              echo "token_key=YT_REFRESH_TOKEN" >> "$GITHUB_OUTPUT"
+              ;;
+            2)
+              echo "id_key=YOUTUBE_CLIENT_ID_2" >> "$GITHUB_OUTPUT"
+              echo "secret_key=YOUTUBE_CLIENT_SECRET_2" >> "$GITHUB_OUTPUT"
+              echo "token_key=YOUTUBE_REFRESH_TOKEN_2" >> "$GITHUB_OUTPUT"
+              ;;
+            3)
+              echo "id_key=YOUTUBE_CLIENT_ID_3" >> "$GITHUB_OUTPUT"
+              echo "secret_key=YOUTUBE_CLIENT_SECRET_3" >> "$GITHUB_OUTPUT"
+              echo "token_key=YOUTUBE_REFRESH_TOKEN_3" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Apply channel keywords (Channel ${{ matrix.channel }})
+        run: npm run update-keywords
+        env:
+          KEYWORDS_MODE: apply
+          YT_CLIENT_ID: ${{ secrets[steps.resolve.outputs.id_key] }}
+          YT_CLIENT_SECRET: ${{ secrets[steps.resolve.outputs.secret_key] }}
+          YT_REFRESH_TOKEN: ${{ secrets[steps.resolve.outputs.token_key] }}
