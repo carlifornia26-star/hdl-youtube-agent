@@ -2,20 +2,15 @@ name: HDL Daily YouTube Teaser
 
 on:
   schedule:
-    # Evenly spaced 2 hours apart (previously uneven: ~4h05m then ~1h40m) — now that each run
-    # does more work (larger Pexels search, repetition-check retry, more scenes), consecutive
-    # channels need enough buffer that one run finishing late doesn't push into the next
-    # channel's start and get queued behind it (concurrency group below serializes runs rather
-    # than letting them overlap).
-    # --- Channel 1 — 2:15 PM Eastern (existing, kept as the anchor) ---
+    # Channel 1 — 2:15 PM Eastern
     - cron: "15 18 * * *" # EDT (UTC-4), Mar-Nov
     - cron: "15 19 * * *" # EST (UTC-5), Nov-Mar
 
-    # --- Channel 2 — 4:15 PM Eastern (2h after Channel 1) ---
+    # Channel 2 — 4:15 PM Eastern
     - cron: "15 20 * * *" # EDT (UTC-4)
     - cron: "15 21 * * *" # EST (UTC-5)
 
-    # --- Channel 3 — 6:15 PM Eastern (2h after Channel 2) ---
+    # Channel 3 — 6:15 PM Eastern
     - cron: "15 22 * * *" # EDT (UTC-4)
     - cron: "15 23 * * *" # EST (UTC-5)
 
@@ -33,116 +28,439 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write # needed to commit the updated videos-manifest.json back to the repo
+  contents: write
 
 jobs:
   build-and-upload:
     runs-on: ubuntu-latest
-    # Was 60. The per-scene x per-language caption translation loop in generate-video.js
-    # (46 scenes x 15 langs = ~690 sequential Workers AI calls, more on a day with retries)
-    # can silently exceed 60 min after the video/Short have already uploaded private —
-    # which then never get flipped public since that's the last step. 120 gives real headroom
-    # even with the loop now running in parallel batches (see generate-video.js).
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout latest repository state
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Show repository version being used
+        run: |
+          set -euo pipefail
+
+          echo "=========================================="
+          echo "HDL DAILY VIDEO — REPOSITORY VERSION"
+          echo "=========================================="
+
+          echo "Repository SHA:"
+          git rev-parse HEAD
+
+          echo "Branch:"
+          git branch --show-current || true
+
+          echo "Last commit:"
+          git log -1 --pretty=format:'%h %ci %s'
+
+          echo
+          echo "=========================================="
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: npm
 
       - name: Resolve channel + check DST alignment
         id: resolve
         run: |
-          # Maps this run's trigger to a channel. All three channels target a US audience and
-          # are anchored to fixed US Eastern local times, so each needs both an EDT and EST
-          # cron entry — the offset check below picks whichever one actually matches today.
+          set -euo pipefail
+
           OFFSET=$(TZ="America/New_York" date +%z)
           SCHEDULE="${{ github.event.schedule }}"
 
+          CHANNEL=""
+
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             CHANNEL="${{ github.event.inputs.channel }}"
+            echo "Manual run selected."
             echo "proceed=true" >> "$GITHUB_OUTPUT"
           else
             case "$SCHEDULE" in
-              "15 18 * * *") CHANNEL=1; EXPECTED="-0400" ;;
-              "15 19 * * *") CHANNEL=1; EXPECTED="-0500" ;;
-              "15 20 * * *") CHANNEL=2; EXPECTED="-0400" ;;
-              "15 21 * * *") CHANNEL=2; EXPECTED="-0500" ;;
-              "15 22 * * *") CHANNEL=3; EXPECTED="-0400" ;;
-              "15 23 * * *") CHANNEL=3; EXPECTED="-0500" ;;
+              "15 18 * * *")
+                CHANNEL=1
+                EXPECTED="-0400"
+                ;;
+              "15 19 * * *")
+                CHANNEL=1
+                EXPECTED="-0500"
+                ;;
+              "15 20 * * *")
+                CHANNEL=2
+                EXPECTED="-0400"
+                ;;
+              "15 21 * * *")
+                CHANNEL=2
+                EXPECTED="-0500"
+                ;;
+              "15 22 * * *")
+                CHANNEL=3
+                EXPECTED="-0400"
+                ;;
+              "15 23 * * *")
+                CHANNEL=3
+                EXPECTED="-0500"
+                ;;
+              *)
+                echo "Unknown schedule: $SCHEDULE"
+                exit 1
+                ;;
             esac
 
             if [ "$OFFSET" = "$EXPECTED" ]; then
               echo "proceed=true" >> "$GITHUB_OUTPUT"
             else
               echo "proceed=false" >> "$GITHUB_OUTPUT"
-              echo "Skipping — current US Eastern offset is $OFFSET, doesn't match this cron slot. The other scheduled trigger for this channel handles today's run."
+              echo "Skipping this duplicate DST trigger."
+              echo "Current US Eastern offset: $OFFSET"
+              echo "Expected offset for this cron: $EXPECTED"
             fi
           fi
 
-          # Secret names aren't a consistent prefix+suffix pattern (channel 1 kept its
-          # original YT_ names, channels 2/3 were saved as YOUTUBE_..._2 / _3), so map
-          # each channel to its exact secret names explicitly rather than formatting one.
+          if [ -z "$CHANNEL" ]; then
+            echo "Channel could not be resolved."
+            exit 1
+          fi
+
           case "$CHANNEL" in
             1)
-              ID_KEY="YT_CLIENT_ID"; SECRET_KEY="YT_CLIENT_SECRET"; TOKEN_KEY="YT_REFRESH_TOKEN" ;;
+              ID_KEY="YT_CLIENT_ID"
+              SECRET_KEY="YT_CLIENT_SECRET"
+              TOKEN_KEY="YT_REFRESH_TOKEN"
+              ;;
             2)
-              ID_KEY="YOUTUBE_CLIENT_ID_2"; SECRET_KEY="YOUTUBE_CLIENT_SECRET_2"; TOKEN_KEY="YOUTUBE_REFRESH_TOKEN_2" ;;
+              ID_KEY="YOUTUBE_CLIENT_ID_2"
+              SECRET_KEY="YOUTUBE_CLIENT_SECRET_2"
+              TOKEN_KEY="YOUTUBE_REFRESH_TOKEN_2"
+              ;;
             3)
-              ID_KEY="YOUTUBE_CLIENT_ID_3"; SECRET_KEY="YOUTUBE_CLIENT_SECRET_3"; TOKEN_KEY="YOUTUBE_REFRESH_TOKEN_3" ;;
+              ID_KEY="YOUTUBE_CLIENT_ID_3"
+              SECRET_KEY="YOUTUBE_CLIENT_SECRET_3"
+              TOKEN_KEY="YOUTUBE_REFRESH_TOKEN_3"
+              ;;
+            *)
+              echo "Invalid channel: $CHANNEL"
+              exit 1
+              ;;
           esac
+
           echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
           echo "id_key=$ID_KEY" >> "$GITHUB_OUTPUT"
           echo "secret_key=$SECRET_KEY" >> "$GITHUB_OUTPUT"
           echo "token_key=$TOKEN_KEY" >> "$GITHUB_OUTPUT"
 
+          echo "Resolved channel: $CHANNEL"
+          echo "US Eastern offset: $OFFSET"
+
       - name: Install ffmpeg
         if: steps.resolve.outputs.proceed == 'true'
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
 
       - name: Install dependencies
         if: steps.resolve.outputs.proceed == 'true'
-        run: npm install
+        run: |
+          set -euo pipefail
+          npm ci
 
-      - name: Generate + upload today's video (Channel ${{ steps.resolve.outputs.channel }})
+      - name: Validate current weekly keyword file
         if: steps.resolve.outputs.proceed == 'true'
-        run: npm run generate
+        run: |
+          set -euo pipefail
+
+          echo "=========================================="
+          echo "VALIDATING ACTIVE WEEKLY KEYWORDS"
+          echo "=========================================="
+
+          node scripts/validate-weekly-keywords.js
+
+      - name: Display active keyword version
+        if: steps.resolve.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+
+          node - <<'NODE'
+          const fs = require("fs");
+
+          const file = "keywords-weekly.json";
+
+          if (!fs.existsSync(file)) {
+            console.error(`${file} does not exist.`);
+            process.exit(1);
+          }
+
+          const data = JSON.parse(
+            fs.readFileSync(file, "utf8")
+          );
+
+          console.log("==========================================");
+          console.log("ACTIVE WEEKLY KEYWORDS");
+          console.log("==========================================");
+
+          console.log("updatedAt:", data.updatedAt || "N/A");
+          console.log("week:", data.week || data.weekStart || "N/A");
+
+          if (data.generatedAt) {
+            console.log("generatedAt:", data.generatedAt);
+          }
+
+          const channelKeywords =
+            data.channelKeywords ||
+            data.finalChannelKeywords ||
+            data.keywords ||
+            "";
+
+          console.log(
+            "Channel keyword characters:",
+            String(channelKeywords).length
+          );
+
+          if (Array.isArray(data.googleTrends)) {
+            console.log(
+              "Google Trends terms:",
+              data.googleTrends.length
+            );
+          }
+
+          if (Array.isArray(data.youtubeTrending)) {
+            console.log(
+              "YouTube trending terms:",
+              data.youtubeTrending.length
+            );
+          }
+
+          if (Array.isArray(data.finalVideoTags)) {
+            console.log(
+              "Final video tags:",
+              data.finalVideoTags.length
+            );
+          }
+
+          if (Array.isArray(data.finalShortTags)) {
+            console.log(
+              "Final Short tags:",
+              data.finalShortTags.length
+            );
+          }
+
+          console.log("==========================================");
+          NODE
+
+      - name: Generate + upload today's video
+        if: steps.resolve.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+
+          echo "=========================================="
+          echo "STARTING HDL DAILY GENERATION"
+          echo "=========================================="
+
+          echo "Channel: $CHANNEL_ID"
+          echo "Repository SHA: $(git rev-parse HEAD)"
+
+          npm run generate
+
+          echo "=========================================="
+          echo "HDL DAILY GENERATION FINISHED"
+          echo "=========================================="
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
-          # Pulls the exact secret matching this run's resolved channel into the
-          # plain names the script already expects — no script changes needed for auth.
+
           YT_CLIENT_ID: ${{ secrets[steps.resolve.outputs.id_key] }}
           YT_CLIENT_SECRET: ${{ secrets[steps.resolve.outputs.secret_key] }}
           YT_REFRESH_TOKEN: ${{ secrets[steps.resolve.outputs.token_key] }}
-          FISH_API_KEY: ${{ secrets.FISH_API_KEY }} # optional now — Kokoro (local) is primary; this is a fallback
+
+          FISH_API_KEY: ${{ secrets.FISH_API_KEY }}
           FISH_VOICE_ID: ${{ secrets.FISH_VOICE_ID }}
+
           DRY_RUN_PRIVATE: ${{ vars.DRY_RUN_PRIVATE }}
           CHANNEL_ID: ${{ steps.resolve.outputs.channel }}
           YT_VIDEO_LOCATION_DESCRIPTION: ${{ vars.YT_VIDEO_LOCATION_DESCRIPTION }}
 
-      - name: Commit updated video manifest + community post draft
+      - name: Verify generated repository state
         if: always() && steps.resolve.outputs.proceed == 'true'
         run: |
-          git config user.name "hdl-daily-video-bot"
-          git config user.email "actions@users.noreply.github.com"
+          set -euo pipefail
+
+          echo "=========================================="
+          echo "POST-UPLOAD STATE CHECK"
+          echo "=========================================="
+
           CH="${{ steps.resolve.outputs.channel }}"
+
           MANIFEST="videos-manifest.json"
           CLIP_HISTORY="used-clips.json"
-          if [ "$CH" != "1" ]; then MANIFEST="videos-manifest-$CH.json"; CLIP_HISTORY="used-clips-$CH.json"; fi
-          git add "$MANIFEST" "$CLIP_HISTORY" community-posts/ 2>/dev/null || true
-          if [ -n "$(git status --porcelain "$MANIFEST" "$CLIP_HISTORY" community-posts/ 2>/dev/null)" ]; then
-            git commit -m "Update $MANIFEST + $CLIP_HISTORY + today's community post draft (channel $CH) [skip ci]"
-            git pull --rebase origin "${{ github.ref_name }}"
-            git push
-          else
-            echo "No manifest/clip-history/community-post changes to commit."
+
+          if [ "$CH" != "1" ]; then
+            MANIFEST="videos-manifest-$CH.json"
+            CLIP_HISTORY="used-clips-$CH.json"
           fi
 
-      - name: Upload run artifacts (for debugging, kept 3 days)
+          echo "Channel: $CH"
+          echo "Manifest: $MANIFEST"
+          echo "Clip history: $CLIP_HISTORY"
+
+          if [ -f "$MANIFEST" ]; then
+            echo "Manifest exists: YES"
+          else
+            echo "Manifest exists: NO"
+          fi
+
+          if [ -f "$CLIP_HISTORY" ]; then
+            echo "Clip history exists: YES"
+          else
+            echo "Clip history exists: NO"
+          fi
+
+          if [ -f "keywords-weekly.json" ]; then
+            echo "Weekly keyword file exists: YES"
+          else
+            echo "Weekly keyword file exists: NO"
+          fi
+
+          echo
+          echo "Git changes:"
+          git status --short || true
+
+      - name: Write daily automation health record
+        if: always() && steps.resolve.outputs.proceed == 'true'
+        env:
+          CHANNEL: ${{ steps.resolve.outputs.channel }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p automation-health
+
+          node - <<'NODE'
+          const fs = require("fs");
+          const { execSync } = require("child_process");
+
+          const channel = process.env.CHANNEL;
+          const jobStatus = process.env.JOB_STATUS;
+
+          let keywordData = null;
+
+          try {
+            keywordData = JSON.parse(
+              fs.readFileSync("keywords-weekly.json", "utf8")
+            );
+          } catch (error) {
+            console.error(
+              "Could not read keywords-weekly.json:",
+              error.message
+            );
+          }
+
+          let commitSha = "";
+
+          try {
+            commitSha = execSync(
+              "git rev-parse HEAD",
+              { encoding: "utf8" }
+            ).trim();
+          } catch {}
+
+          const record = {
+            channel,
+            status: jobStatus,
+            checkedAt: new Date().toISOString(),
+            repositoryCommitSha: commitSha,
+            keywordFile: {
+              updatedAt: keywordData?.updatedAt || null,
+              week:
+                keywordData?.week ||
+                keywordData?.weekStart ||
+                null
+            },
+            workflow: process.env.GITHUB_WORKFLOW,
+            runId: process.env.GITHUB_RUN_ID,
+            runNumber: process.env.GITHUB_RUN_NUMBER,
+            eventName: process.env.GITHUB_EVENT_NAME
+          };
+
+          const file =
+            `automation-health/daily-channel-${channel}.json`;
+
+          fs.writeFileSync(
+            file,
+            JSON.stringify(record, null, 2) + "\n"
+          );
+
+          console.log(
+            JSON.stringify(record, null, 2)
+          );
+          NODE
+
+      - name: Commit updated video state + health
+        if: always() && steps.resolve.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+
+          git config user.name "hdl-daily-video-bot"
+          git config user.email "actions@users.noreply.github.com"
+
+          CH="${{ steps.resolve.outputs.channel }}"
+
+          MANIFEST="videos-manifest.json"
+          CLIP_HISTORY="used-clips.json"
+
+          if [ "$CH" != "1" ]; then
+            MANIFEST="videos-manifest-$CH.json"
+            CLIP_HISTORY="used-clips-$CH.json"
+          fi
+
+          git add \
+            "$MANIFEST" \
+            "$CLIP_HISTORY" \
+            community-posts/ \
+            automation-health/ \
+            2>/dev/null || true
+
+          if git diff --cached --quiet; then
+            echo "No repository state changes to commit."
+            exit 0
+          fi
+
+          git commit \
+            -m "Update daily upload state and health (channel $CH) [skip ci]"
+
+          for attempt in 1 2 3; do
+            echo "Git push attempt $attempt..."
+
+            if git push; then
+              echo "Git push succeeded."
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "Push failed. Synchronizing with origin/main..."
+
+              git fetch origin main
+
+              git rebase origin/main || {
+                echo "Rebase failed."
+                exit 1
+              }
+            fi
+          done
+
+          echo "Git push failed after 3 attempts."
+          exit 1
+
+      - name: Upload run artifacts
         if: always() && steps.resolve.outputs.proceed == 'true'
         uses: actions/upload-artifact@v4
         with:
@@ -150,5 +468,41 @@ jobs:
           path: |
             build/
             community-posts/
+            automation-health/
           retention-days: 3
           if-no-files-found: ignore
+
+      - name: Final daily status
+        if: always() && steps.resolve.outputs.proceed == 'true'
+        run: |
+          echo "=========================================="
+          echo "HDL DAILY UPLOAD SUMMARY"
+          echo "=========================================="
+          echo "Channel: ${{ steps.resolve.outputs.channel }}"
+          echo "Repository SHA: $(git rev-parse HEAD)"
+
+          if [ -f keywords-weekly.json ]; then
+            node - <<'NODE'
+            const fs = require("fs");
+
+            const data = JSON.parse(
+              fs.readFileSync("keywords-weekly.json", "utf8")
+            );
+
+            console.log(
+              "Keyword week:",
+              data.week ||
+              data.weekStart ||
+              "N/A"
+            );
+
+            console.log(
+              "Keyword updatedAt:",
+              data.updatedAt ||
+              "N/A"
+            );
+            NODE
+          fi
+
+          echo "Workflow job status: ${{ job.status }}"
+          echo "=========================================="
