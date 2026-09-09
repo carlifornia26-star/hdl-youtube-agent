@@ -377,3 +377,126 @@ export async function translateMeta(title, description, targetLang) {
     description: (tDesc || description).slice(0, YT_DESCRIPTION_MAX),
   };
   }
+
+// --- Narration pause safety net --------------------------------------------------------------
+// Kokoro (voice.js) has no SSML/break-tag support — every pause it produces comes purely from
+// punctuation in the text. The SELF-AWARE ADDRESS RULE prompt instruction above asks the model
+// for a line like "you're going to want to skip this part, don't" WITH a comma, but the model
+// doesn't always keep it — when it drops the comma ("skip this don't...") the two clauses run
+// together and Kokoro reads it as one unbroken clause, which is confusing to listen to (it
+// sounds like "skip this, don't [worry]" collapsed into "skip this don't"). Rather than trust
+// the model to always keep the comma, this is a deterministic text-level fix applied to every
+// scene line right after generation, so the audio is safe regardless of what the model outputs.
+const NARRATION_PAUSE_FIXES = [
+  // "skip this" / "skip this part" / "skip this bit" immediately followed by "don't"/"dont" with
+  // no punctuation in between -> insert a comma so Kokoro pauses between the two clauses.
+  { pattern: /\b(skip (?:this|that)(?: part| bit| section)?)\s+(don'?t|do not)\b/gi, replace: "$1, $2" },
+  // Same run-on risk for the mirror-image phrasing ("don't skip this" is fine as-is — only the
+  // "skip this don't" ordering above is the reported bug — but a couple of nearby variants the
+  // same prompt rule can produce are covered too, e.g. "stay right here don't" / "keep watching don't".
+  { pattern: /\b(stay right here|keep watching|stick around)\s+(don'?t|do not)\b/gi, replace: "$1, $2" },
+];
+
+export function sanitizeNarrationPauses(text) {
+  let out = text;
+  for (const { pattern, replace } of NARRATION_PAUSE_FIXES) {
+    out = out.replace(pattern, replace);
+  }
+  return out;
+}
+
+// Applies sanitizeNarrationPauses to every scene's `line` — call this on the array returned by
+// generateScript()/generateBonusScenes() before scenes are used for TTS or captions.
+export function sanitizeScenePauses(scenes) {
+  return scenes.map((s) => ({ ...s, line: sanitizeNarrationPauses(s.line) }));
+}
+
+// --- Curiosity-based titles -------------------------------------------------------------------
+// Only ONE of the 3 channels uses a curiosity-based title on any given day (rotation handled by
+// caller, see pickCuriosityChannel in generate-video.js) — the other two keep the plain,
+// functional "<angle> | HDL Group" title. This keeps the channels from all looking like they're
+// running the same clickbait-title playbook on the same day, and keeps at least 2/3 of daily
+// uploads reading as calm and literal.
+//
+// Deliberately steered AWAY from generic AI clickbait shape ("You Won't Believe...", "This One
+// Trick...", ALL CAPS, excessive punctuation/emoji) and toward a real editorial curiosity title:
+// specific to the book's actual topic, reads like a human editor wrote it, no more than one
+// rhetorical device per title (a question OR a specific-but-withheld detail OR a contrast — not
+// all three stacked). Falls back to the plain title format on any failure.
+export async function generateCuriosityTitle(book) {
+  const prompt = `Write ONE YouTube video title for a teaser video about the topic "${book.angle}" (the video does not name the ebook title itself, only the topic).
+
+Requirements:
+- Under 70 characters.
+- Curiosity-driven: it should make someone want to know the answer/outcome, WITHOUT resorting to generic clickbait phrasing.
+- Do NOT use any of these overused patterns: "You Won't Believe...", "This One Trick...", "The Truth About...", "Nobody Talks About...", "Here's Why...", ALL CAPS words, excessive punctuation (no "!!", no "?!"), emoji.
+- Sound like a specific, well-informed editor wrote it about this exact topic — not a generic template that could apply to any video.
+- Use AT MOST one of: a direct question, a specific-but-withheld detail, a stated contrast/tension. Do not stack more than one of these devices in the same title.
+- Plain sentence case (capitalize normally, not Every Word Capitalized).
+- Output ONLY the title text, nothing else — no quotes, no explanation.`;
+
+  const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
+    messages: [{ role: "user", content: prompt }],
+    max_tokens: 60,
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        type: "object",
+        properties: { title: { type: "string" } },
+        required: ["title"],
+      },
+    },
+  });
+
+  let title;
+  if (result?.response && typeof result.response === "object" && typeof result.response.title === "string") {
+    title = result.response.title;
+  } else if (typeof result?.response === "string") {
+    try {
+      title = JSON.parse(result.response).title;
+    } catch {
+      title = result.response;
+    }
+  }
+  title = (title || "").trim().replace(/^["']|["']$/g, "");
+  if (!title) throw new Error("generateCuriosityTitle: model returned no title");
+  return title.slice(0, 100); // YouTube's hard title cap, same as everywhere else titles are used
+}
+
+// --- Reverse translation (foreign -> English) for weekly trending keywords -------------------
+// update-keywords.js pulls trending terms from Google Trends and YouTube's trending chart in
+// non-English-speaking markets — this translates those terms/phrases INTO English before they're
+// used as channel keywords or video/Short tags, using the same m2m100 model as translateMeta
+// above, just pointed the other direction (foreign source_lang -> "english" target_lang).
+//
+// sourceLang is a full language name ("hindi", "japanese", "portuguese", etc.), matching the
+// format translateMeta already uses for its own source_lang: "english" call above — Workers AI's
+// m2m100 endpoint accepts spelled-out language names, not just ISO codes.
+//
+// Deliberately permissive about failure: a term that fails to translate, comes back empty, or
+// looks like a runaway repeat (see looksLikeRunawayTranslation above) just falls back to the
+// ORIGINAL term rather than being dropped — an untranslated keyword is still a usable keyword,
+// worth keeping rather than losing entirely over one bad translation call.
+export async function translateTermToEnglish(term, sourceLang) {
+  const original = String(term || "").trim();
+  if (!original) return original;
+  if (!sourceLang || sourceLang === "english") return original; // already English, nothing to do
+
+  try {
+    const result = await run("@cf/meta/m2m100-1.2b", {
+      text: original,
+      source_lang: sourceLang,
+      target_lang: "english",
+    });
+    const translated = (result.translated_text || "").trim();
+    if (!translated) return original;
+    if (looksLikeRunawayTranslation(original, translated)) {
+      console.warn(`translateTermToEnglish: "${original}" (${sourceLang}) looked like a runaway repeat, keeping original.`);
+      return original;
+    }
+    return translated;
+  } catch (e) {
+    console.warn(`translateTermToEnglish: "${original}" (${sourceLang}) failed, keeping original:`, e.message);
+    return original;
+  }
+}
