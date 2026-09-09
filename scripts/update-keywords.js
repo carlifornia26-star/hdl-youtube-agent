@@ -219,32 +219,131 @@ function buildCombinedKeywordString({ googleTrendsApprox, youtubeTopTermsFlat })
   return result;
 }
 
+const KEYWORD_HISTORY_DIR = "keyword-history";
+const MAX_SOURCE_ATTEMPTS = 3;
+const RETRY_BASE_MS = 4000;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function collectFreshTrendsWithRetry() {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= MAX_SOURCE_ATTEMPTS; attempt++) {
+    try {
+      console.log(`Trend collection attempt ${attempt}/${MAX_SOURCE_ATTEMPTS}...`);
+
+      const [googleTrendsApprox, youtubeTopTermsByCountry] = await Promise.all([
+        fetchGoogleTrendsWorldwideApprox(),
+        fetchYoutubeTopTermsByCountry(),
+      ]);
+
+      const youtubeCountriesWithData = Object.values(youtubeTopTermsByCountry)
+        .filter((terms) => Array.isArray(terms) && terms.length > 0).length;
+
+      // Do not replace a known-good weekly file with an empty/broken collection.
+      // At least one Google trend AND one YouTube market must return data.
+      if (googleTrendsApprox.length === 0 || youtubeCountriesWithData === 0) {
+        throw new Error(
+          `Insufficient trend data: Google=${googleTrendsApprox.length} terms, ` +
+          `YouTube=${youtubeCountriesWithData} markets with data.`
+        );
+      }
+
+      return { googleTrendsApprox, youtubeTopTermsByCountry };
+    } catch (error) {
+      lastError = error;
+      console.warn(`Trend collection attempt ${attempt} failed: ${error.message}`);
+
+      if (attempt < MAX_SOURCE_ATTEMPTS) {
+        const delay = RETRY_BASE_MS * 2 ** (attempt - 1);
+        console.log(`Waiting ${delay}ms before retry...`);
+        await sleep(delay);
+      }
+    }
+  }
+
+  throw new Error(
+    `Fresh weekly trend collection failed after ${MAX_SOURCE_ATTEMPTS} attempts. ` +
+    `The previous keywords-weekly.json was NOT replaced. Last error: ${lastError?.message || "unknown error"}`
+  );
+}
+
+function validateKeywordData(data) {
+  if (!data || typeof data !== "object") throw new Error("Keyword data is not an object.");
+  if (!Array.isArray(data.fixed)) throw new Error("Keyword data is missing fixed[].");
+  if (!Array.isArray(data.googleTrendsApprox)) throw new Error("Keyword data is missing googleTrendsApprox[].");
+  if (!data.youtubeTopTermsByCountry || typeof data.youtubeTopTermsByCountry !== "object") {
+    throw new Error("Keyword data is missing youtubeTopTermsByCountry.");
+  }
+  if (!Array.isArray(data.youtubeTopTermsFlat)) throw new Error("Keyword data is missing youtubeTopTermsFlat[].");
+  if (typeof data.channelKeywordsString !== "string" || !data.channelKeywordsString.trim()) {
+    throw new Error("Keyword data is missing channelKeywordsString.");
+  }
+  if (data.channelKeywordsString.length > CHANNEL_KEYWORDS_MAX) {
+    throw new Error(`channelKeywordsString is ${data.channelKeywordsString.length} chars; maximum is ${CHANNEL_KEYWORDS_MAX}.`);
+  }
+  if (!data.updatedAt || Number.isNaN(Date.parse(data.updatedAt))) {
+    throw new Error("Keyword data has an invalid updatedAt timestamp.");
+  }
+  return data;
+}
+
 async function runCompute() {
-  console.log("Computing this week's trending keyword set...");
-  const [googleTrendsApprox, youtubeTopTermsByCountry] = await Promise.all([
-    fetchGoogleTrendsWorldwideApprox(),
-    fetchYoutubeTopTermsByCountry(),
-  ]);
+  console.log("Computing this week's trending keyword set with bounded retries...");
+
+  let previousData = null;
+  try {
+    previousData = validateKeywordData(JSON.parse(await fs.readFile(OUT_FILE, "utf8")));
+  } catch {
+    // There may be no previous file on the first-ever run.
+  }
+
+  const { googleTrendsApprox, youtubeTopTermsByCountry } = await collectFreshTrendsWithRetry();
   const youtubeTopTermsFlat = [...new Set(Object.values(youtubeTopTermsByCountry).flat())];
 
-  const data = {
+  const data = validateKeywordData({
     updatedAt: new Date().toISOString(),
     fixed: FIXED_KEYWORDS,
     googleTrendsApprox,
     youtubeTopTermsByCountry,
     youtubeTopTermsFlat,
     channelKeywordsString: buildCombinedKeywordString({ googleTrendsApprox, youtubeTopTermsFlat }),
-  };
+  });
 
+  // Write the current active file only after the complete new dataset has passed validation.
   await fs.writeFile(OUT_FILE, JSON.stringify(data, null, 2) + "\n", "utf8");
-  console.log(`Wrote ${OUT_FILE} (${data.channelKeywordsString.length}/${CHANNEL_KEYWORDS_MAX} chars for channel keywords).`);
+
+  // Keep a dated snapshot as legitimate, useful repository state. The active file remains
+  // the single source read by the daily uploader.
+  await fs.mkdir(KEYWORD_HISTORY_DIR, { recursive: true });
+  const historyDate = data.updatedAt.slice(0, 10);
+  const historyPath = `${KEYWORD_HISTORY_DIR}/${historyDate}.json`;
+  const historyData = {
+    ...data,
+    historySavedAt: new Date().toISOString(),
+    previousUpdatedAt: previousData?.updatedAt || null,
+    generatorVersion: "weekly-keywords-v2",
+  };
+  await fs.writeFile(historyPath, JSON.stringify(historyData, null, 2) + "\n", "utf8");
+
+  console.log(
+    `Wrote ${OUT_FILE} (${data.channelKeywordsString.length}/${CHANNEL_KEYWORDS_MAX} chars) ` +
+    `and ${historyPath}.`
+  );
 }
 
 async function runApply() {
   const raw = await fs.readFile(OUT_FILE, "utf8").catch(() => null);
   if (!raw) throw new Error(`${OUT_FILE} not found — the "compute" phase must run and commit it first.`);
-  const data = JSON.parse(raw);
-  if (!data.channelKeywordsString) throw new Error(`${OUT_FILE} has no channelKeywordsString.`);
+
+  let data;
+  try {
+    data = validateKeywordData(JSON.parse(raw));
+  } catch (error) {
+    throw new Error(`Refusing to apply invalid ${OUT_FILE}: ${error.message}`);
+  }
 
   console.log("Fetching current channel branding...");
   const channel = await getMyChannelBranding();
@@ -257,7 +356,19 @@ async function runApply() {
     keywords: data.channelKeywordsString,
     currentBranding: channel.brandingSettings,
   });
-  console.log("Channel keywords updated.");
+
+  // Verify against the live YouTube channel after the mutation. Do not report success based
+  // solely on the update request returning HTTP 200.
+  const verified = await getMyChannelBranding();
+  const actual = verified.brandingSettings?.channel?.keywords || "";
+  if (actual !== data.channelKeywordsString) {
+    throw new Error(
+      `Channel keyword verification failed for "${verified.snippet.title}" (${verified.id}). ` +
+      `Expected ${data.channelKeywordsString.length} chars but YouTube returned ${actual.length}.`
+    );
+  }
+
+  console.log(`Channel keywords updated AND verified successfully for ${verified.snippet.title}.`);
 }
 
 async function main() {
