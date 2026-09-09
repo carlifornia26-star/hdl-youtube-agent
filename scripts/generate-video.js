@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pickTodaysBook } from "./catalog.js";
-import { generateScript, generateBonusScenes, translateMeta, VIDEO_LANGS, pickTodaysFormat } from "./cf-ai.js";
+import { generateScript, generateBonusScenes, translateMeta, VIDEO_LANGS, pickTodaysFormat, sanitizeScenePauses, generateCuriosityTitle } from "./cf-ai.js";
 import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./assets.js";
 import { loadUsedClipIds, saveUsedClipIds } from "./scene-history.js";
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
@@ -193,6 +193,54 @@ function buildMultilingualTags(localizations, baseTags) {
   return tags;
 }
 
+// Reads keywords-weekly.json (written by scripts/update-keywords.js every Monday 5am — see
+// hdl-keyword-update.yml) and returns its trending terms as extra tags, respecting whatever
+// budget room is left after baseTags + the multilingual tags above. This is the functional
+// stand-in for YouTube Studio's "upload defaults" keywords box, which has no YouTube Data API
+// field at all — the API only exposes per-video tags (set here, every upload) and channel-level
+// Keywords (set separately by update-keywords.js via setChannelKeywords). Silently returns []
+// if the file doesn't exist yet or is malformed, so a missing/broken weekly file never blocks
+// a daily upload.
+//
+// Split into two functions on purpose:
+//  - loadFixedWeeklyKeywords(): the 5 constant terms (Google, YouTube, MrBeast, Artificial
+//    Intelligence (AI), Mirror Movie). Called FIRST, before the multilingual tags below, and
+//    added to the tags array UNCONDITIONALLY (no budget check) — these 5 short words together
+//    are nowhere near YouTube's ~500-char tags cap, so there's no scenario where they get
+//    crowded out. This guarantees they're on every single video AND every Short, every day,
+//    regardless of how much of the character budget the multilingual/trending tags use up.
+//  - loadOtherWeeklyTrendingTags(usedChars): the rotating Google Trends + YouTube-trending
+//    terms, added AFTER the fixed 5 and the multilingual tags, filling whatever budget remains.
+//    These are NOT guaranteed — how many make it on depends on how much room is left.
+async function loadWeeklyKeywordsFile() {
+  try {
+    const raw = await fs.readFile(path.join(process.cwd(), "keywords-weekly.json"), "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return null; // no weekly file yet, or it's malformed — not a reason to fail the day's upload
+  }
+}
+
+function loadFixedWeeklyKeywords(data) {
+  return (data?.fixed || []).map((t) => String(t || "").trim()).filter(Boolean);
+}
+
+function loadOtherWeeklyTrendingTags(data, usedChars) {
+  if (!data) return [];
+  const candidates = [...(data.googleTrendsApprox || []), ...(data.youtubeTopTermsFlat || [])];
+  const tags = [];
+  let chars = usedChars;
+  for (const term of candidates) {
+    const t = String(term || "").trim();
+    if (!t || t.length > MAX_TAG_LENGTH) continue;
+    const addLen = t.length + 1;
+    if (chars + addLen > TAGS_CHAR_BUDGET) break;
+    tags.push(t);
+    chars += addLen;
+  }
+  return tags;
+}
+
 async function main() {
   await fs.mkdir(BUILD_DIR, { recursive: true });
 
@@ -238,7 +286,11 @@ async function main() {
   console.log(`Today's caption style: ${captionStyle.label}`);
 
   // 1) Script (teaser-only, scene count set by the model within the schema's range)
-  const scenes = await generateScript(book, format);
+  const rawScenes = await generateScript(book, format);
+  // Deterministic text-level fix for the "skip this don't" run-on-pause issue — see
+  // sanitizeNarrationPauses in cf-ai.js. Applied here (not inside generateScript) so it also
+  // catches anything a future prompt change might introduce, without relying on the model.
+  const scenes = sanitizeScenePauses(rawScenes);
   console.log(`Generated ${scenes.length} scenes`);
 
   // Pexels video IDs used across recent runs (any channel-scoped history file), so a repeat
@@ -309,7 +361,7 @@ async function main() {
     );
     let bonusScenes;
     try {
-      bonusScenes = await generateBonusScenes(book, TOPUP_SCENES_PER_ROUND);
+      bonusScenes = sanitizeScenePauses(await generateBonusScenes(book, TOPUP_SCENES_PER_ROUND));
     } catch (e) {
       console.warn("Bonus scene generation failed, stopping top-up early:", e.message);
       break;
@@ -490,7 +542,26 @@ async function main() {
   // Title deliberately does NOT include the book name (e.g. "Art of Joy", "Bitcoin Standard")
   // anymore — just the topic/angle. Anyone who wants the book name gets it from the
   // description (translatableDescription below) and the spoken/captioned narration.
-  const enTitle = `${capitalizeFirst(book.angle)} | HDL Group`;
+  //
+  // Curiosity-title rotation: only ONE of the 3 channels uses a curiosity-based title on any
+  // given day (dayOfYear % 3 picks which channel), same day-of-year rotation pattern as
+  // pickTodaysFormat/pickTodaysVoice elsewhere in this file — so it drifts independently of
+  // which book/format/voice landed on that channel today. The other 2 channels keep the plain
+  // functional title. Falls back to the plain title on any generation failure so a bad AI call
+  // never blocks the day's upload.
+  const todaysDayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+  const curiosityChannelToday = (todaysDayOfYear % 3) + 1; // 1, 2, or 3
+  const plainTitle = `${capitalizeFirst(book.angle)} | HDL Group`;
+  let enTitle = plainTitle;
+  if (Number(CHANNEL_ID) === curiosityChannelToday) {
+    try {
+      enTitle = await generateCuriosityTitle(book);
+      console.log(`Curiosity title (channel ${CHANNEL_ID}'s turn today): "${enTitle}"`);
+    } catch (e) {
+      console.warn("Curiosity title generation failed, falling back to the plain title:", e.message);
+      enTitle = plainTitle;
+    }
+  }
   // Only the plain descriptive sentence goes to the translation model. Everything else —
   // the URL, the hashtags, the chapters block, and (further below) the music/thumbnail credit
   // lines — is appended AFTER translation, untranslated, for every language including English.
@@ -536,7 +607,12 @@ async function main() {
   // (tags ride inside the same videos.insert call). See buildMultilingualTags for the budget
   // logic that keeps the combined tags string under YouTube's ~500-char limit.
   const baseTags = [book.title, "HDL Group", book.angle, "ebook"];
-  const tags = [...baseTags, ...buildMultilingualTags(localizations, baseTags)];
+  const weeklyKeywordsData = await loadWeeklyKeywordsFile();
+  const fixedWeeklyKeywords = loadFixedWeeklyKeywords(weeklyKeywordsData);
+  const multilingualTags = buildMultilingualTags(localizations, [...baseTags, ...fixedWeeklyKeywords]);
+  const usedCharsSoFar = [...baseTags, ...fixedWeeklyKeywords, ...multilingualTags].join(",").length;
+  const otherWeeklyTrendingTags = loadOtherWeeklyTrendingTags(weeklyKeywordsData, usedCharsSoFar);
+  const tags = [...baseTags, ...fixedWeeklyKeywords, ...multilingualTags, ...otherWeeklyTrendingTags];
 
   // 6) Upload video — rename to a keyword-bearing filename first (see renameForUpload above),
   // then embed container metadata (title/keywords/comment/language) into the renamed file.
@@ -681,8 +757,11 @@ async function main() {
       // to the translation model. The two URLs (YouTube link + book link) and the hashtags are
       // appended after, untranslated, so they can't come back corrupted in any language.
       const shortTranslatableDescription = `${book.title} — ${book.angle}.`;
+      // Explicit continue-watching CTA, first line so it's visible without expanding the
+      // description (YouTube's Shorts description is collapsed to ~1-2 lines by default).
       const shortUntranslatedSuffix =
-        `\nWatch the full video: https://youtube.com/watch?v=${uploaded.id}\n` +
+        `\n⬇️ Want the full video? Tap the link below:\n` +
+        `https://youtube.com/watch?v=${uploaded.id}\n` +
         `Read the full book: ${SITE_URL}\n\n` +
         `#Shorts #HDLGroup #${book.slug.replace(/-/g, "")}`;
       const shortBaseDescription = shortTranslatableDescription + shortUntranslatedSuffix;
@@ -707,7 +786,12 @@ async function main() {
       // Same multilingual keyword tags as the main video, built from the Short's own translated
       // titles (different phrase from the main video's, so kept separate rather than reused).
       const shortBaseTags = [book.title, "HDL Group", book.angle, "Shorts"];
-      const shortTags = [...shortBaseTags, ...buildMultilingualTags(shortLocalizations, shortBaseTags)];
+      const shortWeeklyKeywordsData = await loadWeeklyKeywordsFile();
+      const shortFixedWeeklyKeywords = loadFixedWeeklyKeywords(shortWeeklyKeywordsData);
+      const shortMultilingualTags = buildMultilingualTags(shortLocalizations, [...shortBaseTags, ...shortFixedWeeklyKeywords]);
+      const shortUsedCharsSoFar = [...shortBaseTags, ...shortFixedWeeklyKeywords, ...shortMultilingualTags].join(",").length;
+      const shortOtherWeeklyTrendingTags = loadOtherWeeklyTrendingTags(shortWeeklyKeywordsData, shortUsedCharsSoFar);
+      const shortTags = [...shortBaseTags, ...shortFixedWeeklyKeywords, ...shortMultilingualTags, ...shortOtherWeeklyTrendingTags];
 
       // One bad/unrecognized translation anywhere in `localizations` fails the ENTIRE upload
       // with YouTube's generic invalidVideoMetadata error (see YT_LOCALE_MAP note above) — so a
