@@ -21,15 +21,19 @@ const CHANNEL_KEYWORDS_MAX = 500; // same brandingSettings.channel.keywords hard
 const FIXED_KEYWORDS = ["Google", "YouTube", "MrBeast", "Artificial Intelligence (AI)", "Mirror Movie"];
 
 // Top 10 countries by population that ALSO have a working YouTube "most popular" chart via the
-// Data API. China and Russia are top-10-by-population but YouTube is blocked/restricted in both
-// (videos.list?chart=mostPopular&regionCode=CN or RU returns empty/unreliable results), so
-// they're swapped for the next-largest countries where the chart actually returns data.
+// Data API. NOTE: China's regionCode=CN has historically returned empty/unreliable results on
+// videos.list?chart=mostPopular&regionCode=CN (YouTube itself is blocked/restricted there), so
+// it was swapped out before — it's included again here by request. fetchYoutubeTopTermsByCountry
+// below already wraps each country in try/catch and logs+skips on failure, so if CN comes back
+// empty this will just show "(none found)" in the log for China rather than breaking the run —
+// keep an eye on the compute-keywords log after this change to confirm whether CN actually
+// returns data or not.
 const YOUTUBE_TRENDING_COUNTRIES = [
   { name: "India", region: "IN" },
   { name: "United States", region: "US" },
   { name: "Indonesia", region: "ID" },
   { name: "Pakistan", region: "PK" },
-  { name: "Nigeria", region: "NG" },
+  { name: "China", region: "CN" },
   { name: "Brazil", region: "BR" },
   { name: "Bangladesh", region: "BD" },
   { name: "Mexico", region: "MX" },
@@ -43,20 +47,26 @@ const YOUTUBE_TRENDING_COUNTRIES = [
 // once (a term trending in 5 different countries this week is a much stronger "genuinely global"
 // signal than a term trending in only 1). Documented here and in SETUP.md as an approximation,
 // not an official Google "worldwide" ranking, since no such official ranking exists.
-const TRENDS_MARKETS = ["US", "GB", "IN", "BR", "JP", "DE", "FR", "ID", "NG", "MX", "PH", "KR"];
+const TRENDS_MARKETS = ["US", "GB", "IN", "BR", "JP", "DE", "FR", "ID", "CN", "MX", "PH", "KR"];
 
 // Dominant language each market's trending terms come back in, for the foreign -> English
 // translation pass below (translateTermToEnglish in cf-ai.js). "english" markets are skipped
 // entirely (no translation call made). A market being mapped to a language doesn't mean every
-// term from it is actually in that language — plenty of trending terms in India, Nigeria, or the
+// term from it is actually in that language — plenty of trending terms in India or the
 // Philippines are already plain English (e.g. "food") — translateTermToEnglish handles that case
 // fine too: translating an already-English word/phrase from a stated source language reliably
 // comes back unchanged (m2m100 recognizes valid English text), it's just a wasted call, not a
 // wrong result — cheap insurance against silently leaving a genuinely foreign term untranslated.
+//
+// IMPORTANT: these must be values Workers AI's m2m100-1.2b model actually accepts as source_lang
+// (it wants full language names, e.g. "tagalog", not the ISO code "tl", and NOT the informal
+// name "filipino" — that used to be here and made every Philippines-market translation call
+// fail with a 400 "not one of [...]" error; it fell back to keeping the original term, so no
+// crash, but every single term stayed untranslated).
 const MARKET_LANGUAGE = {
   US: "english",
   GB: "english",
-  NG: "english", // Nigeria's official/dominant online language is English
+  CN: "chinese",
   IN: "hindi",
   BR: "portuguese",
   JP: "japanese",
@@ -64,7 +74,7 @@ const MARKET_LANGUAGE = {
   FR: "french",
   ID: "indonesian",
   MX: "spanish",
-  PH: "filipino",
+  PH: "tagalog",
   KR: "korean",
   PK: "urdu",
   BD: "bengali",
