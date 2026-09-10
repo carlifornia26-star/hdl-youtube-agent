@@ -1,0 +1,11 @@
+{
+  "checkedAt": "2026-09-10T18:21:59Z",
+  "overallStatus": "failed",
+  "computeStatus": "success",
+  "applyChannelsStatus": "failure",
+  "keywordsFileStatus": "missing",
+  "keywordsUpdatedAt": "",
+  "repositorySha": "eae274037a7fb5da2046a1a85014f348add5f309",
+  "workflowRunId": "34513347639",
+  "workflowRunNumber": "1"
+}
