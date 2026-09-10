@@ -1,6 +1,20 @@
 {
   "videos": [
     {
+      "video_id": "uFlN9Uc2vPI",
+      "short_video_id": "m0cjcsB4_Qg",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "what bitcoin reveals about finance",
+      "description": "Bitcoin Standard explores Bitcoin & digital finance. Available in English only, exclusively on Google Play Books.",
+      "thumbnail_url": "https://i.ytimg.com/vi/uFlN9Uc2vPI/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "script_format": "direct-address",
+      "caption_style": "lower-third",
+      "duration_seconds": 517,
+      "published_at": "2026-09-10T23:00:18.824Z"
+    },
+    {
       "video_id": "eOGlU3VuzwY",
       "short_video_id": "vshcf6eQZV4",
       "book_slug": "age-one",
@@ -51,5 +65,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-09-01T07:00:59.825Z"
+  "updated_at": "2026-09-10T23:00:18.825Z"
 }
