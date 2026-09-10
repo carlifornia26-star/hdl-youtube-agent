@@ -380,26 +380,73 @@ export async function translateMeta(title, description, targetLang) {
 
 // --- Narration pause safety net --------------------------------------------------------------
 // Kokoro (voice.js) has no SSML/break-tag support — every pause it produces comes purely from
-// punctuation in the text. The SELF-AWARE ADDRESS RULE prompt instruction above asks the model
-// for a line like "you're going to want to skip this part, don't" WITH a comma, but the model
-// doesn't always keep it — when it drops the comma ("skip this don't...") the two clauses run
-// together and Kokoro reads it as one unbroken clause, which is confusing to listen to (it
-// sounds like "skip this, don't [worry]" collapsed into "skip this don't"). Rather than trust
-// the model to always keep the comma, this is a deterministic text-level fix applied to every
-// scene line right after generation, so the audio is safe regardless of what the model outputs.
-const NARRATION_PAUSE_FIXES = [
-  // "skip this" / "skip this part" / "skip this bit" immediately followed by "don't"/"dont" with
-  // no punctuation in between -> insert a comma so Kokoro pauses between the two clauses.
-  { pattern: /\b(skip (?:this|that)(?: part| bit| section)?)\s+(don'?t|do not)\b/gi, replace: "$1, $2" },
-  // Same run-on risk for the mirror-image phrasing ("don't skip this" is fine as-is — only the
-  // "skip this don't" ordering above is the reported bug — but a couple of nearby variants the
-  // same prompt rule can produce are covered too, e.g. "stay right here don't" / "keep watching don't".
+// punctuation in the text. Several prompt rules above (SELF-AWARE ADDRESS, reversals, false-
+// summary-then-twist, self-correction, denial-naming) deliberately ask the model for lines that
+// splice two clauses together mid-sentence ("you're going to want to skip this part, don't").
+// The model is asked to keep a comma at that splice point, but doesn't always — when it's
+// dropped, the two clauses run together with no punctuation and Kokoro reads them as one
+// unbroken clause, which throws listeners off. This is a deterministic text-level fix applied to
+// every scene line right after generation, so playback is safe regardless of what the model
+// outputs, rather than a fixed list of exact phrases (which only ever catches the specific
+// wording it was written for and misses every new variant the model comes up with).
+//
+// Two passes:
+//  1) General "don't"/"do not" run-on fix — the class of bug originally reported ("skip this
+//     don't"). Whenever "don't"/"do not" is glued directly to a preceding word with no
+//     punctuation, a comma is inserted UNLESS that preceding word is a normal subject pronoun
+//     ("you don't", "I don't", "it don't") — those are ordinary subject+verb pairs that never
+//     need a pause. Anything else immediately before "don't" ("skip this don't", "worth it
+//     don't", "easy don't") is treated as two clauses run together and gets the comma.
+//  2) "but" run-on fix, same idea — "but" glued to a preceding word gets a comma UNLESS that
+//     word is one where "but" is idiomatically used to mean "except" ("nothing but", "anything
+//     but", "all but"), which never wants a pause before it.
+// Both passes are deliberately narrow (no blind fix for "however"/"actually"/"though"/"yet",
+// which are used constantly as plain adverbs mid-clause and would get false-positive commas far
+// more often than genuine run-ons) plus a short list of other known high-risk exact phrasings
+// the same rhetorical prompt rules tend to produce.
+// Deliberately excludes "this"/"that"/"there" even though they can grammatically be subjects
+// ("this don't work") — in this narration style they're overwhelmingly the OBJECT of a prior
+// imperative ("skip this", "stay right there") with a new "don't ..." clause immediately after,
+// which is exactly the run-on bug being fixed. Treating them as safe subjects would silently
+// un-fix the original reported case ("skip this don't").
+const DONT_SUBJECT_WHITELIST = new Set([
+  "you", "i", "we", "they", "he", "she", "it", "who", "which",
+  "people", "folks", "everyone", "everybody", "nobody", "most", "some", "others", "y'all",
+]);
+
+const BUT_EXCEPT_IDIOM_WHITELIST = new Set([
+  "nothing", "anything", "everything", "all", "none", "no one", "nowhere", "never",
+]);
+
+function fixDontRunOns(text) {
+  return text.replace(/\b([A-Za-z']+)\s+(don'?t|do not)\b/g, (match, prevWord, dontPhrase) => {
+    if (DONT_SUBJECT_WHITELIST.has(prevWord.toLowerCase())) return match;
+    return `${prevWord}, ${dontPhrase}`;
+  });
+}
+
+function fixButRunOns(text) {
+  return text.replace(/\b([A-Za-z']+)\s+(but)\b/gi, (match, prevWord, butWord) => {
+    if (BUT_EXCEPT_IDIOM_WHITELIST.has(prevWord.toLowerCase())) return match;
+    return `${prevWord}, ${butWord}`;
+  });
+}
+
+// A short list of other exact splice phrasings the same reversal/self-correction/false-summary
+// prompt rules are known to produce, glued together with no punctuation — covered literally
+// since "wait"/"actually"/"though" can't get the same general treatment as "don't"/"but" without
+// misfiring on their much more common plain-adverb use ("it actually works", "wait a second").
+const NARRATION_PAUSE_LITERAL_FIXES = [
   { pattern: /\b(stay right here|keep watching|stick around)\s+(don'?t|do not)\b/gi, replace: "$1, $2" },
+  { pattern: /\b(wait)\s+(no|actually)\b/gi, replace: "$1, $2" },
+  { pattern: /\b(or does it|think again|plot twist|spoiler|here's the catch|here's the thing)\s+([a-z])/gi, replace: "$1, $2" },
 ];
 
 export function sanitizeNarrationPauses(text) {
   let out = text;
-  for (const { pattern, replace } of NARRATION_PAUSE_FIXES) {
+  out = fixDontRunOns(out);
+  out = fixButRunOns(out);
+  for (const { pattern, replace } of NARRATION_PAUSE_LITERAL_FIXES) {
     out = out.replace(pattern, replace);
   }
   return out;
