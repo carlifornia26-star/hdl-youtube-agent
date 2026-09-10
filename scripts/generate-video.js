@@ -193,25 +193,26 @@ function buildMultilingualTags(localizations, baseTags) {
   return tags;
 }
 
-// Reads keywords-weekly.json (written by scripts/update-keywords.js every Monday 5am — see
-// hdl-keyword-update.yml) and returns its trending terms as extra tags, respecting whatever
-// budget room is left after baseTags + the multilingual tags above. This is the functional
-// stand-in for YouTube Studio's "upload defaults" keywords box, which has no YouTube Data API
-// field at all — the API only exposes per-video tags (set here, every upload) and channel-level
-// Keywords (set separately by update-keywords.js via setChannelKeywords). Silently returns []
-// if the file doesn't exist yet or is malformed, so a missing/broken weekly file never blocks
-// a daily upload.
+// Reads keywords-weekly.json (written every Monday 5am Africa/Johannesburg — see
+// hdl-keyword-update.yml) and keywords-daily.json (written every day 5pm Africa/Johannesburg —
+// see hdl-keyword-update-daily.yml) and turns them into extra tags, in the requested order:
+// consistent keywords first, then this week's 2 trending words, then the rest (refreshed daily).
+// This is the functional stand-in for YouTube Studio's "upload defaults" keywords box, which has
+// no YouTube Data API field at all — the API only exposes per-video tags (set here, every
+// upload) and channel-level Keywords (set separately by update-keywords.js via
+// setChannelKeywords). Silently returns [] for whichever file doesn't exist yet or is malformed,
+// so a missing/broken keyword file never blocks a daily upload.
 //
-// Split into two functions on purpose:
+// Three tiers on purpose:
 //  - loadFixedWeeklyKeywords(): the 5 constant terms (Google, YouTube, MrBeast, Artificial
-//    Intelligence (AI), Mirror Movie). Called FIRST, before the multilingual tags below, and
-//    added to the tags array UNCONDITIONALLY (no budget check) — these 5 short words together
-//    are nowhere near YouTube's ~500-char tags cap, so there's no scenario where they get
-//    crowded out. This guarantees they're on every single video AND every Short, every day,
-//    regardless of how much of the character budget the multilingual/trending tags use up.
-//  - loadOtherWeeklyTrendingTags(usedChars): the rotating Google Trends + YouTube-trending
-//    terms, added AFTER the fixed 5 and the multilingual tags, filling whatever budget remains.
-//    These are NOT guaranteed — how many make it on depends on how much room is left.
+//    Intelligence (AI), Mirror Movie). Called FIRST, added UNCONDITIONALLY (no budget check) —
+//    these 5 short words are nowhere near YouTube's ~500-char tags cap, so there's no scenario
+//    where they get crowded out. Guarantees they're on every video AND every Short, every day.
+//  - loadWeeklyTop2Keywords(): the 2 words locked in for the week, right after the fixed 5.
+//    Also added UNCONDITIONALLY — 2 short words can't blow the budget either.
+//  - loadDailyTrendingTags(usedChars): everything else, refreshed daily at 5pm, added AFTER the
+//    fixed 5 + weekly 2 + multilingual tags, filling whatever budget remains. NOT guaranteed —
+//    how many make it on depends on how much room is left.
 async function loadWeeklyKeywordsFile() {
   try {
     const raw = await fs.readFile(path.join(process.cwd(), "keywords-weekly.json"), "utf8");
@@ -221,13 +222,26 @@ async function loadWeeklyKeywordsFile() {
   }
 }
 
-function loadFixedWeeklyKeywords(data) {
-  return (data?.fixed || []).map((t) => String(t || "").trim()).filter(Boolean);
+async function loadDailyKeywordsFile() {
+  try {
+    const raw = await fs.readFile(path.join(process.cwd(), "keywords-daily.json"), "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return null; // no daily file yet, or it's malformed — not a reason to fail the day's upload
+  }
 }
 
-function loadOtherWeeklyTrendingTags(data, usedChars) {
-  if (!data) return [];
-  const candidates = [...(data.googleTrendsApprox || []), ...(data.youtubeTopTermsFlat || [])];
+function loadFixedWeeklyKeywords(weeklyData) {
+  return (weeklyData?.fixed || []).map((t) => String(t || "").trim()).filter(Boolean);
+}
+
+function loadWeeklyTop2Keywords(weeklyData) {
+  return (weeklyData?.weeklyTop2 || []).map((t) => String(t || "").trim()).filter(Boolean);
+}
+
+function loadDailyTrendingTags(dailyData, usedChars) {
+  if (!dailyData) return [];
+  const candidates = dailyData.dailyRest || [];
   const tags = [];
   let chars = usedChars;
   for (const term of candidates) {
@@ -608,11 +622,13 @@ async function main() {
   // logic that keeps the combined tags string under YouTube's ~500-char limit.
   const baseTags = [book.title, "HDL Group", book.angle, "ebook"];
   const weeklyKeywordsData = await loadWeeklyKeywordsFile();
+  const dailyKeywordsData = await loadDailyKeywordsFile();
   const fixedWeeklyKeywords = loadFixedWeeklyKeywords(weeklyKeywordsData);
-  const multilingualTags = buildMultilingualTags(localizations, [...baseTags, ...fixedWeeklyKeywords]);
-  const usedCharsSoFar = [...baseTags, ...fixedWeeklyKeywords, ...multilingualTags].join(",").length;
-  const otherWeeklyTrendingTags = loadOtherWeeklyTrendingTags(weeklyKeywordsData, usedCharsSoFar);
-  const tags = [...baseTags, ...fixedWeeklyKeywords, ...multilingualTags, ...otherWeeklyTrendingTags];
+  const weeklyTop2Keywords = loadWeeklyTop2Keywords(weeklyKeywordsData);
+  const multilingualTags = buildMultilingualTags(localizations, [...baseTags, ...fixedWeeklyKeywords, ...weeklyTop2Keywords]);
+  const usedCharsSoFar = [...baseTags, ...fixedWeeklyKeywords, ...weeklyTop2Keywords, ...multilingualTags].join(",").length;
+  const dailyTrendingTags = loadDailyTrendingTags(dailyKeywordsData, usedCharsSoFar);
+  const tags = [...baseTags, ...fixedWeeklyKeywords, ...weeklyTop2Keywords, ...multilingualTags, ...dailyTrendingTags];
 
   // 6) Upload video — rename to a keyword-bearing filename first (see renameForUpload above),
   // then embed container metadata (title/keywords/comment/language) into the renamed file.
@@ -787,11 +803,13 @@ async function main() {
       // titles (different phrase from the main video's, so kept separate rather than reused).
       const shortBaseTags = [book.title, "HDL Group", book.angle, "Shorts"];
       const shortWeeklyKeywordsData = await loadWeeklyKeywordsFile();
+      const shortDailyKeywordsData = await loadDailyKeywordsFile();
       const shortFixedWeeklyKeywords = loadFixedWeeklyKeywords(shortWeeklyKeywordsData);
-      const shortMultilingualTags = buildMultilingualTags(shortLocalizations, [...shortBaseTags, ...shortFixedWeeklyKeywords]);
-      const shortUsedCharsSoFar = [...shortBaseTags, ...shortFixedWeeklyKeywords, ...shortMultilingualTags].join(",").length;
-      const shortOtherWeeklyTrendingTags = loadOtherWeeklyTrendingTags(shortWeeklyKeywordsData, shortUsedCharsSoFar);
-      const shortTags = [...shortBaseTags, ...shortFixedWeeklyKeywords, ...shortMultilingualTags, ...shortOtherWeeklyTrendingTags];
+      const shortWeeklyTop2Keywords = loadWeeklyTop2Keywords(shortWeeklyKeywordsData);
+      const shortMultilingualTags = buildMultilingualTags(shortLocalizations, [...shortBaseTags, ...shortFixedWeeklyKeywords, ...shortWeeklyTop2Keywords]);
+      const shortUsedCharsSoFar = [...shortBaseTags, ...shortFixedWeeklyKeywords, ...shortWeeklyTop2Keywords, ...shortMultilingualTags].join(",").length;
+      const shortDailyTrendingTags = loadDailyTrendingTags(shortDailyKeywordsData, shortUsedCharsSoFar);
+      const shortTags = [...shortBaseTags, ...shortFixedWeeklyKeywords, ...shortWeeklyTop2Keywords, ...shortMultilingualTags, ...shortDailyTrendingTags];
 
       // One bad/unrecognized translation anywhere in `localizations` fails the ENTIRE upload
       // with YouTube's generic invalidVideoMetadata error (see YT_LOCALE_MAP note above) — so a
