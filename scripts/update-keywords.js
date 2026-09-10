@@ -4,21 +4,36 @@ import { getMyChannelBranding, setChannelKeywords, getYoutubeClient } from "./yo
 import { translateTermToEnglish } from "./cf-ai.js";
 import { CATALOG } from "./catalog.js";
 
-// Runs every Monday 5am (see .github/workflows/hdl-keyword-update.yml) in two phases, because
-// the trending lookups (Google Trends + YouTube's per-country trending charts) only need to
-// happen ONCE a week, not once per channel — phase 1 computes a single shared keyword set and
-// commits it to the repo; phase 2 (one job per channel, run right after) reads that committed
-// file and pushes it to each channel's Keywords field. MODE picks which phase this run is:
-//   MODE=compute -> fetch trends, write keywords-weekly.json (no YouTube channel writes)
-//   MODE=apply   -> read keywords-weekly.json, call setChannelKeywords for THIS channel (uses
-//                   the same YT_CLIENT_ID/SECRET/REFRESH_TOKEN env vars every other script here uses)
-const MODE = process.env.KEYWORDS_MODE || "compute";
-const OUT_FILE = "keywords-weekly.json";
+// Two schedules now feed the same keyword pipeline (see the two workflows:
+// hdl-keyword-update.yml [weekly] and hdl-keyword-update-daily.yml [daily]), each running the
+// same two-phase compute-then-apply pattern because the trending lookups only need to happen
+// ONCE per run, not once per channel:
+//   - WEEKLY, Monday 5am Africa/Johannesburg: computes the top 2 trending terms (by combined
+//     cross-market signal strength) and writes keywords-weekly.json. These 2 words sit right
+//     after the 5 fixed keywords and hold for the whole week.
+//   - DAILY, every day 5pm Africa/Johannesburg: computes a fuller trending set (excluding
+//     whatever's already locked in as this week's top 2, so it's genuinely "the rest") and
+//     writes keywords-daily.json. This is the part that actually refreshes every day.
+// MODE picks which phase/schedule this run is:
+//   MODE=compute-weekly -> fetch trends, write keywords-weekly.json (top 2 terms only)
+//   MODE=compute-daily  -> fetch trends, write keywords-daily.json (the rest)
+//   MODE=apply          -> read BOTH files (whichever exist), build the combined channel
+//                           keywords string fresh, call setChannelKeywords for THIS channel
+//                           (uses the same YT_CLIENT_ID/SECRET/REFRESH_TOKEN env vars every
+//                           other script here uses). Run after EITHER compute phase, so the
+//                           channel always reflects the latest of both the weekly-2 and the
+//                           daily-rest, whichever just changed.
+const MODE = process.env.KEYWORDS_MODE || "compute-weekly";
+const WEEKLY_FILE = "keywords-weekly.json";
+const DAILY_FILE = "keywords-daily.json";
 const CHANNEL_KEYWORDS_MAX = 500; // same brandingSettings.channel.keywords hard cap as customize-channel.js
 
 // These 5 never change, regardless of what's trending — always kept, and always survive the
 // 500-char truncation below since they're added first.
 const FIXED_KEYWORDS = ["Google", "YouTube", "MrBeast", "Artificial Intelligence (AI)", "Mirror Movie"];
+
+// How many terms the weekly run locks in right after the fixed keywords. Requested as "2 words".
+const WEEKLY_TOP_N = 2;
 
 // Top 10 countries by population that ALSO have a working YouTube "most popular" chart via the
 // Data API. NOTE: China's regionCode=CN has historically returned empty/unreliable results on
@@ -185,11 +200,34 @@ async function fetchYoutubeTopTermsByCountry() {
   return byCountry;
 }
 
-// Combines fixed keywords + book/brand terms (same as customize-channel.js's buildChannelKeywords)
-// + this week's trending terms into a single string under the channel Keywords field's 500-char
-// cap. Fixed keywords and brand terms are added FIRST so they always survive truncation —
-// trending terms fill whatever room is left.
-function buildCombinedKeywordString({ googleTrendsApprox, youtubeTopTermsFlat }) {
+// Ranks every trending term seen across BOTH sources into one ordered list, so "top N" has a
+// single well-defined meaning instead of two separately-ordered lists. Google Trends terms are
+// already ordered by how many markets they trended in (fetchGoogleTrendsWorldwideApprox), so
+// their rank position gives a weighted score; YouTube per-country appearances each add a smaller
+// bump. Ties resolve toward whichever term has broader cross-source support.
+function rankAllTrendingTerms({ googleTrendsApprox, youtubeTopTermsByCountry }) {
+  const scores = new Map(); // lowercase -> { term, score }
+  function bump(term, amount) {
+    const t = String(term || "").trim();
+    if (!t) return;
+    const key = t.toLowerCase();
+    if (!scores.has(key)) scores.set(key, { term: t, score: 0 });
+    scores.get(key).score += amount;
+  }
+  googleTrendsApprox.forEach((term, i) => bump(term, (googleTrendsApprox.length - i) * 2));
+  for (const terms of Object.values(youtubeTopTermsByCountry || {})) {
+    (terms || []).forEach((term) => bump(term, 1));
+  }
+  return [...scores.values()].sort((a, b) => b.score - a.score).map((e) => e.term);
+}
+
+// Combines fixed keywords + this week's top-2 trending terms + book/brand terms (same as
+// customize-channel.js's buildChannelKeywords) + the rest of today's trending terms into a
+// single string under the channel Keywords field's 500-char cap, in the requested order:
+// consistent keywords, then the weekly 2 words, then everything else. Fixed + weekly-2 + brand
+// terms are added FIRST so they always survive truncation — the daily "rest" fills whatever
+// room is left.
+function buildCombinedKeywordString({ weeklyTop2, dailyRest }) {
   const seen = new Set();
   const phrases = [];
   function add(term) {
@@ -201,13 +239,13 @@ function buildCombinedKeywordString({ googleTrendsApprox, youtubeTopTermsFlat })
   }
 
   FIXED_KEYWORDS.forEach(add);
+  (weeklyTop2 || []).forEach(add);
   ["HDL Group", "High Definition Learning", "digital textbooks", "ebooks"].forEach(add);
   for (const book of CATALOG) {
     add(book.angle);
     add(book.title);
   }
-  googleTrendsApprox.forEach(add);
-  youtubeTopTermsFlat.forEach(add);
+  (dailyRest || []).forEach(add);
 
   const quoted = phrases.map((p) => (p.includes(" ") ? `"${p}"` : p));
   let result = "";
@@ -265,95 +303,136 @@ async function collectFreshTrendsWithRetry() {
   }
 
   throw new Error(
-    `Fresh weekly trend collection failed after ${MAX_SOURCE_ATTEMPTS} attempts. ` +
-    `The previous keywords-weekly.json was NOT replaced. Last error: ${lastError?.message || "unknown error"}`
+    `Fresh trend collection failed after ${MAX_SOURCE_ATTEMPTS} attempts. ` +
+    `The previous keyword file was NOT replaced. Last error: ${lastError?.message || "unknown error"}`
   );
 }
 
-function validateKeywordData(data) {
-  if (!data || typeof data !== "object") throw new Error("Keyword data is not an object.");
-  if (!Array.isArray(data.fixed)) throw new Error("Keyword data is missing fixed[].");
-  if (!Array.isArray(data.googleTrendsApprox)) throw new Error("Keyword data is missing googleTrendsApprox[].");
-  if (!data.youtubeTopTermsByCountry || typeof data.youtubeTopTermsByCountry !== "object") {
-    throw new Error("Keyword data is missing youtubeTopTermsByCountry.");
-  }
-  if (!Array.isArray(data.youtubeTopTermsFlat)) throw new Error("Keyword data is missing youtubeTopTermsFlat[].");
-  if (typeof data.channelKeywordsString !== "string" || !data.channelKeywordsString.trim()) {
-    throw new Error("Keyword data is missing channelKeywordsString.");
-  }
-  if (data.channelKeywordsString.length > CHANNEL_KEYWORDS_MAX) {
-    throw new Error(`channelKeywordsString is ${data.channelKeywordsString.length} chars; maximum is ${CHANNEL_KEYWORDS_MAX}.`);
-  }
+function validateWeeklyData(data) {
+  if (!data || typeof data !== "object") throw new Error("Weekly keyword data is not an object.");
+  if (!Array.isArray(data.fixed)) throw new Error("Weekly keyword data is missing fixed[].");
+  if (!Array.isArray(data.weeklyTop2)) throw new Error("Weekly keyword data is missing weeklyTop2[].");
   if (!data.updatedAt || Number.isNaN(Date.parse(data.updatedAt))) {
-    throw new Error("Keyword data has an invalid updatedAt timestamp.");
+    throw new Error("Weekly keyword data has an invalid updatedAt timestamp.");
   }
   return data;
 }
 
-async function runCompute() {
-  console.log("Computing this week's trending keyword set with bounded retries...");
-
-  let previousData = null;
-  try {
-    previousData = validateKeywordData(JSON.parse(await fs.readFile(OUT_FILE, "utf8")));
-  } catch {
-    // There may be no previous file on the first-ever run.
+function validateDailyData(data) {
+  if (!data || typeof data !== "object") throw new Error("Daily keyword data is not an object.");
+  if (!Array.isArray(data.dailyRest)) throw new Error("Daily keyword data is missing dailyRest[].");
+  if (!Array.isArray(data.googleTrendsApprox)) throw new Error("Daily keyword data is missing googleTrendsApprox[].");
+  if (!data.youtubeTopTermsByCountry || typeof data.youtubeTopTermsByCountry !== "object") {
+    throw new Error("Daily keyword data is missing youtubeTopTermsByCountry.");
   }
+  if (!Array.isArray(data.youtubeTopTermsFlat)) throw new Error("Daily keyword data is missing youtubeTopTermsFlat[].");
+  if (!data.updatedAt || Number.isNaN(Date.parse(data.updatedAt))) {
+    throw new Error("Daily keyword data has an invalid updatedAt timestamp.");
+  }
+  return data;
+}
+
+async function readWeeklyFileIfPresent() {
+  try {
+    return validateWeeklyData(JSON.parse(await fs.readFile(WEEKLY_FILE, "utf8")));
+  } catch {
+    return null; // no weekly file yet (first-ever run) or it's malformed — treated as "no top 2 yet"
+  }
+}
+
+async function readDailyFileIfPresent() {
+  try {
+    return validateDailyData(JSON.parse(await fs.readFile(DAILY_FILE, "utf8")));
+  } catch {
+    return null; // no daily file yet (first-ever run) or it's malformed — treated as "no rest yet"
+  }
+}
+
+// Runs Monday 5am Africa/Johannesburg. Picks the single top-2 trending terms (by combined
+// cross-market signal, see rankAllTrendingTerms) and locks them in for the week, right after the
+// 5 fixed keywords.
+async function runComputeWeekly() {
+  console.log("Computing this week's top 2 trending keywords with bounded retries...");
+
+  const { googleTrendsApprox, youtubeTopTermsByCountry } = await collectFreshTrendsWithRetry();
+  const ranked = rankAllTrendingTerms({ googleTrendsApprox, youtubeTopTermsByCountry });
+  const weeklyTop2 = ranked.slice(0, WEEKLY_TOP_N);
+
+  const data = validateWeeklyData({
+    updatedAt: new Date().toISOString(),
+    fixed: FIXED_KEYWORDS,
+    weeklyTop2,
+  });
+
+  await fs.writeFile(WEEKLY_FILE, JSON.stringify(data, null, 2) + "\n", "utf8");
+
+  await fs.mkdir(KEYWORD_HISTORY_DIR, { recursive: true });
+  const historyPath = `${KEYWORD_HISTORY_DIR}/weekly-${data.updatedAt.slice(0, 10)}.json`;
+  await fs.writeFile(historyPath, JSON.stringify(data, null, 2) + "\n", "utf8");
+
+  console.log(`Wrote ${WEEKLY_FILE} (top 2: ${weeklyTop2.join(", ") || "(none found)"}) and ${historyPath}.`);
+}
+
+// Runs every day 5pm Africa/Johannesburg. Computes a fuller trending set, excluding this week's
+// locked-in top 2 (so it's genuinely "the rest" — no duplicate tag entries), and writes it as
+// the part of the keyword pool that actually refreshes daily.
+async function runComputeDaily() {
+  console.log("Computing today's trending keyword set with bounded retries...");
+
+  const weekly = await readWeeklyFileIfPresent();
+  const excludeSet = new Set((weekly?.weeklyTop2 || []).map((t) => t.toLowerCase()));
 
   const { googleTrendsApprox, youtubeTopTermsByCountry } = await collectFreshTrendsWithRetry();
   const youtubeTopTermsFlat = [...new Set(Object.values(youtubeTopTermsByCountry).flat())];
+  const ranked = rankAllTrendingTerms({ googleTrendsApprox, youtubeTopTermsByCountry });
+  const dailyRest = ranked.filter((t) => !excludeSet.has(t.toLowerCase()));
 
-  const data = validateKeywordData({
+  const data = validateDailyData({
     updatedAt: new Date().toISOString(),
-    fixed: FIXED_KEYWORDS,
+    dailyRest,
     googleTrendsApprox,
     youtubeTopTermsByCountry,
     youtubeTopTermsFlat,
-    channelKeywordsString: buildCombinedKeywordString({ googleTrendsApprox, youtubeTopTermsFlat }),
   });
 
-  // Write the current active file only after the complete new dataset has passed validation.
-  await fs.writeFile(OUT_FILE, JSON.stringify(data, null, 2) + "\n", "utf8");
+  await fs.writeFile(DAILY_FILE, JSON.stringify(data, null, 2) + "\n", "utf8");
 
-  // Keep a dated snapshot as legitimate, useful repository state. The active file remains
-  // the single source read by the daily uploader.
   await fs.mkdir(KEYWORD_HISTORY_DIR, { recursive: true });
-  const historyDate = data.updatedAt.slice(0, 10);
-  const historyPath = `${KEYWORD_HISTORY_DIR}/${historyDate}.json`;
-  const historyData = {
-    ...data,
-    historySavedAt: new Date().toISOString(),
-    previousUpdatedAt: previousData?.updatedAt || null,
-    generatorVersion: "weekly-keywords-v2",
-  };
-  await fs.writeFile(historyPath, JSON.stringify(historyData, null, 2) + "\n", "utf8");
+  const historyPath = `${KEYWORD_HISTORY_DIR}/daily-${data.updatedAt.slice(0, 10)}.json`;
+  await fs.writeFile(historyPath, JSON.stringify(data, null, 2) + "\n", "utf8");
 
-  console.log(
-    `Wrote ${OUT_FILE} (${data.channelKeywordsString.length}/${CHANNEL_KEYWORDS_MAX} chars) ` +
-    `and ${historyPath}.`
-  );
+  console.log(`Wrote ${DAILY_FILE} (${dailyRest.length} terms after excluding this week's top 2) and ${historyPath}.`);
 }
 
+// Reads both files (whichever exist), rebuilds the combined channel keywords string fresh, and
+// pushes it to THIS channel. Run after either compute phase, so the channel always reflects the
+// latest of both the weekly-2 and the daily-rest.
 async function runApply() {
-  const raw = await fs.readFile(OUT_FILE, "utf8").catch(() => null);
-  if (!raw) throw new Error(`${OUT_FILE} not found — the "compute" phase must run and commit it first.`);
-
-  let data;
-  try {
-    data = validateKeywordData(JSON.parse(raw));
-  } catch (error) {
-    throw new Error(`Refusing to apply invalid ${OUT_FILE}: ${error.message}`);
+  const weekly = await readWeeklyFileIfPresent();
+  const daily = await readDailyFileIfPresent();
+  if (!weekly && !daily) {
+    throw new Error(
+      `Neither ${WEEKLY_FILE} nor ${DAILY_FILE} found — at least one compute phase must run and commit first.`
+    );
   }
+
+  const channelKeywordsString = buildCombinedKeywordString({
+    weeklyTop2: weekly?.weeklyTop2 || [],
+    dailyRest: daily?.dailyRest || [],
+  });
 
   console.log("Fetching current channel branding...");
   const channel = await getMyChannelBranding();
   console.log(`Channel: "${channel.snippet.title}" (${channel.id})`);
-  console.log(`Applying keywords (${data.channelKeywordsString.length} chars, computed ${data.updatedAt}):`);
-  console.log(data.channelKeywordsString);
+  console.log(
+    `Applying keywords (${channelKeywordsString.length} chars; weekly updated ` +
+    `${weekly?.updatedAt || "never"}, daily updated ${daily?.updatedAt || "never"}):`
+  );
+  console.log(channelKeywordsString);
 
   await setChannelKeywords({
     channelId: channel.id,
-    keywords: data.channelKeywordsString,
+    keywords: channelKeywordsString,
     currentBranding: channel.brandingSettings,
   });
 
@@ -361,10 +440,10 @@ async function runApply() {
   // solely on the update request returning HTTP 200.
   const verified = await getMyChannelBranding();
   const actual = verified.brandingSettings?.channel?.keywords || "";
-  if (actual !== data.channelKeywordsString) {
+  if (actual !== channelKeywordsString) {
     throw new Error(
       `Channel keyword verification failed for "${verified.snippet.title}" (${verified.id}). ` +
-      `Expected ${data.channelKeywordsString.length} chars but YouTube returned ${actual.length}.`
+      `Expected ${channelKeywordsString.length} chars but YouTube returned ${actual.length}.`
     );
   }
 
@@ -372,9 +451,14 @@ async function runApply() {
 }
 
 async function main() {
-  if (MODE === "compute") await runCompute();
+  if (MODE === "compute-weekly") await runComputeWeekly();
+  else if (MODE === "compute-daily") await runComputeDaily();
   else if (MODE === "apply") await runApply();
-  else throw new Error(`Unknown KEYWORDS_MODE "${MODE}" — expected "compute" or "apply".`);
+  else {
+    throw new Error(
+      `Unknown KEYWORDS_MODE "${MODE}" — expected "compute-weekly", "compute-daily", or "apply".`
+    );
+  }
 }
 
 main().catch((e) => {
