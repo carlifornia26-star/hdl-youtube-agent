@@ -99,6 +99,10 @@ jobs:
         channel: ["1", "2", "3"]
     steps:
       - uses: actions/checkout@v4 # picks up the commit compute-keywords just pushed
+        with:
+          ref: ${{ github.ref_name }} # without this, checkout defaults to github.sha, which is
+          # frozen at workflow-trigger time and does NOT include the commit compute-keywords
+          # pushed earlier in this same run — this line pulls the live branch tip instead
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
