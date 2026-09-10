@@ -182,6 +182,7 @@ jobs:
           echo "=========================================="
 
           node scripts/validate-weekly-keywords.js
+          node scripts/validate-daily-keywords.js
 
       - name: Display active keyword version
         if: steps.resolve.outputs.proceed == 'true'
