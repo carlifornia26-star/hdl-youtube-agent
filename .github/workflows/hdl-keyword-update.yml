@@ -4,17 +4,25 @@ name: HDL Weekly Keyword Update
 # If you're running this from a different timezone, change the cron below to (your 5am) minus
 # your UTC offset.
 #
+# This is the WEEKLY half of a two-schedule keyword pipeline — see also
+# hdl-keyword-update-daily.yml (every day 5pm SAST). The 5 fixed keywords never change. This
+# workflow locks in only the top 2 trending terms for the week, right after the fixed 5; the
+# REST of the trending pool (the part that actually refreshes daily) is computed by the daily
+# workflow instead.
+#
 # Two phases:
 #   1) compute-keywords — runs ONCE: fetches worldwide Google Trends (aggregated approximation
 #      across major markets — see scripts/update-keywords.js for why there's no single official
 #      "worldwide" feed) + YouTube's own trending chart in the top 10 populous countries with a
-#      working chart, combines them with the 5 fixed keywords, and commits keywords-weekly.json.
+#      working chart, ranks every term seen across both sources, and commits keywords-weekly.json
+#      with just the top 2 + the 5 fixed keywords.
 #   2) apply-channel-keywords — runs 3x (one per channel, matrix) right after phase 1, reading
-#      that committed file and pushing it to each channel's Keywords field via the YouTube API.
-#      generate-video.js also reads the same file every day going forward and folds its trending
-#      terms into that day's video/Short tags — the closest available equivalent to a per-upload
-#      "default keywords" setting, since the YouTube Data API has no such field (Studio's Upload
-#      Defaults page is UI-only, not exposed via the API at all).
+#      BOTH keywords-weekly.json (just written) and keywords-daily.json (whatever the daily
+#      workflow last wrote) and pushing the combined string to each channel's Keywords field via
+#      the YouTube API. generate-video.js also reads both files every day and folds fixed +
+#      weekly-2 + daily-rest into that day's video/Short tags — the closest available equivalent
+#      to a per-upload "default keywords" setting, since the YouTube Data API has no such field
+#      (Studio's Upload Defaults page is UI-only, not exposed via the API at all).
 on:
   schedule:
     - cron: "0 3 * * 1" # Monday 03:00 UTC = 05:00 SAST (Africa/Johannesburg)
@@ -40,10 +48,10 @@ jobs:
           node-version: "20"
       - name: Install dependencies
         run: npm ci
-      - name: Fetch trends + write keywords-weekly.json
+      - name: Fetch trends + write keywords-weekly.json (top 2 terms)
         run: npm run update-keywords
         env:
-          KEYWORDS_MODE: compute
+          KEYWORDS_MODE: compute-weekly
           # Needed now for translateTermToEnglish (cf-ai.js) — the same Cloudflare Workers AI
           # credentials every other script here already uses for translation.
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
