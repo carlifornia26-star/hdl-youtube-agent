@@ -159,6 +159,30 @@ jobs:
           echo "Resolved channel: $CHANNEL"
           echo "US Eastern offset: $OFFSET"
 
+          # Fixed daily PUBLISH moment per channel (as opposed to the trigger time above) — the
+          # trigger just STARTS the render/upload pipeline, whose duration varies run to run
+          # (TTS, translation, encode time). Without this, the video goes public the instant the
+          # pipeline happens to finish, so the actual live-on-YouTube timestamp drifts all over
+          # the place day to day. Competitor analysis showed top channels publish at the exact
+          # same second every time (a human clicking "schedule" in Studio) — this is the
+          # automated equivalent: a fixed Eastern wall-clock target per channel, 90 minutes after
+          # that channel's trigger (comfortable buffer for a normal run), converted to UTC using
+          # the same DST-aware $OFFSET already resolved above. publishVideo() in youtube.js uses
+          # this as a `publishAt` schedule instead of publishing the moment the script reaches
+          # that line, so the actual public-timestamp stops varying with render duration.
+          case "$CHANNEL" in
+            1) PUBLISH_ET_HOUR=15; PUBLISH_ET_MIN=45 ;; # 3:45 PM ET (90 min after 2:15 PM trigger)
+            2) PUBLISH_ET_HOUR=17; PUBLISH_ET_MIN=45 ;; # 5:45 PM ET (90 min after 4:15 PM trigger)
+            3) PUBLISH_ET_HOUR=19; PUBLISH_ET_MIN=45 ;; # 7:45 PM ET (90 min after 6:15 PM trigger)
+          esac
+
+          if [ "$OFFSET" = "-0400" ]; then UTC_ADD=4; else UTC_ADD=5; fi
+          PUBLISH_HOUR_UTC=$(( (PUBLISH_ET_HOUR + UTC_ADD) % 24 ))
+
+          echo "publish_hour_utc=$PUBLISH_HOUR_UTC" >> "$GITHUB_OUTPUT"
+          echo "publish_minute_utc=$PUBLISH_ET_MIN" >> "$GITHUB_OUTPUT"
+          echo "Scheduled publish target: ${PUBLISH_HOUR_UTC}:${PUBLISH_ET_MIN} UTC"
+
       - name: Install ffmpeg
         if: steps.resolve.outputs.proceed == 'true'
         run: |
@@ -289,6 +313,8 @@ jobs:
           DRY_RUN_PRIVATE: ${{ vars.DRY_RUN_PRIVATE }}
           CHANNEL_ID: ${{ steps.resolve.outputs.channel }}
           YT_VIDEO_LOCATION_DESCRIPTION: ${{ vars.YT_VIDEO_LOCATION_DESCRIPTION }}
+          PUBLISH_HOUR_UTC: ${{ steps.resolve.outputs.publish_hour_utc }}
+          PUBLISH_MINUTE_UTC: ${{ steps.resolve.outputs.publish_minute_utc }}
 
       - name: Verify generated repository state
         if: always() && steps.resolve.outputs.proceed == 'true'
