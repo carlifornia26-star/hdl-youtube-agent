@@ -10,7 +10,8 @@
     "customize-channel": "node scripts/customize-channel.js",
     "update-keywords": "node scripts/update-keywords.js",
     "set-channel-trailer": "node scripts/set-channel-trailer.js",
-    "setup-playlists": "node scripts/setup-playlists.js"
+    "setup-playlists": "node scripts/setup-playlists.js",
+    "analyze-competitor": "node scripts/analyze-competitor.js"
   },
   "dependencies": {
     "exiftool-vendored": "^35.0.0",
