@@ -9,16 +9,22 @@ name: HDL Daily Keyword Update
 # trending words for the whole week right after them. This workflow computes the REST of the
 # trending pool — everything after the fixed 5 + weekly 2 — fresh every day.
 #
-# Two phases, same pattern as the weekly workflow:
-#   1) compute-keywords — runs ONCE: fetches worldwide Google Trends + YouTube's own trending
-#      chart (same sources as the weekly workflow, see scripts/update-keywords.js), ranks every
-#      term, excludes whatever this week's locked-in top 2 already are, and commits
-#      keywords-daily.json with the rest.
-#   2) apply-channel-keywords — runs 3x (one per channel, matrix) right after phase 1, reading
-#      BOTH keywords-weekly.json (whatever Monday last wrote) and keywords-daily.json (just
-#      written) and pushing the combined string to each channel's Keywords field via the YouTube
-#      API. generate-video.js also reads both files every day and folds fixed + weekly-2 +
-#      daily-rest into that day's video/Short tags.
+# ONE phase now: compute-keywords fetches worldwide Google Trends + YouTube's own trending
+# chart (same sources as the weekly workflow, see scripts/update-keywords.js), ranks every term,
+# excludes whatever this week's locked-in top 2 already are, and commits keywords-daily.json
+# with the rest. generate-video.js reads this file (plus keywords-weekly.json) every day and
+# folds fixed + weekly-2 + daily-rest into that day's video/Short `tags` — the only place these
+# keywords now reach YouTube.
+#
+# REMOVED (2026-09-11): this workflow used to have a second job, apply-channel-keywords, which
+# pushed the combined keyword string to each of the 3 channels' brandingSettings.channel.keywords
+# field (the "Channel Keywords" SEO setting in YouTube Studio) via the YouTube API. It's been
+# removed by request — it was the recurring source of "Neither keywords-weekly.json nor
+# keywords-daily.json found" failures (a checkout-timing race against the compute job earlier in
+# the same run), and channel-level keywords aren't shown to viewers anywhere either, so removing
+# this doesn't lose any public-facing SEO value. If you ever want channel-level keywords back,
+# the removed job (and the setChannelKeywords call it used in scripts/update-keywords.js) is
+# recoverable from git history.
 on:
   schedule:
     - cron: "0 15 * * *" # every day 15:00 UTC = 17:00 SAST (Africa/Johannesburg)
@@ -86,55 +92,9 @@ jobs:
           echo "Unable to push daily keyword state after 3 attempts."
           exit 1
 
-  apply-channel-keywords:
-    needs: compute-keywords
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    strategy:
-      matrix:
-        channel: ["1", "2", "3"]
-    steps:
-      - uses: actions/checkout@v4 # picks up the commit compute-keywords just pushed
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Resolve channel secrets
-        id: resolve
-        run: |
-          # Same secret-name mapping as every other multi-channel workflow in this repo.
-          case "${{ matrix.channel }}" in
-            1)
-              echo "id_key=YT_CLIENT_ID" >> "$GITHUB_OUTPUT"
-              echo "secret_key=YT_CLIENT_SECRET" >> "$GITHUB_OUTPUT"
-              echo "token_key=YT_REFRESH_TOKEN" >> "$GITHUB_OUTPUT"
-              ;;
-            2)
-              echo "id_key=YOUTUBE_CLIENT_ID_2" >> "$GITHUB_OUTPUT"
-              echo "secret_key=YOUTUBE_CLIENT_SECRET_2" >> "$GITHUB_OUTPUT"
-              echo "token_key=YOUTUBE_REFRESH_TOKEN_2" >> "$GITHUB_OUTPUT"
-              ;;
-            3)
-              echo "id_key=YOUTUBE_CLIENT_ID_3" >> "$GITHUB_OUTPUT"
-              echo "secret_key=YOUTUBE_CLIENT_SECRET_3" >> "$GITHUB_OUTPUT"
-              echo "token_key=YOUTUBE_REFRESH_TOKEN_3" >> "$GITHUB_OUTPUT"
-              ;;
-          esac
-
-      - name: Apply channel keywords (Channel ${{ matrix.channel }})
-        run: npm run update-keywords
-        env:
-          KEYWORDS_MODE: apply
-          YT_CLIENT_ID: ${{ secrets[steps.resolve.outputs.id_key] }}
-          YT_CLIENT_SECRET: ${{ secrets[steps.resolve.outputs.secret_key] }}
-          YT_REFRESH_TOKEN: ${{ secrets[steps.resolve.outputs.token_key] }}
-
-
   finalize-daily-health:
     if: always()
-    needs: [compute-keywords, apply-channel-keywords]
+    needs: [compute-keywords]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -158,9 +118,8 @@ jobs:
           cat > automation-health/daily.json <<EOF
           {
             "checkedAt": "$NOW",
-            "overallStatus": "${{ needs['compute-keywords'].result == 'success' && needs['apply-channel-keywords'].result == 'success' && 'success' || 'failed' }}",
+            "overallStatus": "${{ needs['compute-keywords'].result == 'success' && 'success' || 'failed' }}",
             "computeStatus": "${{ needs['compute-keywords'].result }}",
-            "applyChannelsStatus": "${{ needs['apply-channel-keywords'].result }}",
             "keywordsFileStatus": "$KEYWORDS_STATUS",
             "keywordsUpdatedAt": "$UPDATED_AT",
             "repositorySha": "$SHA",
