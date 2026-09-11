@@ -92,6 +92,28 @@ async function renameForUpload(sourcePath, keywordText, extension = "mp4") {
 
 const BUILD_DIR = path.resolve("build");
 const SITE_URL = "https://highdefinitionlearning.pages.dev/"; // every description link points here, not the per-book page
+
+// Sibling-channel cross-promotion, matching the "SUB TO ALL CHANNELS" block every competitor
+// video carries. Optional by design (falls back to no block at all) since this repo doesn't
+// otherwise store the other 2 channels' URLs anywhere — set these as repo Variables
+// (Settings -> Secrets and variables -> Actions -> Variables) once you have each channel's
+// public @handle URL: HDL_CHANNEL_1_URL, HDL_CHANNEL_2_URL, HDL_CHANNEL_3_URL.
+const HDL_CHANNEL_URLS = {
+  1: process.env.HDL_CHANNEL_1_URL || "",
+  2: process.env.HDL_CHANNEL_2_URL || "",
+  3: process.env.HDL_CHANNEL_3_URL || "",
+};
+
+// Builds the cross-channel subscribe block for every channel EXCEPT the one uploading right now.
+// Returns "" (no block) if fewer than 2 sibling URLs are configured, so a half-filled-in setup
+// never ships an awkward 1-line "SUB TO ALL CHANNELS" pointing at just one other channel.
+function buildSubscribeBlock(currentChannelId) {
+  const siblings = Object.entries(HDL_CHANNEL_URLS)
+    .filter(([id, url]) => id !== String(currentChannelId) && url)
+    .map(([, url]) => url);
+  if (siblings.length < 2) return "";
+  return `\n\nSUB TO ALL HDL GROUP CHANNELS\n${siblings.join("\n")}`;
+}
 const PADDING_SECONDS = 0.8; // per-scene buffer after the voice line finishes, before the next scene cuts in
 const MIN_SCENE_SECONDS = 4;
 const MAX_SCENE_SECONDS = 45;
@@ -116,7 +138,13 @@ const MIN_CHAPTERS_TO_INCLUDE = 3;
 // snippet.tags is a single flat array (not per-locale) — YouTube also rejects the whole upload
 // if the combined tags string goes over roughly 500 characters, so multilingual tags are added
 // up to this budget rather than unconditionally for all 15 languages.
-const TAGS_CHAR_BUDGET = 460;
+// Competitor analysis (see analyze-competitor.js) found top-performing videos ship with ZERO
+// tags — YouTube's ranking signal comes from title/thumbnail/retention, not the tags field.
+// Dropped from 460 to 180: the fixed 5 + weekly-top-2 keywords (added unconditionally below,
+// no budget check) still land on every upload either way; this just stops the multilingual/daily
+// trending tags from maxing out the full ~500-char field for a signal that isn't earning its
+// keep. Multilingual tags and trending tags still get a modest allowance, just not the whole budget.
+const TAGS_CHAR_BUDGET = 180;
 const MAX_TAG_LENGTH = 100; // YouTube rejects any single tag over 100 chars
 
 // If more than this fraction of scenes end up with no narration (Fish Audio down, key revoked,
@@ -151,10 +179,29 @@ function formatTimestamp(totalSeconds) {
 // free label — costs nothing extra (no translation call, no new data), since `built[i].line`
 // already exists. Left in English even inside translated descriptions (see chaptersBlock below)
 // to avoid a second translateMeta pass just for chapter labels — the timestamps do the real work.
+// Was a flat "first 6 words" cut, which routinely sliced a scene's narration line off
+// mid-thought (e.g. "Most people think success online is" — the sentence just stops).
+// Now prefers a natural clause boundary (sentence end or comma) within the length budget, so a
+// chapter title reads as a complete phrase; if no boundary exists in range, it truncates at a
+// whole-word boundary and appends "…" so it visibly reads as a fragment instead of a
+// finished-looking sentence that just happens to trail off.
 function chapterLabel(line, index) {
   if (index === 0) return "Intro";
-  const words = line.trim().split(/\s+/).filter(Boolean).slice(0, 6).join(" ");
-  return words.length > 0 ? words : `Part ${index + 1}`;
+  const MAX_CHARS = 42;
+  const clean = line.trim().replace(/\s+/g, " ");
+  if (!clean) return `Part ${index + 1}`;
+
+  const window = clean.slice(0, MAX_CHARS + 1);
+  const lastPunct = Math.max(window.lastIndexOf("."), window.lastIndexOf("!"), window.lastIndexOf("?"), window.lastIndexOf(","));
+  if (lastPunct > 10) {
+    return clean.slice(0, lastPunct).trim();
+  }
+
+  if (clean.length <= MAX_CHARS) return clean;
+  const words = clean.slice(0, MAX_CHARS).split(" ");
+  words.pop(); // drop the partial trailing word so we never cut a word in half
+  const truncated = words.join(" ").trim();
+  return truncated ? `${truncated}…` : `Part ${index + 1}`;
 }
 
 // Walks the already-built scene list and picks out chapter marks at least MIN_CHAPTER_GAP_SECONDS
@@ -229,6 +276,27 @@ async function loadDailyKeywordsFile() {
   } catch {
     return null; // no daily file yet, or it's malformed — not a reason to fail the day's upload
   }
+}
+
+// Builds today's fixed publish target (UTC) from PUBLISH_HOUR_UTC/PUBLISH_MINUTE_UTC (set by
+// daily-video.yml's resolve step — see comment there). Returns undefined if either env var is
+// missing (manual/local runs) or if today's target time has already passed, in which case
+// publishVideo() falls back to its original immediate-publish behavior — a missed schedule
+// window should never leave a finished video stuck private.
+function computeScheduledPublishAt() {
+  const hour = Number(process.env.PUBLISH_HOUR_UTC);
+  const minute = Number(process.env.PUBLISH_MINUTE_UTC);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return undefined;
+
+  const now = new Date();
+  const target = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour, minute, 0));
+  if (target.getTime() <= Date.now()) {
+    console.warn(
+      `computeScheduledPublishAt: target ${target.toISOString()} has already passed — publishing immediately instead of scheduling.`
+    );
+    return undefined;
+  }
+  return target.toISOString();
 }
 
 function loadFixedWeeklyKeywords(weeklyData) {
@@ -585,8 +653,18 @@ async function main() {
   // "hbhefinitionlearning.pages.d ev" — a broken link in the description of every translated
   // video). Hashtags and chapter timestamps are static identifiers too, so they're pulled out
   // for the same reason even though they're lower-risk than a URL.
-  const translatableDescription = `${book.title} explores ${book.angle}. Available in English only, exclusively on Google Play Books.`;
-  const untranslatedSuffix = `\nRead the full book: ${SITE_URL}\n\n#HDLGroup #${book.slug.replace(/-/g, "")}`;
+  // Hook first, sales pitch after — competitor descriptions open with the premise/question, not
+  // a disclaimer. Previously this one translated sentence bundled both ("X explores Y. Available
+  // in English only...") so the very first thing a reader hit was a disclaimer, not a hook. Now
+  // only the hook gets translated per-language; "Available in English only..." moves into the
+  // untranslated suffix below (which is also more internally consistent — translating a sentence
+  // that says "English only" into Spanish was always a little odd).
+  const translatableDescription = `Curious about ${book.angle}? ${book.title} breaks it down.`;
+  const untranslatedSuffix =
+    `\n\nAvailable in English only, exclusively on Google Play Books.` +
+    `\nRead the full book: ${SITE_URL}` +
+    buildSubscribeBlock(CHANNEL_ID) +
+    `\n\n#HDLGroup #${book.slug.replace(/-/g, "")}`;
   const baseDescription = translatableDescription + chaptersBlock + untranslatedSuffix;
   let attributionSuffix = "";
   if (musicTrack) attributionSuffix += `\n\n${attributionLine(musicTrack)}`;
@@ -957,9 +1035,18 @@ async function main() {
   // cost a few missing Short caption languages, never a stuck-private video again. If this
   // throws, the run still fails loudly (GitHub Actions red X) rather than silently leaving
   // anything stuck private — not wrapped in try/catch, same as before.
-  await publishVideo({ videoId: uploaded.id });
+  //
+  // publishAt: competitor analysis showed top channels go public at the exact same wall-clock
+  // moment every day; this pipeline's actual publish instant used to be whatever time the run
+  // happened to reach this line (render/TTS/translation duration varies day to day). Now it
+  // schedules the fixed daily target computed in daily-video.yml (PUBLISH_HOUR_UTC/MINUTE_UTC)
+  // instead, so the public timestamp stops drifting with render time. Falls back to immediate
+  // publish automatically if those env vars are missing (e.g. a manual workflow_dispatch run,
+  // or local testing) or if today's target has already passed by the time we get here.
+  const publishAt = computeScheduledPublishAt();
+  await publishVideo({ videoId: uploaded.id, publishAt });
   if (shortVideoId) {
-    await publishVideo({ videoId: shortVideoId });
+    await publishVideo({ videoId: shortVideoId, publishAt });
   }
 
   // 7c) Short captions, part 2 — the remaining languages, attempted only after both videos are
