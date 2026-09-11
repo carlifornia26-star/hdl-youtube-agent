@@ -479,7 +479,8 @@ Requirements:
 - Do NOT use any of these overused patterns: "You Won't Believe...", "This One Trick...", "The Truth About...", "Nobody Talks About...", "Here's Why...", ALL CAPS words, excessive punctuation (no "!!", no "?!"), emoji.
 - Sound like a specific, well-informed editor wrote it about this exact topic — not a generic template that could apply to any video.
 - Use AT MOST one of: a direct question, a specific-but-withheld detail, a stated contrast/tension. Do not stack more than one of these devices in the same title.
-- Plain sentence case (capitalize normally, not Every Word Capitalized).
+- If a concrete number fits naturally (a count of items, mistakes, steps, minutes, signs, etc. — something structurally true of the content, NOT a fabricated statistic or claim), include it. Skip it if it would feel forced for this particular topic.
+- Title Case every major word (capitalize each significant word, skip small connector words like "a", "the", "of", "to") — matches the convention most high-performing video titles use. Do not write in ALL CAPS or plain sentence case.
 - Output ONLY the title text, nothing else — no quotes, no explanation.`;
 
   const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
@@ -546,4 +547,4 @@ export async function translateTermToEnglish(term, sourceLang) {
     console.warn(`translateTermToEnglish: "${original}" (${sourceLang}) failed, keeping original:`, e.message);
     return original;
   }
-}
+  }
