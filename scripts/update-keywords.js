@@ -1,13 +1,10 @@
 import fs from "node:fs/promises";
 import fetch from "node-fetch";
-import { getMyChannelBranding, setChannelKeywords, getYoutubeClient } from "./youtube.js";
+import { getYoutubeClient } from "./youtube.js";
 import { translateTermToEnglish } from "./cf-ai.js";
-import { CATALOG } from "./catalog.js";
 
-// Two schedules now feed the same keyword pipeline (see the two workflows:
-// hdl-keyword-update.yml [weekly] and hdl-keyword-update-daily.yml [daily]), each running the
-// same two-phase compute-then-apply pattern because the trending lookups only need to happen
-// ONCE per run, not once per channel:
+// Two schedules feed the same keyword pipeline (see the two workflows: hdl-keyword-update.yml
+// [weekly] and hdl-keyword-update-daily.yml [daily]):
 //   - WEEKLY, Monday 5am Africa/Johannesburg: computes the top 2 trending terms (by combined
 //     cross-market signal strength) and writes keywords-weekly.json. These 2 words sit right
 //     after the 5 fixed keywords and hold for the whole week.
@@ -17,16 +14,19 @@ import { CATALOG } from "./catalog.js";
 // MODE picks which phase/schedule this run is:
 //   MODE=compute-weekly -> fetch trends, write keywords-weekly.json (top 2 terms only)
 //   MODE=compute-daily  -> fetch trends, write keywords-daily.json (the rest)
-//   MODE=apply          -> read BOTH files (whichever exist), build the combined channel
-//                           keywords string fresh, call setChannelKeywords for THIS channel
-//                           (uses the same YT_CLIENT_ID/SECRET/REFRESH_TOKEN env vars every
-//                           other script here uses). Run after EITHER compute phase, so the
-//                           channel always reflects the latest of both the weekly-2 and the
-//                           daily-rest, whichever just changed.
+//
+// NOTE (2026-09-11): this script used to have a third mode, MODE=apply, which pushed the
+// combined keyword string to each channel's brandingSettings.channel.keywords field (the
+// "Channel Keywords" SEO setting in YouTube Studio). That mode has been removed by request —
+// it was the recurring source of the "Neither keywords-weekly.json nor keywords-daily.json
+// found" failures (a stale-checkout race against the compute job in the same workflow run).
+// Channel-level keywords are no longer touched by this pipeline at all, going forward. Both
+// files this script writes are still fully used, though: generate-video.js reads them to build
+// the per-video/per-Short `tags` list on every upload (see buildMultilingualTags/
+// loadDailyTrendingTags in that file) — that's now the ONLY place these keywords reach YouTube.
 const MODE = process.env.KEYWORDS_MODE || "compute-weekly";
 const WEEKLY_FILE = "keywords-weekly.json";
 const DAILY_FILE = "keywords-daily.json";
-const CHANNEL_KEYWORDS_MAX = 500; // same brandingSettings.channel.keywords hard cap as customize-channel.js
 
 // These 5 never change, regardless of what's trending — always kept, and always survive the
 // 500-char truncation below since they're added first.
@@ -221,42 +221,6 @@ function rankAllTrendingTerms({ googleTrendsApprox, youtubeTopTermsByCountry }) 
   return [...scores.values()].sort((a, b) => b.score - a.score).map((e) => e.term);
 }
 
-// Combines fixed keywords + this week's top-2 trending terms + book/brand terms (same as
-// customize-channel.js's buildChannelKeywords) + the rest of today's trending terms into a
-// single string under the channel Keywords field's 500-char cap, in the requested order:
-// consistent keywords, then the weekly 2 words, then everything else. Fixed + weekly-2 + brand
-// terms are added FIRST so they always survive truncation — the daily "rest" fills whatever
-// room is left.
-function buildCombinedKeywordString({ weeklyTop2, dailyRest }) {
-  const seen = new Set();
-  const phrases = [];
-  function add(term) {
-    const t = String(term || "").trim();
-    const key = t.toLowerCase();
-    if (!t || seen.has(key)) return;
-    seen.add(key);
-    phrases.push(t);
-  }
-
-  FIXED_KEYWORDS.forEach(add);
-  (weeklyTop2 || []).forEach(add);
-  ["HDL Group", "High Definition Learning", "digital textbooks", "ebooks"].forEach(add);
-  for (const book of CATALOG) {
-    add(book.angle);
-    add(book.title);
-  }
-  (dailyRest || []).forEach(add);
-
-  const quoted = phrases.map((p) => (p.includes(" ") ? `"${p}"` : p));
-  let result = "";
-  for (const p of quoted) {
-    const next = result ? `${result} ${p}` : p;
-    if (next.length > CHANNEL_KEYWORDS_MAX) break;
-    result = next;
-  }
-  return result;
-}
-
 const KEYWORD_HISTORY_DIR = "keyword-history";
 const MAX_SOURCE_ATTEMPTS = 3;
 const RETRY_BASE_MS = 4000;
@@ -340,14 +304,6 @@ async function readWeeklyFileIfPresent() {
   }
 }
 
-async function readDailyFileIfPresent() {
-  try {
-    return validateDailyData(JSON.parse(await fs.readFile(DAILY_FILE, "utf8")));
-  } catch {
-    return null; // no daily file yet (first-ever run) or it's malformed — treated as "no rest yet"
-  }
-}
-
 // Runs Monday 5am Africa/Johannesburg. Picks the single top-2 trending terms (by combined
 // cross-market signal, see rankAllTrendingTerms) and locks them in for the week, right after the
 // 5 fixed keywords.
@@ -404,59 +360,14 @@ async function runComputeDaily() {
   console.log(`Wrote ${DAILY_FILE} (${dailyRest.length} terms after excluding this week's top 2) and ${historyPath}.`);
 }
 
-// Reads both files (whichever exist), rebuilds the combined channel keywords string fresh, and
-// pushes it to THIS channel. Run after either compute phase, so the channel always reflects the
-// latest of both the weekly-2 and the daily-rest.
-async function runApply() {
-  const weekly = await readWeeklyFileIfPresent();
-  const daily = await readDailyFileIfPresent();
-  if (!weekly && !daily) {
-    throw new Error(
-      `Neither ${WEEKLY_FILE} nor ${DAILY_FILE} found — at least one compute phase must run and commit first.`
-    );
-  }
-
-  const channelKeywordsString = buildCombinedKeywordString({
-    weeklyTop2: weekly?.weeklyTop2 || [],
-    dailyRest: daily?.dailyRest || [],
-  });
-
-  console.log("Fetching current channel branding...");
-  const channel = await getMyChannelBranding();
-  console.log(`Channel: "${channel.snippet.title}" (${channel.id})`);
-  console.log(
-    `Applying keywords (${channelKeywordsString.length} chars; weekly updated ` +
-    `${weekly?.updatedAt || "never"}, daily updated ${daily?.updatedAt || "never"}):`
-  );
-  console.log(channelKeywordsString);
-
-  await setChannelKeywords({
-    channelId: channel.id,
-    keywords: channelKeywordsString,
-    currentBranding: channel.brandingSettings,
-  });
-
-  // Verify against the live YouTube channel after the mutation. Do not report success based
-  // solely on the update request returning HTTP 200.
-  const verified = await getMyChannelBranding();
-  const actual = verified.brandingSettings?.channel?.keywords || "";
-  if (actual !== channelKeywordsString) {
-    throw new Error(
-      `Channel keyword verification failed for "${verified.snippet.title}" (${verified.id}). ` +
-      `Expected ${channelKeywordsString.length} chars but YouTube returned ${actual.length}.`
-    );
-  }
-
-  console.log(`Channel keywords updated AND verified successfully for ${verified.snippet.title}.`);
-}
-
 async function main() {
   if (MODE === "compute-weekly") await runComputeWeekly();
   else if (MODE === "compute-daily") await runComputeDaily();
-  else if (MODE === "apply") await runApply();
   else {
     throw new Error(
-      `Unknown KEYWORDS_MODE "${MODE}" — expected "compute-weekly", "compute-daily", or "apply".`
+      `Unknown KEYWORDS_MODE "${MODE}" — expected "compute-weekly" or "compute-daily". ` +
+      `("apply" mode, which used to push a combined string to channel-level branding ` +
+      `keywords, was removed — see the comment at the top of this file.)`
     );
   }
 }
