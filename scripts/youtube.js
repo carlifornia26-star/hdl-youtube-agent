@@ -182,33 +182,66 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
 //      "Published" and moving on while the video quietly stays private on YouTube.
 // videos.update never notifies subscribers (notifySubscribers only exists on videos.insert),
 // so no notification flag is needed here — this call is silent by construction.
-export async function publishVideo({ videoId }) {
+// `publishAt`, if given, is an ISO timestamp in the future — the video is set to `private` with
+// that scheduled publish time instead of `public` immediately, and YouTube itself flips it public
+// at that exact instant. This exists so the video's actual live-to-viewers timestamp is a fixed
+// daily wall-clock moment (see PUBLISH_HOUR_UTC/PUBLISH_MINUTE_UTC in daily-video.yml) instead of
+// "whenever this run happens to finish rendering" — competitor videos publish at the same second
+// every time, which this now matches. If publishAt is missing, already in the past (a run that
+// overran its buffer), or YouTube rejects it, this falls straight back to the original
+// immediate-public behavior so a scheduling edge case can never leave a finished video stuck.
+export async function publishVideo({ videoId, publishAt }) {
   if (process.env.DRY_RUN_PRIVATE === "true") {
     console.log(`DRY_RUN_PRIVATE set — leaving ${videoId} private, not publishing.`);
     return;
   }
   const youtube = client();
 
+  const scheduledMode = Boolean(publishAt) && new Date(publishAt).getTime() > Date.now();
+  if (publishAt && !scheduledMode) {
+    console.warn(`publishVideo: publishAt (${publishAt}) is not in the future — publishing immediately instead.`);
+  }
+
   let lastErr;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      await youtube.videos.update({
-        part: ["status"],
-        requestBody: {
-          id: videoId,
-          status: {
+      const status = scheduledMode
+        ? {
+            privacyStatus: "private",
+            publishAt,
+            selfDeclaredMadeForKids: false,
+            license: "youtube",
+            containsSyntheticMedia: true,
+          }
+        : {
             privacyStatus: "public",
             selfDeclaredMadeForKids: false,
             license: "youtube",
             containsSyntheticMedia: true,
-          },
-        },
+          };
+
+      await youtube.videos.update({
+        part: ["status"],
+        requestBody: { id: videoId, status },
       });
 
       // Read back the real, current status directly from YouTube rather than trusting the
       // update call's own success response — this is the check that catches a silent no-op.
       const check = await youtube.videos.list({ part: ["status"], id: [videoId] });
       const liveStatus = check.data.items?.[0]?.status?.privacyStatus;
+      const livePublishAt = check.data.items?.[0]?.status?.publishAt;
+
+      if (scheduledMode) {
+        if (liveStatus === "private" && livePublishAt) {
+          console.log(`Scheduled (confirmed): https://youtube.com/watch?v=${videoId} goes public at ${livePublishAt}`);
+          return;
+        }
+        lastErr = new Error(
+          `videos.update for ${videoId} (scheduled) returned 200 OK but status is "${liveStatus}"/publishAt "${livePublishAt}", not the expected private+publishAt.`
+        );
+        console.warn(`publishVideo: attempt ${attempt}/3 (scheduled) did not stick, retrying...`);
+        continue;
+      }
 
       if (liveStatus === "public") {
         console.log(`Published (confirmed public): https://youtube.com/watch?v=${videoId}`);
@@ -539,4 +572,4 @@ export async function addVideoToPlaylist({ playlistId, videoId }) {
     err.isQuotaExceeded = isQuotaExceeded(err);
     throw err;
   }
-    }
+      }
