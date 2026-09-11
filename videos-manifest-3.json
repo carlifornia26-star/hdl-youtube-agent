@@ -1,6 +1,20 @@
 {
   "videos": [
     {
+      "video_id": "roGi3FHuS-o",
+      "short_video_id": "8Zg5WCu3Tno",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "what makes happiness last",
+      "description": "Art of Joy explores the science of happiness. Available in English only, exclusively on Google Play Books.",
+      "thumbnail_url": "https://i.ytimg.com/vi/roGi3FHuS-o/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "script_format": "myth-bust",
+      "caption_style": "classic-pop",
+      "duration_seconds": 516,
+      "published_at": "2026-09-11T00:33:47.187Z"
+    },
+    {
       "video_id": "AE2IrtZzo50",
       "short_video_id": "NkeYnwvWBKM",
       "book_slug": "bitcoin-standard",
@@ -65,5 +79,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-09-02T04:43:19.339Z"
+  "updated_at": "2026-09-11T00:33:47.187Z"
 }
