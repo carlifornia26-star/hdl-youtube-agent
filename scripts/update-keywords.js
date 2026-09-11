@@ -97,7 +97,7 @@ const MARKET_LANGUAGE = {
 
 const STOPWORDS = new Set([
   "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "is", "are", "was", "were",
-  "with", "at", "by", "from", "this", "that", "it", "its", "how", "what", "why", "vs", "new",
+  "with", "at", "by", "from", "this", "that", "it", "its", "how", "what", "why", "who", "vs", "new",
   "official", "video", "full", "part", "ft", "feat", "shorts", "short", "trailer", "live",
 ]);
 
@@ -105,6 +105,21 @@ function tally(map, term) {
   const key = term.trim();
   if (!key) return;
   map.set(key, (map.get(key) || 0) + 1);
+}
+
+// Catches garbled fragments that slip through RSS/translation (e.g. "G is", "who") that read as
+// noise rather than an actual trending term — traced back as part of the same investigation that
+// found unrelated tags like "ben affleck" showing up on topically-unrelated book videos. Requires
+// at least 3 real letters AND at least one word of 3+ letters, so short acronyms like "AI" or
+// "UK" survive (they're meaningful alone) but a stray 1-letter fragment plus a stopword-like
+// leftover ("G is") does not.
+function isLikelyValidTrendTerm(term) {
+  const t = String(term || "").trim();
+  if (!t) return false;
+  const letterCount = (t.match(/[a-zA-Z]/g) || []).length;
+  if (letterCount < 3) return false;
+  const hasRealWord = t.split(/\s+/).some((w) => w.replace(/[^a-zA-Z]/g, "").length >= 3);
+  return hasRealWord;
 }
 
 // --- Phase A: Google Trends RSS across major markets, aggregated by how many markets a term
@@ -135,6 +150,7 @@ async function fetchGoogleTrendsWorldwideApprox() {
       const lang = MARKET_LANGUAGE[geo] || "english";
       for (const t of titles) {
         const englishTerm = await translateTermToEnglish(t, lang);
+        if (!isLikelyValidTrendTerm(englishTerm)) continue;
         if (!perTermMarkets.has(englishTerm)) perTermMarkets.set(englishTerm, new Set());
         perTermMarkets.get(englishTerm).add(geo);
       }
@@ -184,7 +200,14 @@ async function fetchYoutubeTopTermsByCountry() {
           if (lw.length < 3 || STOPWORDS.has(lw)) continue;
           tally(counts, w);
         }
-        for (const tag of v.snippet?.tags || []) tally(counts, tag);
+        // Deliberately NOT tallying v.snippet?.tags here anymore. Raw uploader-set tags on
+        // trending videos are much noisier than title words — celebrity names, movie tie-ins,
+        // and other content specific to that one trending video, with no real relation to the
+        // topic of whatever HDL book ends up carrying it (this is how "ben affleck" and similar
+        // unrelated terms ended up as tags on an AI-business-strategy video — traced back to
+        // this line pulling in a trending video's own promotional tags verbatim). Title words are
+        // still tallied above — they're a cleaner signal of what's ACTUALLY trending as a topic,
+        // rather than whatever an individual uploader threw into their tags box.
       }
       const top = [...counts.entries()]
         .sort((a, b) => b[1] - a[1])
