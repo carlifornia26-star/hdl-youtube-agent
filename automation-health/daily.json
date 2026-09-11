@@ -1,11 +1,10 @@
 {
-  "checkedAt": "2026-09-10T18:21:59Z",
-  "overallStatus": "failed",
+  "checkedAt": "2026-09-11T18:24:47Z",
+  "overallStatus": "success",
   "computeStatus": "success",
-  "applyChannelsStatus": "failure",
-  "keywordsFileStatus": "missing",
-  "keywordsUpdatedAt": "",
-  "repositorySha": "eae274037a7fb5da2046a1a85014f348add5f309",
-  "workflowRunId": "34513347639",
-  "workflowRunNumber": "1"
+  "keywordsFileStatus": "present",
+  "keywordsUpdatedAt": "2026-09-10T18:20:38.616Z",
+  "repositorySha": "edbdb5b077c125fc8a32563eff0ddae481c0de9f",
+  "workflowRunId": "34632772572",
+  "workflowRunNumber": "2"
 }
