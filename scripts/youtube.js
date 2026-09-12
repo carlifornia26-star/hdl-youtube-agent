@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import fs from "node:fs";
+import fetch from "node-fetch";
 
 function oauth2Client() {
   const oauth2 = new google.auth.OAuth2(process.env.YT_CLIENT_ID, process.env.YT_CLIENT_SECRET);
@@ -501,6 +502,29 @@ export async function uploadThumbnail({ videoId, imagePath }) {
   }
 }
 
+// Third-party AI-training permission — READ-ONLY from this script's side. Confirmed via
+// developers.google.com/youtube/v3/video-trainability: the Data API only exposes a `get` here,
+// no `set`/`update` method exists at all. The actual toggle ("Allow third-party companies to
+// train AI models using my content") lives in YouTube Studio channel settings (or Content
+// Manager settings, for larger multi-channel operations) as a ONE-TIME channel-wide setting —
+// it is not a per-video upload field, and nothing in this repo can turn it on for you. This
+// function can only verify the current status after each upload and warn if it's off, which is
+// the closest thing to automating this that the API allows. Not part of the googleapis npm
+// client's bundled `youtube` v3 discovery doc as of writing, so this calls the REST endpoint
+// directly with the same OAuth token rather than through client().
+export async function checkVideoTrainability(videoId) {
+  const auth = oauth2Client();
+  const { token } = await auth.getAccessToken();
+  const res = await fetch(`https://youtube.googleapis.com/youtube/v3/videoTrainability?id=${videoId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw new Error(`videoTrainability.get failed: ${res.status} ${await res.text()}`);
+  }
+  const data = await res.json();
+  return data.permitted; // "all" | "none" | [specific allowed parties]
+}
+
 export async function uploadCaptionTrack({ videoId, language, srtPath, name }) {
   const youtube = client();
   // Retry: calling captions.insert immediately after videos.insert can fail with a
@@ -572,4 +596,4 @@ export async function addVideoToPlaylist({ playlistId, videoId }) {
     err.isQuotaExceeded = isQuotaExceeded(err);
     throw err;
   }
-      }
+}
