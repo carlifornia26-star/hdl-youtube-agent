@@ -1,14 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pickTodaysBook } from "./catalog.js";
-import { generateScript, generateBonusScenes, translateMeta, VIDEO_LANGS, pickTodaysFormat, sanitizeScenePauses, generateCuriosityTitle } from "./cf-ai.js";
+import { generateScript, generateBonusScenes, translateMeta, VIDEO_LANGS, pickTodaysFormat, sanitizeScenePauses, generateCuriosityTitle, generateNumberTitle } from "./cf-ai.js";
 import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./assets.js";
 import { loadUsedClipIds, saveUsedClipIds } from "./scene-history.js";
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
 import { fetchBackgroundMusic, attributionLine } from "./music.js";
 import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic, normalizeLoudness, pickTodaysCaptionStyle, tagVideoMetadata, tagThumbnailMetadata } from "./render.js";
 import { exiftool } from "exiftool-vendored";
-import { uploadVideo, uploadCaptionTrack, uploadThumbnail, addVideoToPlaylist, publishVideo } from "./youtube.js";
+import { uploadVideo, uploadCaptionTrack, uploadThumbnail, addVideoToPlaylist, publishVideo, checkVideoTrainability } from "./youtube.js";
 import { appendVideoEntry } from "./manifest.js";
 import { buildDailyCommunityPost } from "./community-post.js";
 
@@ -69,6 +69,38 @@ function capitalizeFirst(text) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+// Random integer in [100,000,000, 2,000,000,000], comma-formatted (e.g. "1,234,567,890") — NEVER
+// spelled out in words. Used by the number-title rotation further down. Generated in code, not
+// left to the AI model, so the exact digits/comma placement are guaranteed correct; the model is
+// only told to reproduce this verbatim inside a title, and that's double-checked after generation.
+function formatBigNumber() {
+  const min = 100_000_000;
+  const max = 2_000_000_000;
+  const n = Math.floor(Math.random() * (max - min + 1)) + min;
+  return n.toLocaleString("en-US");
+}
+
+// Logs (never blocks) the current third-party AI-training permission for a just-uploaded video —
+// see checkVideoTrainability in youtube.js for why this is read-only. Called once per upload
+// (main video + Short), right after each goes up.
+async function logTrainabilityStatus(videoId, label) {
+  try {
+    const permitted = await checkVideoTrainability(videoId);
+    const isOff = !permitted || permitted === "none" || (Array.isArray(permitted) && permitted.length === 0);
+    if (isOff) {
+      console.warn(
+        `${label}: third-party AI training is OFF (permitted: ${JSON.stringify(permitted)}). ` +
+          `This is a one-time CHANNEL setting in YouTube Studio (or Content Manager) — this script ` +
+          `cannot turn it on per video, only verify it. See SETUP.md.`
+      );
+    } else {
+      console.log(`${label}: third-party AI training is ON (permitted: ${JSON.stringify(permitted)}).`);
+    }
+  } catch (e) {
+    console.warn(`${label}: could not verify third-party AI training status:`, e.message);
+  }
+}
+
 function slugifyForFilename(text) {
   return text
     .toLowerCase()
@@ -114,7 +146,7 @@ function buildSubscribeBlock(currentChannelId) {
   if (siblings.length < 2) return "";
   return `\n\nSUB TO ALL HDL GROUP CHANNELS\n${siblings.join("\n")}`;
 }
-const PADDING_SECONDS = 0.8; // per-scene buffer after the voice line finishes, before the next scene cuts in
+const PADDING_SECONDS = 0.3; // per-scene buffer after the voice line finishes, before the next scene cuts in — was 0.8s, tightened to shorten the gap between sentences (each scene is ~1 sentence in this pipeline, so this buffer IS the inter-sentence pause). Kept slightly above 0 rather than 0 flat so the cut doesn't feel like it's clipping the last word of narration.
 const MIN_SCENE_SECONDS = 4;
 const MAX_SCENE_SECONDS = 45;
 const SHORT_MIN_SECONDS = 40; // Short target window — comfortably inside YouTube's Shorts duration
@@ -140,6 +172,14 @@ const MIN_CHAPTERS_TO_INCLUDE = 3;
 // up to this budget rather than unconditionally for all 15 languages.
 // Competitor analysis (see analyze-competitor.js) found top-performing videos ship with ZERO
 // tags — YouTube's ranking signal comes from title/thumbnail/retention, not the tags field.
+// TAGS_ENABLED is a full kill switch: false means every video/Short uploads with NO tags at all
+// (skips the multilingual/trending-keyword tag computation entirely, not just the upload field),
+// as a real test of "does removing tags change anything." Flip back to true (or ask to have it
+// flipped back) to restore tags exactly as they were — nothing below this flag was deleted, only
+// gated, so re-enabling needs no other changes. TAGS_CHAR_BUDGET below still applies whenever
+// TAGS_ENABLED is true.
+const TAGS_ENABLED = false;
+
 // Dropped from 460 to 180: the fixed 5 + weekly-top-2 keywords (added unconditionally below,
 // no budget check) still land on every upload either way; this just stops the multilingual/daily
 // trending tags from maxing out the full ~500-char field for a signal that isn't earning its
@@ -350,9 +390,12 @@ async function main() {
   console.log(`Today's book (Channel ${CHANNEL_ID}): ${book.displayTitle}`);
 
   // One narrator voice for the ENTIRE video (main + Short), computed once here and passed into
-  // every synthesizeVoice() call below — never mixed voices within one video. Tomorrow's video
-  // gets the next voice in the rotation (see VOICE_POOL in voice.js).
-  const narratorVoice = pickTodaysVoice();
+  // every synthesizeVoice() call below — never mixed voices within one video. Same per-channel
+  // offset as book/format/captionStyle above — this used to be missing here, which meant every
+  // channel got the identical voice on the same day regardless of channelOffset; now channel 2
+  // and 3 each land on a different voice than channel 1 today, and tomorrow's video gets the
+  // next voice in each channel's own rotation (see VOICE_POOL in voice.js).
+  const narratorVoice = pickTodaysVoice(new Date(), Number(CHANNEL_ID) - 1);
   console.log(`Today's narrator voice: ${narratorVoice}`);
 
   // Same per-channel-offset rotation pattern as pickTodaysBook — see FORMAT_POOL in cf-ai.js.
@@ -525,6 +568,37 @@ async function main() {
     console.warn("Background music failed, uploading without it:", e.message);
   }
 
+  // 3bb) Title — computed HERE, before the thumbnail block below, so the thumbnail's text
+  // overlay (variant B) can draw the ACTUAL final title/number instead of a separate
+  // approximation built from the book alone. Title deliberately does NOT include the book name
+  // (e.g. "Art of Joy", "Bitcoin Standard") — just the topic/angle. Anyone who wants the book
+  // name gets it from the description (translatableDescription below) and the narration.
+  //
+  // Number-title rotation: 2 of the 3 channels use a number-driven title on any given day, the
+  // third keeps the plain functional title — rotates which channel is "plain" by dayOfYear % 3
+  // (same pattern as pickTodaysFormat/pickTodaysVoice elsewhere in this file), so it drifts
+  // independently of which book/format/voice landed on that channel today. Falls back to the
+  // plain title (and drops the number, so nothing gets bolded on the thumbnail either) on any
+  // generation failure, so a bad AI call never blocks the day's upload. generateCuriosityTitle()
+  // in cf-ai.js is left in place, just unused here, in case number titles get turned back off.
+  const todaysDayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+  const plainChannelToday = (todaysDayOfYear % 3) + 1; // 1, 2, or 3 — the ONE channel staying plain today
+  const isNumberChannelToday = Number(CHANNEL_ID) !== plainChannelToday;
+  const plainTitle = `${capitalizeFirst(book.angle)} | HDL Group`;
+  let enTitle = plainTitle;
+  let todaysNumber = null; // set only once a number has actually landed in enTitle
+  if (isNumberChannelToday) {
+    todaysNumber = formatBigNumber();
+    try {
+      enTitle = await generateNumberTitle(book, todaysNumber);
+      console.log(`Number title (channel ${CHANNEL_ID}): "${enTitle}"`);
+    } catch (e) {
+      console.warn("Number title generation failed, falling back to the plain title:", e.message);
+      enTitle = plainTitle;
+      todaysNumber = null;
+    }
+  }
+
   // 3c) Thumbnail image — TWO different real Unsplash photos matching the book's topic.
   // Variant A is the plain, text-free photo. Variant B is the same kind of photo but with a
   // short high-contrast title overlay burned in (see thumbTitleText below) — a deliberate
@@ -590,22 +664,30 @@ async function main() {
   }
   // Variant A stays the plain, text-free photo exactly as before. Variant B now gets a short,
   // high-contrast title overlay (book's Ch. 8: face/text thumbnails beat plain photos 2-4x on
-  // CTR) — this is a deliberate A/B test between the two styles, not a replacement of A.
-  // thumbTitleText is capped at ~5 words / 40 chars so drawtext in generateThumbnail doesn't
-  // have to wrap or shrink to illegible size on a 1280x720 canvas.
-  const thumbTitleWords = book.title.split(/\s+/).slice(0, 5).join(" ");
+  // CTR) — this is a deliberate A/B test between the two styles, not a replacement of A. Built
+  // from the REAL final title (enTitle, computed just above) instead of the book alone, so the
+  // thumbnail actually matches what the title says. thumbTitleText is capped at ~5 words / 40
+  // chars so drawtext in generateThumbnail doesn't have to wrap or shrink to illegible size on a
+  // 1280x720 canvas. The number (if today's channel has one) is stripped out of this text and
+  // passed separately as numberText below, so it isn't drawn twice — once small in the title
+  // line, once big in the bold callout.
+  const thumbTitleSource = todaysNumber ? enTitle.replace(todaysNumber, "") : enTitle;
+  const thumbTitleWords = thumbTitleSource.split(/\s+/).filter(Boolean).slice(0, 5).join(" ");
   const thumbTitleText = thumbTitleWords.slice(0, 40).toUpperCase();
 
   const thumbSourcePath = thumbnailVariant === "A" ? thumbSourcePathA : thumbSourcePathB;
   const thumbTitleTextForVariant = thumbnailVariant === "B" ? thumbTitleText : null;
+  // Bold number callout only ever appears on variant B (the "has text" variant) — variant A
+  // stays completely plain/text-free, per the existing A/B design.
+  const thumbNumberTextForVariant = thumbnailVariant === "B" ? todaysNumber : null;
   try {
-    await generateThumbnail({ imagePath: thumbSourcePath, outPath: thumbPath, titleText: thumbTitleTextForVariant });
+    await generateThumbnail({ imagePath: thumbSourcePath, outPath: thumbPath, titleText: thumbTitleTextForVariant, numberText: thumbNumberTextForVariant });
   } catch (e) {
     const otherSourcePath = thumbnailVariant === "A" ? thumbSourcePathB : thumbSourcePathA;
     console.warn(`Thumbnail generation (variant ${thumbnailVariant}) failed, retrying with the other photo:`, e.message);
     // Keep the same text/no-text treatment on the fallback photo — only the source image
     // changes, not which variant's style is being attempted.
-    await generateThumbnail({ imagePath: otherSourcePath, outPath: thumbPath, titleText: thumbTitleTextForVariant });
+    await generateThumbnail({ imagePath: otherSourcePath, outPath: thumbPath, titleText: thumbTitleTextForVariant, numberText: thumbNumberTextForVariant });
   }
 
   // 3d) Chapters — built from the already-measured scene durations, zero extra API calls or
@@ -620,30 +702,7 @@ async function main() {
     console.log(`Only ${chapterEntries.length} chapter mark(s) (need ${MIN_CHAPTERS_TO_INCLUDE}+) — skipping chapters block.`);
   }
 
-  // 4) English metadata
-  // Title deliberately does NOT include the book name (e.g. "Art of Joy", "Bitcoin Standard")
-  // anymore — just the topic/angle. Anyone who wants the book name gets it from the
-  // description (translatableDescription below) and the spoken/captioned narration.
-  //
-  // Curiosity-title rotation: only ONE of the 3 channels uses a curiosity-based title on any
-  // given day (dayOfYear % 3 picks which channel), same day-of-year rotation pattern as
-  // pickTodaysFormat/pickTodaysVoice elsewhere in this file — so it drifts independently of
-  // which book/format/voice landed on that channel today. The other 2 channels keep the plain
-  // functional title. Falls back to the plain title on any generation failure so a bad AI call
-  // never blocks the day's upload.
-  const todaysDayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
-  const curiosityChannelToday = (todaysDayOfYear % 3) + 1; // 1, 2, or 3
-  const plainTitle = `${capitalizeFirst(book.angle)} | HDL Group`;
-  let enTitle = plainTitle;
-  if (Number(CHANNEL_ID) === curiosityChannelToday) {
-    try {
-      enTitle = await generateCuriosityTitle(book);
-      console.log(`Curiosity title (channel ${CHANNEL_ID}'s turn today): "${enTitle}"`);
-    } catch (e) {
-      console.warn("Curiosity title generation failed, falling back to the plain title:", e.message);
-      enTitle = plainTitle;
-    }
-  }
+  // 4) English metadata (title/enTitle already computed in step 3bb, above the thumbnail block)
   // Only the plain descriptive sentence goes to the translation model. Everything else —
   // the URL, the hashtags, the chapters block, and (further below) the music/thumbnail credit
   // lines — is appended AFTER translation, untranslated, for every language including English.
@@ -698,15 +757,23 @@ async function main() {
   // localizations, so this costs zero extra Cloudflare calls and zero extra YouTube quota
   // (tags ride inside the same videos.insert call). See buildMultilingualTags for the budget
   // logic that keeps the combined tags string under YouTube's ~500-char limit.
-  const baseTags = [book.title, "HDL Group", book.angle, "ebook"];
-  const weeklyKeywordsData = await loadWeeklyKeywordsFile();
-  const dailyKeywordsData = await loadDailyKeywordsFile();
-  const fixedWeeklyKeywords = loadFixedWeeklyKeywords(weeklyKeywordsData);
-  const weeklyTop2Keywords = loadWeeklyTop2Keywords(weeklyKeywordsData);
-  const multilingualTags = buildMultilingualTags(localizations, [...baseTags, ...fixedWeeklyKeywords, ...weeklyTop2Keywords]);
-  const usedCharsSoFar = [...baseTags, ...fixedWeeklyKeywords, ...weeklyTop2Keywords, ...multilingualTags].join(",").length;
-  const dailyTrendingTags = loadDailyTrendingTags(dailyKeywordsData, usedCharsSoFar);
-  const tags = [...baseTags, ...fixedWeeklyKeywords, ...weeklyTop2Keywords, ...multilingualTags, ...dailyTrendingTags];
+  // TAGS_ENABLED gate: see the comment on TAGS_ENABLED near the top of this file. When false,
+  // this skips ALL of the tag-building work (including the keyword-file reads) and uploads with
+  // an empty tags array — a real test of "no tags," not just an empty-looking field.
+  let tags = [];
+  if (TAGS_ENABLED) {
+    const baseTags = [book.title, "HDL Group", book.angle, "ebook"];
+    const weeklyKeywordsData = await loadWeeklyKeywordsFile();
+    const dailyKeywordsData = await loadDailyKeywordsFile();
+    const fixedWeeklyKeywords = loadFixedWeeklyKeywords(weeklyKeywordsData);
+    const weeklyTop2Keywords = loadWeeklyTop2Keywords(weeklyKeywordsData);
+    const multilingualTags = buildMultilingualTags(localizations, [...baseTags, ...fixedWeeklyKeywords, ...weeklyTop2Keywords]);
+    const usedCharsSoFar = [...baseTags, ...fixedWeeklyKeywords, ...weeklyTop2Keywords, ...multilingualTags].join(",").length;
+    const dailyTrendingTags = loadDailyTrendingTags(dailyKeywordsData, usedCharsSoFar);
+    tags = [...baseTags, ...fixedWeeklyKeywords, ...weeklyTop2Keywords, ...multilingualTags, ...dailyTrendingTags];
+  } else {
+    console.log("TAGS_ENABLED is false — uploading with no tags.");
+  }
 
   // 6) Upload video — rename to a keyword-bearing filename first (see renameForUpload above),
   // then embed container metadata (title/keywords/comment/language) into the renamed file.
@@ -732,6 +799,7 @@ async function main() {
     location: VIDEO_LOCATION_DESCRIPTION ? { description: VIDEO_LOCATION_DESCRIPTION } : undefined,
   });
   console.log(`Uploaded (private, not yet public): https://youtube.com/watch?v=${uploaded.id}`);
+  await logTrainabilityStatus(uploaded.id, "Main video");
 
   // 6b) Upload the thumbnail generated back in step 3c — rename to a keyword-bearing filename
   // and embed IPTC/XMP metadata first, same as the video above (PDF's file-naming and
@@ -845,8 +913,13 @@ async function main() {
         }
       }
 
-      // No book name here either — same reasoning as enTitle above.
-      const shortTitle = `${capitalizeFirst(book.angle)} #Shorts`.slice(0, 100); // YouTube's 100-char title cap
+      // No book name here either — same reasoning as enTitle above. If today's channel has a
+      // number title (isNumberChannelToday/todaysNumber, computed back in step 3bb), the Short
+      // carries the same number-driven title as the main video — "video+short" both get the
+      // bold-number treatment together, not just the long-form upload. Otherwise keeps the
+      // original plain pattern exactly as before.
+      const shortPlainTitle = `${capitalizeFirst(book.angle)} #Shorts`;
+      const shortTitle = (todaysNumber ? `${enTitle} #Shorts` : shortPlainTitle).slice(0, 100); // YouTube's 100-char title cap
       // Same URL-safety fix as the main video's description above: only the plain sentence goes
       // to the translation model. The two URLs (YouTube link + book link) and the hashtags are
       // appended after, untranslated, so they can't come back corrupted in any language.
@@ -879,15 +952,20 @@ async function main() {
 
       // Same multilingual keyword tags as the main video, built from the Short's own translated
       // titles (different phrase from the main video's, so kept separate rather than reused).
-      const shortBaseTags = [book.title, "HDL Group", book.angle, "Shorts"];
-      const shortWeeklyKeywordsData = await loadWeeklyKeywordsFile();
-      const shortDailyKeywordsData = await loadDailyKeywordsFile();
-      const shortFixedWeeklyKeywords = loadFixedWeeklyKeywords(shortWeeklyKeywordsData);
-      const shortWeeklyTop2Keywords = loadWeeklyTop2Keywords(shortWeeklyKeywordsData);
-      const shortMultilingualTags = buildMultilingualTags(shortLocalizations, [...shortBaseTags, ...shortFixedWeeklyKeywords, ...shortWeeklyTop2Keywords]);
-      const shortUsedCharsSoFar = [...shortBaseTags, ...shortFixedWeeklyKeywords, ...shortWeeklyTop2Keywords, ...shortMultilingualTags].join(",").length;
-      const shortDailyTrendingTags = loadDailyTrendingTags(shortDailyKeywordsData, shortUsedCharsSoFar);
-      const shortTags = [...shortBaseTags, ...shortFixedWeeklyKeywords, ...shortWeeklyTop2Keywords, ...shortMultilingualTags, ...shortDailyTrendingTags];
+      // Same TAGS_ENABLED gate as the main video above — see that comment for why.
+      let shortBaseTags = [];
+      let shortTags = [];
+      if (TAGS_ENABLED) {
+        shortBaseTags = [book.title, "HDL Group", book.angle, "Shorts"];
+        const shortWeeklyKeywordsData = await loadWeeklyKeywordsFile();
+        const shortDailyKeywordsData = await loadDailyKeywordsFile();
+        const shortFixedWeeklyKeywords = loadFixedWeeklyKeywords(shortWeeklyKeywordsData);
+        const shortWeeklyTop2Keywords = loadWeeklyTop2Keywords(shortWeeklyKeywordsData);
+        const shortMultilingualTags = buildMultilingualTags(shortLocalizations, [...shortBaseTags, ...shortFixedWeeklyKeywords, ...shortWeeklyTop2Keywords]);
+        const shortUsedCharsSoFar = [...shortBaseTags, ...shortFixedWeeklyKeywords, ...shortWeeklyTop2Keywords, ...shortMultilingualTags].join(",").length;
+        const shortDailyTrendingTags = loadDailyTrendingTags(shortDailyKeywordsData, shortUsedCharsSoFar);
+        shortTags = [...shortBaseTags, ...shortFixedWeeklyKeywords, ...shortWeeklyTop2Keywords, ...shortMultilingualTags, ...shortDailyTrendingTags];
+      }
 
       // One bad/unrecognized translation anywhere in `localizations` fails the ENTIRE upload
       // with YouTube's generic invalidVideoMetadata error (see YT_LOCALE_MAP note above) — so a
@@ -930,8 +1008,20 @@ async function main() {
         console.log("Short uploaded English-only after localizations retry.");
       }
       console.log(`Uploaded Short (private, not yet public, ~${Math.round(shortTotal)}s): https://youtube.com/watch?v=${uploadedShort.id}`);
+      await logTrainabilityStatus(uploadedShort.id, "Short");
       shortVideoId = uploadedShort.id;
       shortSceneCount = shortScenes.length;
+
+      // Same generated thumbnail (photo + A/B text/number overlay, see step 3c above) as the
+      // main video — gives the Short a custom thumbnail instead of YouTube's auto-picked frame,
+      // and keeps the bold-number callout consistent between the video and its Short rather than
+      // only appearing on the long-form upload. Non-fatal, same reasoning as the main video's
+      // thumbnail upload: YouTube just auto-picks a frame if this fails.
+      try {
+        await uploadThumbnail({ videoId: shortVideoId, imagePath: thumbUploadPath });
+      } catch (e) {
+        console.warn("Short thumbnail upload failed, YouTube will auto-pick a frame instead:", e.message);
+      }
     }
   } catch (e) {
     // A failed Short should never take down the main video, which has already uploaded successfully.
