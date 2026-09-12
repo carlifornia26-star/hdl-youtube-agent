@@ -292,15 +292,18 @@ jobs:
 
           MANIFEST="videos-manifest.json"
           CLIP_HISTORY="used-clips.json"
+          MUSIC_HISTORY="used-music.json"
 
           if [ "$CH" != "1" ]; then
             MANIFEST="videos-manifest-$CH.json"
             CLIP_HISTORY="used-clips-$CH.json"
+            MUSIC_HISTORY="used-music-$CH.json"
           fi
 
           echo "Channel: $CH"
           echo "Manifest: $MANIFEST"
           echo "Clip history: $CLIP_HISTORY"
+          echo "Music history: $MUSIC_HISTORY"
 
           if [ -f "$MANIFEST" ]; then
             echo "Manifest exists: YES"
@@ -312,6 +315,12 @@ jobs:
             echo "Clip history exists: YES"
           else
             echo "Clip history exists: NO"
+          fi
+
+          if [ -f "$MUSIC_HISTORY" ]; then
+            echo "Music history exists: YES"
+          else
+            echo "Music history exists: NO"
           fi
 
           if [ -f "keywords-weekly.json" ]; then
@@ -406,15 +415,18 @@ jobs:
 
           MANIFEST="videos-manifest.json"
           CLIP_HISTORY="used-clips.json"
+          MUSIC_HISTORY="used-music.json"
 
           if [ "$CH" != "1" ]; then
             MANIFEST="videos-manifest-$CH.json"
             CLIP_HISTORY="used-clips-$CH.json"
+            MUSIC_HISTORY="used-music-$CH.json"
           fi
 
           git add \
             "$MANIFEST" \
             "$CLIP_HISTORY" \
+            "$MUSIC_HISTORY" \
             community-posts/ \
             automation-health/ \
             2>/dev/null || true
