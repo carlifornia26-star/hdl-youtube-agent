@@ -1,6 +1,20 @@
 {
   "videos": [
     {
+      "video_id": "nnDd63Li25c",
+      "short_video_id": "RY1_DBDURwc",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "Growing a channel with the algorithm | HDL Group",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/nnDd63Li25c/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "script_format": "cold-open",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 257,
+      "published_at": "2026-09-12T16:17:48.396Z"
+    },
+    {
       "video_id": "1RFaAoPQD4w",
       "short_video_id": "PyTE7Vj72-A",
       "book_slug": "youtube-algorithms",
@@ -93,5 +107,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-09-12T00:40:43.175Z"
+  "updated_at": "2026-09-12T16:17:48.397Z"
 }
