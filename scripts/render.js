@@ -277,8 +277,12 @@ function wrapTitle(text, maxCharsPerLine = 18, maxLines = 2) {
 // fallback video frame), cropped to YouTube's 1280x720 thumbnail size — no overlay burned in.
 // With titleText: same photo, plus a bold white-on-black-stroke title across the top, MrBeast-
 // thumbnail style — this is "variant B", compared against the plain "variant A" over time.
+// With numberText (variant B only, when today's channel has a number title — see
+// generateNumberTitle in cf-ai.js): an additional big, bold, high-contrast yellow "price-tag"
+// style callout lower on the frame, MrBeast-thumbnail convention for a big headline number —
+// visually distinct from the white title text above it so it reads as the standout element.
 const THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024; // YouTube's hard cap on thumbnails.set
-export async function generateThumbnail({ imagePath, outPath, titleText }) {
+export async function generateThumbnail({ imagePath, outPath, titleText, numberText }) {
   const vf = [
     `scale=1280:720:force_original_aspect_ratio=increase`,
     `crop=1280:720`,
@@ -292,6 +296,16 @@ export async function generateThumbnail({ imagePath, outPath, titleText }) {
     vf.push(
       `drawtext=fontfile=${CAPTION_FONT}:text='${wrapped}':fontcolor=white:fontsize=84:` +
         `bordercolor=black:borderw=10:line_spacing=14:x=(w-text_w)/2:y=50`
+    );
+  }
+  if (numberText) {
+    const safeNumber = escapeDrawtext(numberText);
+    // Bigger than the title text (110 vs 84), bright yellow fill, heavy black stroke, anchored
+    // near the bottom of the frame so it never collides with the title block above when both
+    // are present — the number is meant to be the loudest single element on the thumbnail.
+    vf.push(
+      `drawtext=fontfile=${CAPTION_FONT}:text='${safeNumber}':fontcolor=yellow:fontsize=110:` +
+        `bordercolor=black:borderw=14:x=(w-text_w)/2:y=h-220`
     );
   }
   // qscale 2 = ffmpeg's near-max JPEG quality (scale is 2-31, lower is better). At 1280x720
@@ -368,4 +382,4 @@ export function buildSrt(scenesWithDurations, translatedLines) {
     const ms = String(Math.floor((sec % 1) * 1000)).padStart(3, "0");
     return `${h}:${m}:${s},${ms}`;
   }
-      }
+    }
