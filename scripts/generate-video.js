@@ -6,6 +6,7 @@ import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./a
 import { loadUsedClipIds, saveUsedClipIds } from "./scene-history.js";
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
 import { fetchBackgroundMusic, attributionLine } from "./music.js";
+import { loadUsedMusicTitles, saveUsedMusicTitles } from "./music-history.js";
 import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic, normalizeLoudness, pickTodaysCaptionStyle, tagVideoMetadata, tagThumbnailMetadata } from "./render.js";
 import { exiftool } from "exiftool-vendored";
 import { uploadVideo, uploadCaptionTrack, uploadThumbnail, addVideoToPlaylist, publishVideo, checkVideoTrainability } from "./youtube.js";
@@ -553,17 +554,22 @@ async function main() {
     console.warn("Loudness normalization failed, uploading un-normalized audio:", e.message);
   }
 
-  // 3b2) Background music — a real, free, attribution-licensed track (see music.js), mixed in
-  // as a quiet bed under the now-normalized narration. Runs AFTER loudnorm (see above) so the
-  // music's audibility isn't at the mercy of loudnorm's dynamic gain curve. If the download or
-  // mix fails for any reason, fall back to uploading without music rather than failing the run.
+  // 3b2) Background music — picked from the full live incompetech catalog (see music.js),
+  // filtered down to a calm/neutral mood, mixed in as a quiet bed under the now-normalized
+  // narration. Runs AFTER loudnorm (see above) so the music's audibility isn't at the mercy of
+  // loudnorm's dynamic gain curve. `recentMusicTitles` steers the pick away from tracks this
+  // channel has used lately (see music-history.js) — otherwise, with only 6 hardcoded tracks
+  // before, every viewer heard the same couple on repeat. If the download or mix fails for any
+  // reason, fall back to uploading without music rather than failing the run.
   let musicTrack = null;
+  const recentMusicTitles = await loadUsedMusicTitles();
   try {
     const musicPath = path.join(BUILD_DIR, "music.mp3");
-    musicTrack = await fetchBackgroundMusic(musicPath);
+    musicTrack = await fetchBackgroundMusic(musicPath, { channel: CHANNEL_ID, recentTitles: recentMusicTitles });
     const musicOutPath = path.join(BUILD_DIR, "final_with_music.mp4");
     await mixBackgroundMusic({ videoPath: uploadPath, musicPath, outPath: musicOutPath });
     uploadPath = musicOutPath;
+    await saveUsedMusicTitles([...recentMusicTitles, musicTrack.title]);
   } catch (e) {
     console.warn("Background music failed, uploading without it:", e.message);
   }
