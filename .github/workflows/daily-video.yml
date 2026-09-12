@@ -2,17 +2,25 @@ name: HDL Daily YouTube Teaser
 
 on:
   schedule:
-    # Channel 1 — 2:15 PM Eastern
-    - cron: "15 18 * * *" # EDT (UTC-4), Mar-Nov
-    - cron: "15 19 * * *" # EST (UTC-5), Nov-Mar
-
-    # Channel 2 — 4:15 PM Eastern
-    - cron: "15 20 * * *" # EDT (UTC-4)
-    - cron: "15 21 * * *" # EST (UTC-5)
-
-    # Channel 3 — 6:15 PM Eastern
-    - cron: "15 22 * * *" # EDT (UTC-4)
-    - cron: "15 23 * * *" # EST (UTC-5)
+    # All 3 channels target the SAME daily publish moment — 16:00:00 UTC, matching the exact
+    # publish time found on MrBeast's videos in competitor analysis (16:00:0X UTC on all 4
+    # samples). Trigger times below are NOT that publish time — they're staggered earlier so each
+    # channel's render/TTS/translate/upload pipeline has time to finish before 16:00 UTC, and
+    # publishVideo() then holds the video at `private` with a scheduled `publishAt` of 16:00 UTC
+    # rather than going public the moment the run finishes (see the "Compute publish target" step
+    # below and publishVideo() in youtube.js). Spaced 2 hours apart — this repo's own
+    # `concurrency` group below serializes all 3 channels onto one runner slot, and each run's
+    # own timeout-minutes is 120, so a 2-hour gap keeps channel 2/3 from ever queuing behind an
+    # unusually long channel 1/2 run and missing the shared 16:00 UTC target.
+    #
+    # Fixed in UTC now, not US Eastern — the previous EDT/EST cron-pair + offset-check dance
+    # existed only to keep a fixed US Eastern wall-clock trigger time across DST changes. That's
+    # no longer the goal (the goal is a fixed UTC publish time, matching a competitor who
+    # publishes at a fixed UTC time year-round), so that whole DST mechanism is removed below —
+    # one plain UTC cron per channel is now sufficient.
+    - cron: "0 9 * * *"  # Channel 1 trigger — 09:00 UTC (7h buffer before the 16:00 UTC publish target)
+    - cron: "0 11 * * *" # Channel 2 trigger — 11:00 UTC (5h buffer)
+    - cron: "0 13 * * *" # Channel 3 trigger — 13:00 UTC (3h buffer)
 
   workflow_dispatch:
     inputs:
@@ -68,61 +76,31 @@ jobs:
           node-version: "20"
           cache: npm
 
-      - name: Resolve channel + check DST alignment
+      - name: Resolve channel
         id: resolve
         run: |
           set -euo pipefail
 
-          OFFSET=$(TZ="America/New_York" date +%z)
           SCHEDULE="${{ github.event.schedule }}"
-
           CHANNEL=""
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             CHANNEL="${{ github.event.inputs.channel }}"
             echo "Manual run selected."
-            echo "proceed=true" >> "$GITHUB_OUTPUT"
           else
+            # One plain UTC cron per channel now (see the `on.schedule` comment above for why
+            # the old EDT/EST DST-pair dance is gone) — a straight lookup, no offset check needed.
             case "$SCHEDULE" in
-              "15 18 * * *")
-                CHANNEL=1
-                EXPECTED="-0400"
-                ;;
-              "15 19 * * *")
-                CHANNEL=1
-                EXPECTED="-0500"
-                ;;
-              "15 20 * * *")
-                CHANNEL=2
-                EXPECTED="-0400"
-                ;;
-              "15 21 * * *")
-                CHANNEL=2
-                EXPECTED="-0500"
-                ;;
-              "15 22 * * *")
-                CHANNEL=3
-                EXPECTED="-0400"
-                ;;
-              "15 23 * * *")
-                CHANNEL=3
-                EXPECTED="-0500"
-                ;;
+              "0 9 * * *")  CHANNEL=1 ;;
+              "0 11 * * *") CHANNEL=2 ;;
+              "0 13 * * *") CHANNEL=3 ;;
               *)
                 echo "Unknown schedule: $SCHEDULE"
                 exit 1
                 ;;
             esac
-
-            if [ "$OFFSET" = "$EXPECTED" ]; then
-              echo "proceed=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "proceed=false" >> "$GITHUB_OUTPUT"
-              echo "Skipping this duplicate DST trigger."
-              echo "Current US Eastern offset: $OFFSET"
-              echo "Expected offset for this cron: $EXPECTED"
-            fi
           fi
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
 
           if [ -z "$CHANNEL" ]; then
             echo "Channel could not be resolved."
@@ -157,31 +135,16 @@ jobs:
           echo "token_key=$TOKEN_KEY" >> "$GITHUB_OUTPUT"
 
           echo "Resolved channel: $CHANNEL"
-          echo "US Eastern offset: $OFFSET"
 
-          # Fixed daily PUBLISH moment per channel (as opposed to the trigger time above) — the
-          # trigger just STARTS the render/upload pipeline, whose duration varies run to run
-          # (TTS, translation, encode time). Without this, the video goes public the instant the
-          # pipeline happens to finish, so the actual live-on-YouTube timestamp drifts all over
-          # the place day to day. Competitor analysis showed top channels publish at the exact
-          # same second every time (a human clicking "schedule" in Studio) — this is the
-          # automated equivalent: a fixed Eastern wall-clock target per channel, 90 minutes after
-          # that channel's trigger (comfortable buffer for a normal run), converted to UTC using
-          # the same DST-aware $OFFSET already resolved above. publishVideo() in youtube.js uses
-          # this as a `publishAt` schedule instead of publishing the moment the script reaches
-          # that line, so the actual public-timestamp stops varying with render duration.
-          case "$CHANNEL" in
-            1) PUBLISH_ET_HOUR=15; PUBLISH_ET_MIN=45 ;; # 3:45 PM ET (90 min after 2:15 PM trigger)
-            2) PUBLISH_ET_HOUR=17; PUBLISH_ET_MIN=45 ;; # 5:45 PM ET (90 min after 4:15 PM trigger)
-            3) PUBLISH_ET_HOUR=19; PUBLISH_ET_MIN=45 ;; # 7:45 PM ET (90 min after 6:15 PM trigger)
-          esac
-
-          if [ "$OFFSET" = "-0400" ]; then UTC_ADD=4; else UTC_ADD=5; fi
-          PUBLISH_HOUR_UTC=$(( (PUBLISH_ET_HOUR + UTC_ADD) % 24 ))
-
-          echo "publish_hour_utc=$PUBLISH_HOUR_UTC" >> "$GITHUB_OUTPUT"
-          echo "publish_minute_utc=$PUBLISH_ET_MIN" >> "$GITHUB_OUTPUT"
-          echo "Scheduled publish target: ${PUBLISH_HOUR_UTC}:${PUBLISH_ET_MIN} UTC"
+          # Fixed daily PUBLISH moment — the SAME clock time for all 3 channels, matching the
+          # exact UTC time found on MrBeast's videos in competitor analysis (16:00:0X UTC on all
+          # 4 samples, year-round — his isn't Eastern-fixed, it's UTC-fixed). Trigger time (above,
+          # in `on.schedule`) only starts the pipeline; publishVideo() in youtube.js holds the
+          # video at `private` with this as its scheduled `publishAt` so the actual public
+          # timestamp is always 16:00:00 UTC regardless of how long that day's render took.
+          echo "publish_hour_utc=16" >> "$GITHUB_OUTPUT"
+          echo "publish_minute_utc=0" >> "$GITHUB_OUTPUT"
+          echo "Scheduled publish target: 16:00 UTC (all channels)"
 
       - name: Install ffmpeg
         if: steps.resolve.outputs.proceed == 'true'
