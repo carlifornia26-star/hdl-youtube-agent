@@ -10,11 +10,15 @@ import fs from "node:fs/promises";
 // Leave unset to let the daily rotation (see VOICE_POOL / pickTodaysVoice) pick automatically.
 const KOKORO_MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
 
-// One narrator voice per video, rotating day to day — never mixed voices within a single video.
-// Same day-of-year rotation as pickTodaysBook() in catalog.js, but on its own cycle (11 voices
-// vs. 7 books) so voice and book drift independently instead of always pairing the same two up.
-// All English (US + UK) so translated-metadata videos still get an English narrator; a mix of
-// genders/accents so the channel doesn't sound identical every day.
+// One narrator voice per video, rotating day to day AND per-channel — same channelOffset
+// pattern as pickTodaysBook()/pickTodaysCaptionStyle() (see catalog.js / render.js). Previously
+// this had NO channel offset at all, so all 3 channels got the exact same single voice on any
+// given day — which is why it looked like only "2 voices in rotation" rather than cycling
+// through all 11: with no offset, every channel just shares one day-of-year index, so across 3
+// channels x however many days you'd actually run, you'd only ever have sampled a handful of the
+// pool's 11 voices, never all of them independently per channel. Own independent cycle (11
+// voices vs. 7 books) so voice and book drift independently instead of always pairing the same
+// two up.
 const VOICE_POOL = [
   "af_heart", // US female — warm, friendly
   "am_michael", // US male — grounded, professional
@@ -29,11 +33,11 @@ const VOICE_POOL = [
   "af_sarah", // US female — clear, articulate
 ];
 
-export function pickTodaysVoice(date = new Date()) {
+export function pickTodaysVoice(date = new Date(), channelOffset = 0) {
   if (process.env.KOKORO_VOICE) return process.env.KOKORO_VOICE; // manual override wins
   const start = new Date(date.getFullYear(), 0, 0);
   const dayOfYear = Math.floor((date - start) / 86400000);
-  return VOICE_POOL[dayOfYear % VOICE_POOL.length];
+  return VOICE_POOL[(dayOfYear + channelOffset) % VOICE_POOL.length];
 }
 
 let kokoroPromise = null;
@@ -183,4 +187,4 @@ export async function synthesizeVoice(rawText, outPath, voice = pickTodaysVoice(
       throw new Error(`Both Kokoro (${kokoroErr.message}) and Fish Audio (${fishErr.message}) failed`);
     }
   }
-  }
+}
