@@ -511,6 +511,65 @@ Requirements:
   return title.slice(0, 100); // YouTube's hard title cap, same as everywhere else titles are used
 }
 
+// --- Number titles (2 of 3 channels per day) ---------------------------------------------------
+// generateCuriosityTitle above is left in place but unused for now — this is the replacement
+// title generator: 2 of the 3 channels each day use a number-driven title (rotation handled by
+// the caller, see plainChannelToday in generate-video.js), the third keeps the plain "<angle> |
+// HDL Group" title. formattedNumber is generated in generate-video.js (a random integer between
+// 100,000,000 and 2,000,000,000, comma-formatted) — NOT by this model, since an LLM can't be
+// trusted to reproduce a specific long digit string with exact comma placement reliably. This
+// function's job is just to build a natural-sounding title AROUND that exact number.
+export async function generateNumberTitle(book, formattedNumber) {
+  const prompt = `Write ONE YouTube video title for a teaser video about the topic "${book.angle}" (the video does not name the ebook title itself, only the topic).
+
+The title MUST include this exact number, written EXACTLY as given below, somewhere natural in the sentence: ${formattedNumber}
+
+Requirements:
+- Under 100 characters total (the number itself is long, so budget space for it).
+- Reproduce the number EXACTLY as given — same digits, same comma placement. Do not spell it out in words, do not round it, do not add or remove a comma or digit.
+- Curiosity-driven and specific to this exact topic — treat the big, oddly-specific number as the hook itself (MrBeast-style: "$1,234,567,890 App Idea Nobody's Tried"). This is a stylistic curiosity device, not a literal financial claim about the book or company.
+- Do NOT use generic clickbait phrases: "You Won't Believe...", "This One Trick...", "The Truth About...", ALL CAPS words, excessive punctuation (no "!!", no "?!"), emoji.
+- Sound like a specific, well-informed editor wrote it about this exact topic — not a generic template that could apply to any video.
+- Title Case every major word (capitalize each significant word, skip small connector words like "a", "the", "of", "to"). Do not write in ALL CAPS or plain sentence case.
+- Output ONLY the title text, nothing else — no quotes, no explanation.`;
+
+  const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
+    messages: [{ role: "user", content: prompt }],
+    max_tokens: 80,
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        type: "object",
+        properties: { title: { type: "string" } },
+        required: ["title"],
+      },
+    },
+  });
+
+  let title;
+  if (result?.response && typeof result.response === "object" && typeof result.response.title === "string") {
+    title = result.response.title;
+  } else if (typeof result?.response === "string") {
+    try {
+      title = JSON.parse(result.response).title;
+    } catch {
+      title = result.response;
+    }
+  }
+  title = (title || "").trim().replace(/^["']|["']$/g, "");
+  if (!title) throw new Error("generateNumberTitle: model returned no title");
+
+  // The model is unreliable at preserving an exact long digit string verbatim — if it dropped,
+  // rounded, or reformatted the number, append it directly rather than trusting a retry to get
+  // it right. The number appearing exactly as generated is the one hard requirement here.
+  if (!title.includes(formattedNumber)) {
+    console.warn(`generateNumberTitle: model didn't reproduce "${formattedNumber}" exactly, appending it directly.`);
+    title = `${title} — ${formattedNumber}`;
+  }
+
+  return title.slice(0, 100); // YouTube's hard title cap, same as everywhere else titles are used
+}
+
 // --- Reverse translation (foreign -> English) for weekly trending keywords -------------------
 // update-keywords.js pulls trending terms from Google Trends and YouTube's trending chart in
 // non-English-speaking markets — this translates those terms/phrases INTO English before they're
@@ -547,4 +606,4 @@ export async function translateTermToEnglish(term, sourceLang) {
     console.warn(`translateTermToEnglish: "${original}" (${sourceLang}) failed, keeping original:`, e.message);
     return original;
   }
-  }
+}
