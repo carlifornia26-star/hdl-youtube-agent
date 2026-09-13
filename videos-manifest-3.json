@@ -1,6 +1,20 @@
 {
   "videos": [
     {
+      "video_id": "JFFY3EF3RSQ",
+      "short_video_id": "__hihuxO6XI",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "Modern Pet Care Impacts 830,598,641 Lives",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/JFFY3EF3RSQ/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "script_format": "stat-hook",
+      "caption_style": "lower-third",
+      "duration_seconds": 543,
+      "published_at": "2026-09-13T17:17:48.946Z"
+    },
+    {
       "video_id": "nnDd63Li25c",
       "short_video_id": "RY1_DBDURwc",
       "book_slug": "youtube-algorithms",
@@ -107,5 +121,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-09-12T16:17:48.397Z"
+  "updated_at": "2026-09-13T17:17:48.946Z"
 }
