@@ -1,6 +1,20 @@
 {
   "videos": [
     {
+      "video_id": "JmLQHWYZ89o",
+      "short_video_id": "9viOPBXZd_8",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "Growing Channel Success With 1,024,241,957 Views",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/JmLQHWYZ89o/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "script_format": "cold-open",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 556,
+      "published_at": "2026-09-14T15:53:43.909Z"
+    },
+    {
       "video_id": "WwTpur1zMNo",
       "short_video_id": "HX8OJoEYLa4",
       "book_slug": "art-of-joy",
@@ -174,5 +188,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-09-13T13:57:48.969Z"
+  "updated_at": "2026-09-14T15:53:43.910Z"
 }
