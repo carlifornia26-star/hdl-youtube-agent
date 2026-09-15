@@ -35,12 +35,10 @@ async function mapWithConcurrency(items, limit, fn) {
 // playlists/manifest don't overwrite each other.
 const CHANNEL_ID = process.env.CHANNEL_ID || "1";
 
-// Audio policy: pure, uninterrupted narrator voice-over, no background music bed. Previously
-// this pipeline mixed a quiet incompetech.com music track under every video (see music.js /
-// render.js MUSIC_VOLUME) — that step is now skipped entirely so nothing competes with vocal
-// intelligibility. Flip back to true to restore it; fetchBackgroundMusic/mixBackgroundMusic are
-// left in place, untouched, for that.
-const ENABLE_BACKGROUND_MUSIC = false;
+// Audio policy: background music stays on, but only calm/relaxed/mellow/uplifting tracks —
+// see GOOD_FEELS/BAD_FEELS in music.js, which already excludes anything dark, aggressive,
+// intense, or action-coded before it's ever a candidate. Set to false to go narration-only.
+const ENABLE_BACKGROUND_MUSIC = true;
 
 // categoryId now comes from the BOOK being featured today (book.categoryId, set per-title in
 // catalog.js), not the channel. pickTodaysBook() rotates every channel through the full 7-book
