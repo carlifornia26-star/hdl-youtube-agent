@@ -35,6 +35,13 @@ async function mapWithConcurrency(items, limit, fn) {
 // playlists/manifest don't overwrite each other.
 const CHANNEL_ID = process.env.CHANNEL_ID || "1";
 
+// Audio policy: pure, uninterrupted narrator voice-over, no background music bed. Previously
+// this pipeline mixed a quiet incompetech.com music track under every video (see music.js /
+// render.js MUSIC_VOLUME) — that step is now skipped entirely so nothing competes with vocal
+// intelligibility. Flip back to true to restore it; fetchBackgroundMusic/mixBackgroundMusic are
+// left in place, untouched, for that.
+const ENABLE_BACKGROUND_MUSIC = false;
+
 // categoryId now comes from the BOOK being featured today (book.categoryId, set per-title in
 // catalog.js), not the channel. pickTodaysBook() rotates every channel through the full 7-book
 // catalog (just offset by a day), so a channel-level category was wrong on ~6 of every 7
@@ -563,15 +570,17 @@ async function main() {
   // reason, fall back to uploading without music rather than failing the run.
   let musicTrack = null;
   const recentMusicTitles = await loadUsedMusicTitles();
-  try {
-    const musicPath = path.join(BUILD_DIR, "music.mp3");
-    musicTrack = await fetchBackgroundMusic(musicPath, { channel: CHANNEL_ID, recentTitles: recentMusicTitles });
-    const musicOutPath = path.join(BUILD_DIR, "final_with_music.mp4");
-    await mixBackgroundMusic({ videoPath: uploadPath, musicPath, outPath: musicOutPath });
-    uploadPath = musicOutPath;
-    await saveUsedMusicTitles([...recentMusicTitles, musicTrack.title]);
-  } catch (e) {
-    console.warn("Background music failed, uploading without it:", e.message);
+  if (ENABLE_BACKGROUND_MUSIC) {
+    try {
+      const musicPath = path.join(BUILD_DIR, "music.mp3");
+      musicTrack = await fetchBackgroundMusic(musicPath, { channel: CHANNEL_ID, recentTitles: recentMusicTitles });
+      const musicOutPath = path.join(BUILD_DIR, "final_with_music.mp4");
+      await mixBackgroundMusic({ videoPath: uploadPath, musicPath, outPath: musicOutPath });
+      uploadPath = musicOutPath;
+      await saveUsedMusicTitles([...recentMusicTitles, musicTrack.title]);
+    } catch (e) {
+      console.warn("Background music failed, uploading without it:", e.message);
+    }
   }
 
   // 3bb) Title — computed HERE, before the thumbnail block below, so the thumbnail's text
