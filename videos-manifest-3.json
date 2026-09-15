@@ -1,6 +1,20 @@
 {
   "videos": [
     {
+      "video_id": "JeZnlnatHWw",
+      "short_video_id": "bVVYYT-U1fs",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "Advanced Ai Business Strategy Impacts 1,131,054,486",
+      "description": "Curious about advanced AI business strategy? AGE ONE: Premium Edition breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/JeZnlnatHWw/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "script_format": "direct-hook",
+      "caption_style": "classic-pop",
+      "duration_seconds": 533,
+      "published_at": "2026-09-15T18:02:52.142Z"
+    },
+    {
       "video_id": "8ZdeXB_---c",
       "short_video_id": "39bRngkxvqU",
       "book_slug": "age-one",
@@ -135,5 +149,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-09-14T18:48:30.330Z"
+  "updated_at": "2026-09-15T18:02:52.143Z"
 }
