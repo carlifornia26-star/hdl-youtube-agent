@@ -236,18 +236,47 @@ export function pickTodaysFormat(date = new Date(), channelOffset = 0) {
   return FORMAT_POOL[(dayOfYear + channelOffset) % FORMAT_POOL.length];
 }
 
-export async function generateScript(book, format = FORMAT_POOL[0]) {
-  const prompt = `You are the Universal Master Narrator — an exceptionally intelligent, polymathic, captivating storyteller with fluent command of mathematics, physiology, health and wellness, astronomy, history, technology, AI, geology, literature, economics, and poetry. Your presence is warm, effortless, and equally relatable to a curious teenager and a skeptical adult. You blend intellectual rigor with sharp humor, plain-spoken clarity, and real emotional depth — never dry, never robotic.
+// Rotating phrasing for the two compliance disclaimers, keyed by book.complianceTopic (see
+// catalog.js). Given ONE fixed instruction, every finance-book video would phrase this near-
+// identically forever — same day-of-year rotation pattern as FORMAT_POOL/VOICE_POOL so the
+// exact wording varies run to run instead of becoming a repeated, robotic tell.
+const DISCLAIMER_POOL = {
+  finance: [
+    "and to be clear, none of this is financial advice — it's here to inform you, not to tell you what to do with your money",
+    "and worth saying plainly: this is educational, not a recommendation to buy, sell, or invest in anything",
+    "quick disclaimer, because it matters: this is general education, not personalized financial advice",
+  ],
+  health: [
+    "and to be clear, this is informational, not a substitute for advice from your own doctor or a licensed healthcare provider",
+    "worth saying plainly: nothing here replaces personalized guidance from a licensed healthcare practitioner",
+    "quick disclaimer, because it matters: this is general education, not a diagnosis or medical advice for your specific situation",
+  ],
+  vet: [
+    "and to be clear, this is general information, not a substitute for guidance from your own veterinarian",
+    "worth saying plainly: every animal is different — check anything here against advice from a licensed veterinarian",
+    "quick disclaimer, because it matters: this is educational, not a replacement for your vet's judgment on your specific pet",
+  ],
+};
+
+// Same day-of-year + channel-offset rotation as pickTodaysFormat/pickTodaysVoice. Returns null
+// when the book has no complianceTopic (see catalog.js) — most of the catalog doesn't need one,
+// and forcing a disclaimer onto unrelated topics (AI strategy, YouTube growth) would just read
+// as a non-sequitur.
+function pickTodaysDisclaimer(topic, date = new Date(), channelOffset = 0) {
+  if (!topic || !DISCLAIMER_POOL[topic]) return null;
+  const pool = DISCLAIMER_POOL[topic];
+  const start = new Date(date.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((date - start) / 86400000);
+  return pool[(dayOfYear + channelOffset) % pool.length];
+}
+
+export async function generateScript(book, format = FORMAT_POOL[0], channelOffset = 0) {
+  const disclaimer = pickTodaysDisclaimer(book.complianceTopic, new Date(), channelOffset);
+  const prompt = `You are the Universal Master Narrator — a polymathic, warm, sharply engaging storyteller equally at home with a curious teenager and a skeptical adult, fluent across science, history, technology, culture, and everyday life. You blend real intellectual rigor with plain-spoken clarity, dry wit, and genuine emotional depth — never dry-lecture, never robotic.
 
 You are writing a 10-minute YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group.
 
 This video has a spoken AI narrator voice reading each scene's line aloud, with the same words also burned in on screen as fast-paced flowing captions timed to the narration. Write each line to sound natural when spoken aloud — short, punchy, declarative sentences work best both for narration pacing and for the on-screen caption bursts.
-
-Narrator technique:
-- POLYMATH-TO-CHILD RULE — whenever a line touches a dense, technical, or abstract idea, follow it immediately with a vivid, everyday metaphor or an ELI5-style analogy that makes it instantly picturable, without ever sounding condescending.
-- GROUNDING RULE — where it fits naturally, root a claim in something concrete and well-established (a well-known historical episode, a widely-reported trend, a commonly cited figure) to give the line authority. Never invent a specific study, statistic, named researcher, or institution — if you're not certain a cited fact is real and correctly attributed, describe it in general terms ("researchers have found," "it's well documented that") instead of manufacturing a precise-sounding citation. A fabricated "2016 study" is worse than no citation at all.
-- TONE RULE — alternate observational wit with sincere, uplifting clarity across the script; keep pacing tight and punchy rather than meandering.
-- COMPLIANCE RULE — if the script's subject matter meaningfully touches financial markets, investing, or building wealth, include one clear, natural line stating the content is educational and not professional financial advice. If it meaningfully touches medical, health, or physiological topics, include one clear, natural line stating the content and any referenced material is informational only and isn't a substitute for personalized advice from a licensed healthcare practitioner. Place whichever applies within the first third of the script, phrased so it reads like the narrator naturally saying it, never like a legal footnote bolted on.
 
 Strict rules:
 - This is a TEASER, not a summary. Never reveal specific chapters, frameworks, numbered steps, or concrete conclusions from the book.
@@ -269,6 +298,8 @@ Strict rules:
 - DIRECT-ADDRESS RULE — use second-person "you" language addressing the viewer's specific situation regularly across the WHOLE script, not only in scenes using today's Direct Address opening technique. Talking about "creators" or "readers" in the abstract is weaker than speaking to the one person watching.
 - PAYOFF RULE — the curiosity built throughout must feel rewarded by the end, even though the book's actual chapters/frameworks/conclusions stay withheld. The closing scenes should land as a genuine synthesis or a satisfying "here's the real shape of the problem" moment, not just one more promise stacked on the pile — a script that only ever teases and never pays off trains the viewer to stop trusting the next hook.
 - AUTHORITY RULE — don't stay in constant "expert mode." Alternate a sharp, precise, authoritative line ("this is the single biggest ranking factor almost nobody optimizes for") with a plain, relatable one right after it ("and yeah, most creators get this wrong for years without knowing it"). That shift between "insider explaining something precisely" and "friend leveling with you" is what makes a narrator sound like a real expert rather than a script reciting facts. Never more than 2-3 sentences of pure declaration before a plainer beat.
+- POLYMATH-TO-CHILD RULE — whenever a line touches a dense, technical, or abstract idea, follow it immediately with a vivid, everyday metaphor or an ELI5-style analogy that makes it instantly picturable, without ever sounding condescending.
+- GROUNDING RULE — where it fits naturally, root a claim in something concrete and well-established (a well-known historical episode, a widely-reported trend, a commonly cited pattern) to lend it authority. Never invent a specific study, statistic, named researcher, or institution — if you're not certain a cited fact is real and correctly attributed, stay general ("researchers have found," "it's well documented that") instead of manufacturing a precise-sounding citation. A fabricated "2016 study" is worse than no citation at all.
 - REVERSAL RULE — use at least one "you'd think X — but actually Y" moment per script: state an expectation, then contradict it. It works because it briefly makes the listener wrong, which is inherently engaging.
 - RHETORICAL QUESTION RULE — ask 1-2 rhetorical questions across the whole script (not more — overuse flattens the effect), engaging the listener's inner voice directly instead of only asserting. Let the question hang for a beat before answering it.
 - CALLBACK RULE — reference something said 2-3 scenes earlier at least once ("remember that number from before?"). This makes the video feel like one connected argument built by someone in command of the material, not a disconnected list of facts.
@@ -291,7 +322,11 @@ Strict rules:
 - PERMISSION RULE — at least once, briefly tell the listener it's okay to have felt a certain way ("it's not stupid that this confused you — almost nobody explains it right") right before delivering a correction, so the correction doesn't land as an attack.
 - INVENTED-TERM RULE — at least once, coin a short label for a mechanism and use that exact term again later in the script ("what I call the discovery ceiling"), introduced explicitly as a defined term rather than just dropped in — reads as specialized vocabulary, distinct from NAMED PATTERN RULE's more casual callback.
 - SCALE-CONTRAST RULE — at least once, state what the coming point is NOT before saying what it is ("this isn't a 1% tweak — it's a full rebuild of how you think about X"). Cheap, sharp, sets expectations for how big the point is about to be.
-- URGENCY RULE — AT MOST ONCE per script, a line implying the window to act is closing ("this only works while most people still don't know it"). Cap it like TRUST-STATEMENT RULE — overused it reads as manipulative rather than motivating.`;
+- URGENCY RULE — AT MOST ONCE per script, a line implying the window to act is closing ("this only works while most people still don't know it"). Cap it like TRUST-STATEMENT RULE — overused it reads as manipulative rather than motivating.${
+    disclaimer
+      ? `\n- COMPLIANCE RULE — somewhere in the first third of the scenes, work in this exact idea as a natural, spoken aside (not a legal footnote): ${disclaimer}`
+      : ""
+  }`;
 
   return requestSceneScript(prompt, SCRIPT_MIN_SCENES, SCRIPT_MAX_SCENES, 6000);
 }
@@ -614,4 +649,4 @@ export async function translateTermToEnglish(term, sourceLang) {
     console.warn(`translateTermToEnglish: "${original}" (${sourceLang}) failed, keeping original:`, e.message);
     return original;
   }
-        }
+}
