@@ -82,10 +82,26 @@ const SCRIPT_MAX_SCENES = 46;
 //  - phraseDupes: a scene-length chunk of text (6+ words) that reappears verbatim in another
 //    scene, even mid-sentence ("You'll learn how to create content" showing up 3 times).
 // Returns a count, not a boolean, so callers can log how bad it was even after the retry.
-function countRepetition(scenes) {
+//
+// `priorLines` (optional) seeds the opening/six-gram maps with lines from scenes that already
+// exist elsewhere in the SAME video — the main script and/or earlier top-up rounds — so a new
+// batch is checked against everything already said, not just against itself. Without this, each
+// generateBonusScenes() call only ever compares its own 10 scenes to each other, so two separate
+// top-up rounds (or a top-up round and the main script) can both reach for the same obvious
+// opening line with nothing catching it.
+function countRepetition(scenes, priorLines = []) {
   const openings = new Map();
   const sixGrams = new Map();
   let dupes = 0;
+  for (const line of priorLines) {
+    const words = line.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const opening = words.slice(0, 4).join(" ");
+    if (opening) openings.set(opening, (openings.get(opening) || 0) + 1);
+    for (let i = 0; i + 6 <= words.length; i++) {
+      const gram = words.slice(i, i + 6).join(" ");
+      sixGrams.set(gram, (sixGrams.get(gram) || 0) + 1);
+    }
+  }
   for (const s of scenes) {
     const words = s.line.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const opening = words.slice(0, 4).join(" ");
@@ -110,7 +126,10 @@ function countRepetition(scenes) {
 // this retries ONCE with an extra, sharper reminder appended — an LLM given the same prompt
 // twice usually varies enough on the second pass to break out of the repeated pattern, and one
 // retry is cheap compared to shipping a script that repeats itself on camera.
-async function requestSceneScript(prompt, minItems, maxItems, maxTokens) {
+// `priorLines` (optional): lines from scenes that already exist elsewhere in this same video
+// (main script and/or earlier top-up rounds). Passed through to countRepetition() so dupes are
+// caught across the whole video, not just within this one batch — see countRepetition above.
+async function requestSceneScript(prompt, minItems, maxItems, maxTokens, priorLines = []) {
   async function attempt(promptText) {
     const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
       messages: [{ role: "user", content: promptText }],
@@ -173,16 +192,16 @@ async function requestSceneScript(prompt, minItems, maxItems, maxTokens) {
   }
 
   let scenes = await attempt(prompt);
-  const dupes = countRepetition(scenes);
+  const dupes = countRepetition(scenes, priorLines);
   if (dupes > 0) {
-    console.warn(`Script generation: detected ${dupes} repeated opening(s)/phrase(s) across scenes, retrying once with a stronger anti-repetition reminder.`);
+    console.warn(`Script generation: detected ${dupes} repeated opening(s)/phrase(s) (${priorLines.length ? "against earlier scenes in this video" : "within this batch"}), retrying once with a stronger anti-repetition reminder.`);
     const retryPrompt =
       prompt +
-      `\n\nIMPORTANT CORRECTION: your previous attempt at this reused the same sentence opening or the same phrase (6+ words) in more than one scene. Every scene must start differently from every other scene, and no phrase of 6 or more words may appear in more than one scene anywhere in the script. Re-write the whole script from scratch with this fixed.`;
+      `\n\nIMPORTANT CORRECTION: your previous attempt at this reused the same sentence opening or the same phrase (6+ words) in more than one scene${priorLines.length ? ", OR reused an opening/phrase that was already used earlier in this same video (listed above as ALREADY COVERED)" : ""}. Every scene must start differently from every other scene${priorLines.length ? ", and differently from anything already covered earlier in the video" : ""}, and no phrase of 6 or more words may appear in more than one scene anywhere in the script${priorLines.length ? " or repeat something already said earlier in the video" : ""}. Re-write the whole script from scratch with this fixed.`;
     const retryScenes = await attempt(retryPrompt);
     // Only keep the retry if it actually improved things — a worse or equal retry isn't worth
     // discarding the first (still-usable) attempt over.
-    if (countRepetition(retryScenes) < dupes) scenes = retryScenes;
+    if (countRepetition(retryScenes, priorLines) < dupes) scenes = retryScenes;
   }
   return scenes;
 }
@@ -284,6 +303,7 @@ Strict rules:
 - Scene 1 is the single highest-leverage moment in the whole video for whether a viewer keeps watching past the first 15-22 seconds — most of the video's session-time performance is decided right there. Today's opening technique (${format.label}): ${format.opening} Do NOT open with throat-clearing, a generic greeting, or a soft, overused opener like "Have you ever wondered..." or "In today's fast-paced world...". The book's title mention (see below) can land in scene 1 or scene 2 — it doesn't have to be the first sentence itself.
 - Explicitly mention once, naturally, that the book is available in English only.
 - End with a call to action to read the full book on the High Definition Learning Group website.
+- CTA CONCENTRATION RULE — buy/read-now urgency language ("read it now," "why wait," "don't miss out," "what are you waiting for," "get your copy," "start your journey today," or any close paraphrase of these) may appear in EXACTLY ONE scene: the final call-to-action scene required above. Every other scene builds curiosity only and must not nudge the viewer toward action, even softly — a script that pushes the sale in six different scenes reads as desperate and trains viewers to tune it out well before the actual CTA lands.
 - Do not use quotation marks of any kind inside a line's text — rephrase instead of quoting anything.
 - Mention the book's exact title, "${book.title}", naturally exactly 3 times across the whole script — once early to introduce it, once in the middle to reinforce it, and once in the closing call to action. Do not use the title any other number of times; refer to it as "the book," "this guide," or similar in between.
 - Produce between ${SCRIPT_MIN_SCENES} and ${SCRIPT_MAX_SCENES} scenes — more, shorter scenes than a typical script, so the visuals cut more often. Each scene's line is 3-4 sentences (roughly 40-55 words) written to be spoken naturally in about 15-22 seconds — the total script across all scenes should land around 2000-2300 words so the finished narration runs close to 10 minutes.
@@ -331,13 +351,34 @@ Strict rules:
   return requestSceneScript(prompt, SCRIPT_MIN_SCENES, SCRIPT_MAX_SCENES, 6000);
 }
 
+// Builds a compact "already covered" list from previously generated scene lines (main script
+// and/or earlier top-up rounds) so a new generateBonusScenes() call knows what's already been
+// said — first ~8 words of each prior line, not the full text, to keep prompt size bounded even
+// after several top-up rounds. Used both to steer the model away from repeats on the first try
+// and (via requestSceneScript's priorLines param) to hard-check the result afterward.
+function summarizeCoveredOpenings(existingLines) {
+  return existingLines
+    .map((line) => line.trim().split(/\s+/).slice(0, 8).join(" "))
+    .filter(Boolean)
+    .map((s) => `- ${s}...`)
+    .join("\n");
+}
+
 // Called by generate-video.js only when the built video still lands under the 8-minute target
 // after the main script's scenes have all been synthesized and their REAL durations measured.
 // Requests `count` ADDITIONAL scenes to insert into the video — no title mention, no CTA, no
 // "English only" line (all three are already covered by the main script and are checked for
 // separately) — so these can just be appended to the existing scene list with no bookkeeping.
-export async function generateBonusScenes(book, count) {
-  const prompt = `You are the Universal Master Narrator — the same polymathic, warm, sharply engaging voice used throughout this video — extending an existing YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group. The intro, main body, and closing call-to-action already exist — you're writing ${count} ADDITIONAL supporting scenes to insert into the video, deepening the curiosity without revealing the book's actual chapters, frameworks, steps, or conclusions.
+// `existingLines` (optional): the spoken line from every scene already built for this video so
+// far — the main script plus any earlier top-up rounds. Passed so this round (a) is steered away
+// from repeating ideas/openings already used, and (b) gets hard-checked against them afterward
+// via requestSceneScript's priorLines param — see countRepetition in this file for why that
+// cross-round check matters (each top-up round used to be checked only against itself).
+export async function generateBonusScenes(book, count, existingLines = []) {
+  const coveredBlock = existingLines.length
+    ? `\n\nALREADY COVERED in this video (main script + any earlier top-up scenes) — do not reuse these openings or make the same point again, even reworded:\n${summarizeCoveredOpenings(existingLines)}`
+    : "";
+  const prompt = `You are the Universal Master Narrator — the same polymathic, warm, sharply engaging voice used throughout this video — extending an existing YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group. The intro, main body, and closing call-to-action already exist — you're writing ${count} ADDITIONAL supporting scenes to insert into the video, deepening the curiosity without revealing the book's actual chapters, frameworks, steps, or conclusions.${coveredBlock}
 
 Same style as the rest of the video: an AI narrator speaks each line aloud, natural and punchy, with the same words burned in on screen as fast-paced captions. Where it fits, follow the POLYMATH-TO-CHILD approach — a dense idea immediately paired with a vivid everyday metaphor. Ground claims in well-established, general terms rather than inventing specific studies, statistics, or named sources.
 
@@ -353,7 +394,7 @@ Strict rules:
 - Every scene needs a concrete, sensory detail (not an abstract claim) and should escalate slightly past the previous scene's stakes rather than repeating the same weight of point. Use direct "you" language addressing the viewer. Vary sentence length within each scene rather than uniform-length sentences. At least one of these scenes should plant a specific, unresolved curiosity hook without revealing the book's actual chapters/frameworks/conclusions.
 - DELIVERY — alternate sharp/authoritative lines with plain, human ones; don't stay in constant expert mode. If space allows across these ${count} scenes: one reversal ("you'd think X, but actually Y"), one rhetorical question, one callback-style reference to an earlier idea, one named pattern, one micro-scene instead of a flat claim, a brief self-correction beat, a stakes-forward line, a false-summary-then-twist, a named contrast pair, one single-sentence one-liner scene, an identity-address line, or a scale-contrast line. Never force more than one or two of these into a single scene.`;
 
-  return requestSceneScript(prompt, count, count, 3000);
+  return requestSceneScript(prompt, count, count, 3000, existingLines);
 }
 
 // Translates {title, description} into a small set of target languages for YouTube `localizations`.
@@ -649,4 +690,4 @@ export async function translateTermToEnglish(term, sourceLang) {
     console.warn(`translateTermToEnglish: "${original}" (${sourceLang}) failed, keeping original:`, e.message);
     return original;
   }
-}
+  }
