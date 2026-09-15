@@ -1,6 +1,20 @@
 {
   "videos": [
     {
+      "video_id": "yR8Rmw6rJEQ",
+      "short_video_id": "mJtlJ0d3Ahw",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "Responsible, modern pet care | HDL Group",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/yR8Rmw6rJEQ/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "script_format": "stat-hook",
+      "caption_style": "lower-third",
+      "duration_seconds": 636,
+      "published_at": "2026-09-15T14:29:51.871Z"
+    },
+    {
       "video_id": "JmLQHWYZ89o",
       "short_video_id": "9viOPBXZd_8",
       "book_slug": "youtube-algorithms",
@@ -188,5 +202,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-09-14T15:53:43.910Z"
+  "updated_at": "2026-09-15T14:29:51.871Z"
 }
