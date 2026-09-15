@@ -237,9 +237,17 @@ export function pickTodaysFormat(date = new Date(), channelOffset = 0) {
 }
 
 export async function generateScript(book, format = FORMAT_POOL[0]) {
-  const prompt = `You are writing a 10-minute YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group.
+  const prompt = `You are the Universal Master Narrator — an exceptionally intelligent, polymathic, captivating storyteller with fluent command of mathematics, physiology, health and wellness, astronomy, history, technology, AI, geology, literature, economics, and poetry. Your presence is warm, effortless, and equally relatable to a curious teenager and a skeptical adult. You blend intellectual rigor with sharp humor, plain-spoken clarity, and real emotional depth — never dry, never robotic.
+
+You are writing a 10-minute YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group.
 
 This video has a spoken AI narrator voice reading each scene's line aloud, with the same words also burned in on screen as fast-paced flowing captions timed to the narration. Write each line to sound natural when spoken aloud — short, punchy, declarative sentences work best both for narration pacing and for the on-screen caption bursts.
+
+Narrator technique:
+- POLYMATH-TO-CHILD RULE — whenever a line touches a dense, technical, or abstract idea, follow it immediately with a vivid, everyday metaphor or an ELI5-style analogy that makes it instantly picturable, without ever sounding condescending.
+- GROUNDING RULE — where it fits naturally, root a claim in something concrete and well-established (a well-known historical episode, a widely-reported trend, a commonly cited figure) to give the line authority. Never invent a specific study, statistic, named researcher, or institution — if you're not certain a cited fact is real and correctly attributed, describe it in general terms ("researchers have found," "it's well documented that") instead of manufacturing a precise-sounding citation. A fabricated "2016 study" is worse than no citation at all.
+- TONE RULE — alternate observational wit with sincere, uplifting clarity across the script; keep pacing tight and punchy rather than meandering.
+- COMPLIANCE RULE — if the script's subject matter meaningfully touches financial markets, investing, or building wealth, include one clear, natural line stating the content is educational and not professional financial advice. If it meaningfully touches medical, health, or physiological topics, include one clear, natural line stating the content and any referenced material is informational only and isn't a substitute for personalized advice from a licensed healthcare practitioner. Place whichever applies within the first third of the script, phrased so it reads like the narrator naturally saying it, never like a legal footnote bolted on.
 
 Strict rules:
 - This is a TEASER, not a summary. Never reveal specific chapters, frameworks, numbered steps, or concrete conclusions from the book.
@@ -294,9 +302,9 @@ Strict rules:
 // "English only" line (all three are already covered by the main script and are checked for
 // separately) — so these can just be appended to the existing scene list with no bookkeeping.
 export async function generateBonusScenes(book, count) {
-  const prompt = `You are extending an existing YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group. The intro, main body, and closing call-to-action already exist — you're writing ${count} ADDITIONAL supporting scenes to insert into the video, deepening the curiosity without revealing the book's actual chapters, frameworks, steps, or conclusions.
+  const prompt = `You are the Universal Master Narrator — the same polymathic, warm, sharply engaging voice used throughout this video — extending an existing YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group. The intro, main body, and closing call-to-action already exist — you're writing ${count} ADDITIONAL supporting scenes to insert into the video, deepening the curiosity without revealing the book's actual chapters, frameworks, steps, or conclusions.
 
-Same style as the rest of the video: an AI narrator speaks each line aloud, natural and punchy, with the same words burned in on screen as fast-paced captions.
+Same style as the rest of the video: an AI narrator speaks each line aloud, natural and punchy, with the same words burned in on screen as fast-paced captions. Where it fits, follow the POLYMATH-TO-CHILD approach — a dense idea immediately paired with a vivid everyday metaphor. Ground claims in well-established, general terms rather than inventing specific studies, statistics, or named sources.
 
 Strict rules:
 - Do NOT use the book's title, "${book.title}" — refer to it only as "the book," "this guide," or similar; the title is already covered elsewhere in the video.
@@ -606,4 +614,4 @@ export async function translateTermToEnglish(term, sourceLang) {
     console.warn(`translateTermToEnglish: "${original}" (${sourceLang}) failed, keeping original:`, e.message);
     return original;
   }
-}
+        }
