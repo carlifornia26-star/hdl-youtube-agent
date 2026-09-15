@@ -13,6 +13,10 @@
 // channel whose fallback category was set for something else). Tying it to the book instead
 // means the tag is correct every time, on every channel, regardless of the day's rotation.
 // Reference IDs: Education=27, Science & Technology=28, Howto & Style=26, Pets & Animals=15.
+// `complianceTopic` ("finance" | "health" | "vet", omitted otherwise) drives the rotating
+// compliance disclaimer line in cf-ai.js's generateScript — set deterministically per book here
+// rather than left to the model to decide per-run, so it fires consistently every time this
+// book comes up and never fires for books it doesn't apply to.
 export const CATALOG = [
   {
     slug: "age-one",
@@ -40,6 +44,7 @@ export const CATALOG = [
     pageUrl: "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
     stockKeywords: ["bitcoin", "cryptocurrency", "blockchain", "digital finance", "stock market", "gold coins"],
     categoryId: "27", // Education
+    complianceTopic: "finance",
   },
   {
     slug: "science-of-feeling-great",
@@ -49,6 +54,7 @@ export const CATALOG = [
     pageUrl: "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
     stockKeywords: ["healthy lifestyle", "morning routine", "wellness", "sunrise nature", "yoga meditation", "healthy food"],
     categoryId: "26", // Howto & Style
+    complianceTopic: "health",
   },
   {
     slug: "art-of-joy",
@@ -76,6 +82,7 @@ export const CATALOG = [
     pageUrl: "https://highdefinitionlearning.pages.dev/pet-friendly", // TODO: confirm real slug — not present in this batch
     stockKeywords: ["happy dog", "cat owner", "pet care", "puppy", "kitten playing", "dog walking park"],
     categoryId: "15", // Pets & Animals
+    complianceTopic: "vet",
   },
 ];
 
