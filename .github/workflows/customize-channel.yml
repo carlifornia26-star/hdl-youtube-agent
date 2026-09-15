@@ -13,7 +13,7 @@ on:
         required: true
         default: "1"
         type: choice
-        options: ["1", "2", "3"]
+        options: ["1", "2", "3", "4"]
 
 jobs:
   localize-channel:
@@ -49,6 +49,11 @@ jobs:
               echo "id_key=YOUTUBE_CLIENT_ID_3" >> "$GITHUB_OUTPUT"
               echo "secret_key=YOUTUBE_CLIENT_SECRET_3" >> "$GITHUB_OUTPUT"
               echo "token_key=YOUTUBE_REFRESH_TOKEN_3" >> "$GITHUB_OUTPUT"
+              ;;
+            4)
+              echo "id_key=YOUTUBE_CLIENT_ID_4" >> "$GITHUB_OUTPUT"
+              echo "secret_key=YOUTUBE_CLIENT_SECRET_4" >> "$GITHUB_OUTPUT"
+              echo "token_key=YOUTUBE_REFRESH_TOKEN_4" >> "$GITHUB_OUTPUT"
               ;;
           esac
 
