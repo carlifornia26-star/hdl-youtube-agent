@@ -29,7 +29,7 @@ on:
         required: true
         default: "1"
         type: choice
-        options: ["1", "2", "3"]
+        options: ["1", "2", "3", "4"]
 
 concurrency:
   group: hdl-daily-video
@@ -122,6 +122,11 @@ jobs:
               ID_KEY="YOUTUBE_CLIENT_ID_3"
               SECRET_KEY="YOUTUBE_CLIENT_SECRET_3"
               TOKEN_KEY="YOUTUBE_REFRESH_TOKEN_3"
+              ;;
+            4)
+              ID_KEY="YOUTUBE_CLIENT_ID_4"
+              SECRET_KEY="YOUTUBE_CLIENT_SECRET_4"
+              TOKEN_KEY="YOUTUBE_REFRESH_TOKEN_4"
               ;;
             *)
               echo "Invalid channel: $CHANNEL"
