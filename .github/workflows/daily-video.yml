@@ -2,16 +2,22 @@ name: HDL Daily YouTube Teaser
 
 on:
   schedule:
-    # All 3 channels target the SAME daily publish moment — 16:00:00 UTC, matching the exact
+    # All 4 channels target the SAME daily publish moment — 16:00:00 UTC, matching the exact
     # publish time found on MrBeast's videos in competitor analysis (16:00:0X UTC on all 4
     # samples). Trigger times below are NOT that publish time — they're staggered earlier so each
     # channel's render/TTS/translate/upload pipeline has time to finish before 16:00 UTC, and
     # publishVideo() then holds the video at `private` with a scheduled `publishAt` of 16:00 UTC
     # rather than going public the moment the run finishes (see the "Compute publish target" step
     # below and publishVideo() in youtube.js). Spaced 2 hours apart — this repo's own
-    # `concurrency` group below serializes all 3 channels onto one runner slot, and each run's
-    # own timeout-minutes is 120, so a 2-hour gap keeps channel 2/3 from ever queuing behind an
-    # unusually long channel 1/2 run and missing the shared 16:00 UTC target.
+    # `concurrency` group below serializes all 4 channels onto one runner slot, and each run's
+    # own timeout-minutes is 120, so a 2-hour gap keeps a later channel from ever queuing behind an
+    # unusually long earlier-channel run and missing the shared 16:00 UTC target.
+    #
+    # Channel 4's 1h buffer (vs. channel 3's 3h) is the tightest in the rotation: if channel 3's
+    # 13:00 UTC run is still going when channel 4's 15:00 UTC trigger fires, `concurrency` queues
+    # channel 4 behind it, and a channel-3 run longer than ~1h then pushes channel 4 past the
+    # 16:00 UTC publish target. Worth revisiting (e.g. moving publish later, or channel 1 earlier)
+    # if channel 4 starts missing its target.
     #
     # Fixed in UTC now, not US Eastern — the previous EDT/EST cron-pair + offset-check dance
     # existed only to keep a fixed US Eastern wall-clock trigger time across DST changes. That's
@@ -21,6 +27,7 @@ on:
     - cron: "0 9 * * *"  # Channel 1 trigger — 09:00 UTC (7h buffer before the 16:00 UTC publish target)
     - cron: "0 11 * * *" # Channel 2 trigger — 11:00 UTC (5h buffer)
     - cron: "0 13 * * *" # Channel 3 trigger — 13:00 UTC (3h buffer)
+    - cron: "0 15 * * *" # Channel 4 trigger — 15:00 UTC (1h buffer)
 
   workflow_dispatch:
     inputs:
@@ -94,6 +101,7 @@ jobs:
               "0 9 * * *")  CHANNEL=1 ;;
               "0 11 * * *") CHANNEL=2 ;;
               "0 13 * * *") CHANNEL=3 ;;
+              "0 15 * * *") CHANNEL=4 ;;
               *)
                 echo "Unknown schedule: $SCHEDULE"
                 exit 1
