@@ -492,7 +492,12 @@ async function main() {
     );
     let bonusScenes;
     try {
-      bonusScenes = sanitizeScenePauses(await generateBonusScenes(book, TOPUP_SCENES_PER_ROUND));
+      // Pass every line built so far (main script + any earlier top-up rounds) so this round
+      // is steered away from — and hard-checked against — ideas/openings already used. Without
+      // this, each top-up round only ever compared its own 10 scenes to each other, which is
+      // why separate rounds could open with near-identical lines (see cf-ai.js countRepetition).
+      const existingLines = built.map((s) => s.line);
+      bonusScenes = sanitizeScenePauses(await generateBonusScenes(book, TOPUP_SCENES_PER_ROUND, existingLines));
     } catch (e) {
       console.warn("Bonus scene generation failed, stopping top-up early:", e.message);
       break;
