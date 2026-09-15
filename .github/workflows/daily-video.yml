@@ -13,21 +13,20 @@ on:
     # own timeout-minutes is 120, so a 2-hour gap keeps a later channel from ever queuing behind an
     # unusually long earlier-channel run and missing the shared 16:00 UTC target.
     #
-    # Channel 4's 1h buffer (vs. channel 3's 3h) is the tightest in the rotation: if channel 3's
-    # 13:00 UTC run is still going when channel 4's 15:00 UTC trigger fires, `concurrency` queues
-    # channel 4 behind it, and a channel-3 run longer than ~1h then pushes channel 4 past the
-    # 16:00 UTC publish target. Worth revisiting (e.g. moving publish later, or channel 1 earlier)
-    # if channel 4 starts missing its target.
+    # Channel 4 moved from 15:00 UTC (1h buffer) to 07:00 UTC (9h buffer) — its old slot was the
+    # tightest in the rotation and could miss the 16:00 UTC publish target if channel 3's run
+    # overran. It now runs FIRST in the day, ahead of channel 1, still 2h clear of channel 1's
+    # 09:00 UTC trigger, so the shared-runner `concurrency` queue can't push it late.
     #
     # Fixed in UTC now, not US Eastern — the previous EDT/EST cron-pair + offset-check dance
     # existed only to keep a fixed US Eastern wall-clock trigger time across DST changes. That's
     # no longer the goal (the goal is a fixed UTC publish time, matching a competitor who
     # publishes at a fixed UTC time year-round), so that whole DST mechanism is removed below —
     # one plain UTC cron per channel is now sufficient.
-    - cron: "0 9 * * *"  # Channel 1 trigger — 09:00 UTC (7h buffer before the 16:00 UTC publish target)
+    - cron: "0 7 * * *"  # Channel 4 trigger — 07:00 UTC (9h buffer before the 16:00 UTC publish target)
+    - cron: "0 9 * * *"  # Channel 1 trigger — 09:00 UTC (7h buffer)
     - cron: "0 11 * * *" # Channel 2 trigger — 11:00 UTC (5h buffer)
     - cron: "0 13 * * *" # Channel 3 trigger — 13:00 UTC (3h buffer)
-    - cron: "0 15 * * *" # Channel 4 trigger — 15:00 UTC (1h buffer)
 
   workflow_dispatch:
     inputs:
@@ -98,10 +97,10 @@ jobs:
             # One plain UTC cron per channel now (see the `on.schedule` comment above for why
             # the old EDT/EST DST-pair dance is gone) — a straight lookup, no offset check needed.
             case "$SCHEDULE" in
+              "0 7 * * *")  CHANNEL=4 ;;
               "0 9 * * *")  CHANNEL=1 ;;
               "0 11 * * *") CHANNEL=2 ;;
               "0 13 * * *") CHANNEL=3 ;;
-              "0 15 * * *") CHANNEL=4 ;;
               *)
                 echo "Unknown schedule: $SCHEDULE"
                 exit 1
