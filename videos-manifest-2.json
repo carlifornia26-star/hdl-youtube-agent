@@ -1,6 +1,20 @@
 {
   "videos": [
     {
+      "video_id": "N80f88LwC6I",
+      "short_video_id": "NJl9tOspKis",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "Advanced AI business strategy | HDL Group",
+      "description": "Curious about advanced AI business strategy? AGE ONE: Premium Edition breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/N80f88LwC6I/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "script_format": "direct-hook",
+      "caption_style": "classic-pop",
+      "duration_seconds": 610,
+      "published_at": "2026-09-16T16:03:45.241Z"
+    },
+    {
       "video_id": "5D9KvrJSmJw",
       "short_video_id": "ONddzxtiLkk",
       "book_slug": "pet-friendly",
@@ -121,5 +135,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-09-14T17:17:33.669Z"
+  "updated_at": "2026-09-16T16:03:45.242Z"
 }
