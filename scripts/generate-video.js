@@ -417,7 +417,10 @@ async function main() {
   console.log(`Today's caption style: ${captionStyle.label}`);
 
   // 1) Script (teaser-only, scene count set by the model within the schema's range)
-  const rawScenes = await generateScript(book, format);
+  // channelOffset passed here (previously omitted) so the disclaimer rotation and the
+  // grounding-fact rotation (both keyed by day-of-year + channelOffset — see cf-ai.js)
+  // actually differ across the 3 channels on the same calendar day, same as book/format/voice.
+  const rawScenes = await generateScript(book, format, Number(CHANNEL_ID) - 1);
   // Deterministic text-level fix for the "skip this don't" run-on-pause issue — see
   // sanitizeNarrationPauses in cf-ai.js. Applied here (not inside generateScript) so it also
   // catches anything a future prompt change might introduce, without relying on the model.
