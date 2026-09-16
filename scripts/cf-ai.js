@@ -289,8 +289,112 @@ function pickTodaysDisclaimer(topic, date = new Date(), channelOffset = 0) {
   return pool[(dayOfYear + channelOffset) % pool.length];
 }
 
+// GROUNDING_LIBRARY: hand-verified, real quotes/beliefs, statistics, historical dates, and
+// cultural customs — one pool per book slug. This is the ONLY source of specific citations the
+// model is allowed to use. It exists because the model cannot verify facts on its own, and the
+// old approach (just telling it "don't invent a study") produced narration with zero concrete
+// substance rather than risking a fabricated one. Every entry here should be something you (or
+// Claude, via web search) have actually checked — never let the model add an entry live.
+// `type` just helps the model vary its phrasing; `fact` is the exact detail to paraphrase
+// (never quote verbatim — the script already bans quotation marks); `source` is for your own
+// records and is never spoken on screen.
+// Expand this over time — 3-5 items per topic is a reasonable minimum so the daily rotation
+// (see pickTodaysGrounding) doesn't repeat the same 2-3 facts every week.
+const GROUNDING_LIBRARY = {
+  "age-one": [
+    { type: "historical", fact: "in 1956 a small group of researchers coined the term \"artificial intelligence\" at a summer workshop at Dartmouth College, wagering the whole field could be cracked in a single summer", source: "Dartmouth Summer Research Project on Artificial Intelligence, 1956" },
+    { type: "quote", fact: "Alan Turing opened his 1950 paper on machine intelligence by posing the question that still defines the field: can a machine think", source: "Alan Turing, 'Computing Machinery and Intelligence', 1950" },
+    { type: "stat", fact: "a McKinsey global survey published in 2025 found 78% of organizations now use AI in at least one business function, up from 72% just a year earlier", source: "McKinsey, 'The state of AI: How organizations are rewiring to capture value', 2025" },
+    { type: "stat", fact: "that same 2025 McKinsey survey found 71% of organizations report regularly using generative AI specifically", source: "McKinsey, 2025 State of AI survey" },
+    { type: "historical", fact: "in 2012 a neural network called AlexNet's breakthrough win at the ImageNet competition is widely credited with kicking off the modern deep-learning boom", source: "ImageNet Large Scale Visual Recognition Challenge, 2012" },
+    { type: "historical", fact: "Nikola Tesla believed alternating current was superior to Thomas Edison's direct current, and proved it during the so-called 'War of Currents' in the late 1880s and 1890s — AC went on to become the worldwide standard for power transmission", source: "widely documented history of the War of Currents, 1880s-1890s" },
+    { type: "stat", fact: "ChatGPT reached 100 million monthly users within about two months of its late-2022 launch, according to a UBS analysis — making it, at the time, the fastest-growing consumer application in internet history, beating TikTok's nine months and Instagram's two and a half years to the same milestone", source: "UBS/Similarweb analysis reported by Reuters, February 2023" },
+    { type: "historical", fact: "in May 1997, IBM's Deep Blue became the first computer to defeat a reigning world chess champion, Garry Kasparov, in a full match under standard tournament time controls", source: "IBM Deep Blue vs. Garry Kasparov rematch, May 1997" },
+    { type: "historical", fact: "in 2024, John Hopfield and Geoffrey Hinton won the Nobel Prize in Physics for foundational neural-network discoveries that underpin today's machine learning — the first time a Nobel science prize went to AI research", source: "Royal Swedish Academy of Sciences, 2024 Nobel Prize in Physics" },
+    { type: "historical", fact: "AI has crashed before — a critical 1973 government report by mathematician James Lighthill led the UK to slash academic AI funding almost overnight, kicking off what researchers still call the first 'AI winter'", source: "The Lighthill Report, UK Science Research Council, 1973" },
+  ],
+  "bitcoin-standard": [
+    { type: "historical", fact: "on October 31, 2008, someone using the pseudonym Satoshi Nakamoto published the Bitcoin white paper, and their real identity has never been confirmed", source: "Bitcoin: A Peer-to-Peer Electronic Cash System, 2008" },
+    { type: "custom", fact: "the first known real-world Bitcoin purchase was in 2010, when someone paid 10,000 bitcoin for two pizzas — an event now marked every May 22nd as 'Bitcoin Pizza Day'", source: "widely documented Bitcoin history, 2010" },
+    { type: "stat", fact: "Bitcoin's total supply is hard-capped at 21 million coins, a limit written into its original code and unchangeable by any single party", source: "Bitcoin protocol design" },
+    { type: "custom", fact: "in 2021, El Salvador became the first country in the world to adopt Bitcoin as legal tender", source: "El Salvador Bitcoin Law, 2021" },
+    { type: "quote", fact: "back in 1999 — nearly a decade before Bitcoin existed — the economist Milton Friedman predicted that a reliable, anonymous form of electronic cash would soon develop on the internet", source: "Milton Friedman, National Taxpayers Union/Foundation interview, 1999" },
+    { type: "historical", fact: "the Mt. Gox exchange once handled over 70% of all bitcoin trades worldwide before it collapsed in 2014, after roughly 850,000 bitcoin went missing in a years-long, undetected theft", source: "Mt. Gox collapse, February 2014" },
+    { type: "stat", fact: "Bitcoin's mining reward is programmed to cut in half roughly every four years — from 50 coins per block in 2009 down to 3.125 today after the most recent halving in April 2024 — a built-in scarcity mechanism that runs until around the year 2140", source: "Bitcoin protocol halving schedule; most recent halving, April 2024" },
+  ],
+  "science-of-feeling-great": [
+    { type: "stat", fact: "the Harvard Study of Adult Development, running since 1938 and still active today, found that the strongest predictor of long-term health and happiness wasn't wealth or fame — it was the quality of a person's close relationships", source: "Harvard Study of Adult Development; Waldinger & Schulz, 'The Good Life', 2023" },
+    { type: "custom", fact: "researchers studying so-called 'Blue Zones' — regions like Okinawa, Japan and Sardinia, Italy — found unusually high numbers of people living past 100, tied largely to diet, daily movement, and strong social ties", source: "Dan Buettner's Blue Zones research" },
+    { type: "custom", fact: "in Japan, the practice of 'shinrin-yoku', or forest bathing, became part of official national public health guidance in the 1980s", source: "Japanese Ministry of Agriculture, Forestry and Fisheries, shinrin-yoku program, 1982" },
+    { type: "historical", fact: "the World Health Organization's founding constitution in 1948 defined health not merely as the absence of disease, but as a state of complete physical, mental, and social well-being", source: "WHO Constitution, adopted 1948" },
+    { type: "stat", fact: "the CDC recommends that adults get at least 7 hours of sleep per night, and identifies chronic short sleep as linked to higher long-term risk for conditions like obesity and heart disease", source: "US Centers for Disease Control and Prevention, sleep guidance" },
+    { type: "stat", fact: "the World Health Organization recommends adults get at least 150 to 300 minutes of moderate-intensity physical activity every week, or 75 to 150 minutes of vigorous activity, to meaningfully cut the risk of heart disease, diabetes, and some cancers", source: "WHO Guidelines on Physical Activity and Sedentary Behaviour, updated 2020" },
+    { type: "custom", fact: "in 2010, UNESCO added the Mediterranean diet to its list of Intangible Cultural Heritage, recognizing it as a shared way of eating, farming, and gathering across communities in Italy, Greece, Spain, and Morocco — not just a list of foods", source: "UNESCO Intangible Cultural Heritage inscription, November 2010" },
+  ],
+  "art-of-joy": [
+    { type: "stat", fact: "the Harvard Study of Adult Development, running since 1938, found that close relationships mattered more for long-term happiness than money or career success", source: "Harvard Study of Adult Development; Waldinger & Schulz, 'The Good Life', 2023" },
+    { type: "custom", fact: "the United Nations has published an annual World Happiness Report since 2012, ranking countries by self-reported wellbeing", source: "World Happiness Report, UN Sustainable Development Solutions Network, since 2012" },
+    { type: "custom", fact: "in Denmark, the concept of 'hygge' — a deliberate sense of coziness and togetherness — is frequently cited as one reason Nordic countries top global happiness rankings", source: "commonly cited in World Happiness Report coverage of Nordic countries" },
+    { type: "historical", fact: "the field of positive psychology — the scientific study of what makes life good, rather than just what makes it go wrong — was formally established after psychologist Martin Seligman made it his central theme as president of the American Psychological Association in 1998", source: "Martin Seligman, APA presidency, 1998" },
+    { type: "custom", fact: "in 1972, Bhutan's king declared that Gross National Happiness mattered more than Gross National Product, and the country still tracks an official Gross National Happiness Index today alongside its economic statistics", source: "Bhutan's Gross National Happiness policy, established 1972" },
+    { type: "historical", fact: "over 2,300 years ago, Aristotle argued in his Nicomachean Ethics that eudaimonia — often translated as flourishing or living well — was the ultimate goal of human life, not pleasure or wealth for their own sake", source: "Aristotle, Nicomachean Ethics" },
+    { type: "historical", fact: "psychologists Philip Brickman and Donald Campbell coined the term 'hedonic treadmill' in 1971, and a 1978 follow-up study found lottery winners were no happier than a control group about a year after their win, while accident victims who'd been paralyzed had returned close to their prior baseline happiness too", source: "Brickman & Campbell, 1971; Brickman, Coates & Janoff-Bulman, 'Lottery Winners and Accident Victims: Is Happiness Relative?', 1978" },
+  ],
+  "youtube-algorithms": [
+    { type: "stat", fact: "YouTube's own engineering team confirmed in 2017 that viewers were collectively watching over 1 billion hours of video on the platform every single day", source: "YouTube VP of Engineering Cristos Goodrow, 2017 announcement" },
+    { type: "historical", fact: "around 2012, YouTube shifted its recommendation algorithm to prioritize total watch time over raw view counts, changing what creators had to optimize for", source: "widely reported YouTube algorithm history, 2012" },
+    { type: "stat", fact: "creators upload more than 500 hours of new video to YouTube every single minute", source: "YouTube platform statistics, widely reported" },
+    { type: "historical", fact: "YouTube was founded in 2005 by three former PayPal employees, and the very first video ever uploaded to the platform — an 18-second clip called 'Me at the zoo' — went up on April 23, 2005", source: "YouTube company history; first upload, April 23, 2005" },
+    { type: "historical", fact: "YouTube launched its short-form video feature, Shorts, in 2020, explicitly built to compete with the format popularized by TikTok", source: "YouTube Shorts launch, 2020" },
+    { type: "historical", fact: "Google bought YouTube for $1.65 billion in an all-stock deal in November 2006 — just under two years after YouTube's founding, and at the time the largest acquisition in Google's history", source: "Google-YouTube acquisition, announced October 2006, closed November 2006" },
+  ],
+  "pet-friendly": [
+    { type: "historical", fact: "dogs are believed to have been domesticated from wolves at least 15,000 years ago, making them humanity's oldest domestic animal companion", source: "widely cited archaeological and genetic dating of dog domestication" },
+    { type: "custom", fact: "in ancient Egypt, cats were revered highly enough that killing one — even by accident — could carry the death penalty, and many households mummified their pet cats", source: "well-documented ancient Egyptian history" },
+    { type: "historical", fact: "most of today's recognizable dog breeds took shape during the Victorian era in 19th-century England, when kennel clubs began formalizing breed standards", source: "The Kennel Club, founded 1873, and Victorian-era breed standardization" },
+    { type: "stat", fact: "45.5% of U.S. households now own a dog and 32.1% own a cat, according to the AVMA's 2024 survey — both figures up sharply from 1996, when dog and cat ownership sat at 31.6% and 27.3%", source: "American Veterinary Medical Association, 2024 Pet Ownership and Demographic Sourcebook" },
+    { type: "stat", fact: "cats typically sleep 12 to 16 hours a day — meaning an average house cat spends roughly 70% of its entire life asleep", source: "widely documented feline sleep behavior" },
+    { type: "historical", fact: "the world's first guide dog school opened in Germany in August 1916, founded by Dr. Gerhard Stalling to train dogs for soldiers who'd been blinded in World War I", source: "Dr. Gerhard Stalling's guide dog school, Oldenburg, Germany, 1916" },
+    { type: "stat", fact: "a dog's nose holds up to 300 million olfactory receptors, compared to roughly 6 million in a human nose — one reason dogs can be trained to detect everything from explosives to certain diseases by scent alone", source: "widely documented canine olfaction research" },
+  ],
+};
+GROUNDING_LIBRARY["age-one-premium"] = GROUNDING_LIBRARY["age-one"];
+
+// Rotates in a small, varying subset of a book's verified facts — same day-of-year +
+// channelOffset pattern as pickTodaysFormat/pickTodaysDisclaimer, but stepped by a different
+// multiplier (dayOfYear * 5) so it doesn't happen to sync with which FORMAT_POOL/VOICE_POOL
+// entries land on the same day. Returns [] (never null) when the book has no library yet, so
+// callers can always safely spread/map the result without a null check.
+function pickTodaysGrounding(slug, count = 3, date = new Date(), channelOffset = 0) {
+  const pool = GROUNDING_LIBRARY[slug];
+  if (!pool || !pool.length) return [];
+  const start = new Date(date.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((date - start) / 86400000);
+  const startIdx = (dayOfYear * 5 + channelOffset) % pool.length;
+  const picked = [];
+  for (let i = 0; i < Math.min(count, pool.length); i++) {
+    picked.push(pool[(startIdx + i) % pool.length]);
+  }
+  return picked;
+}
+
+// Renders the picked grounding facts into a prompt block, plus the phrasing-variety guidance
+// that keeps this from turning into a fixed "As so-and-so once said" template every time.
+function renderGroundingBlock(items) {
+  if (!items.length) return "";
+  const list = items.map((it, i) => `  ${i + 1}. [${it.type}] ${it.fact}`).join("\n");
+  return `
+
+VERIFIED GROUNDING LIBRARY — the ONLY specific citations you're allowed to use in this script:
+${list}
+
+- GROUNDING RULE — naturally weave in 2 to 4 of the items above, wherever they genuinely support a point being made — never all of them crammed in, never forced into a scene they don't fit. Paraphrase each one into your own sentence (no quotation marks, per the rule above) but never change the name, number, date, or attribution given — use it exactly as stated. Do NOT invent any additional named study, statistic, historical date, quote, or custom beyond this list — if a point would benefit from a citation but nothing above fits, stay general ("researchers have found," "it's well documented that") instead of manufacturing one. A fabricated fact is worse than no fact.
+- PHRASING VARIETY RULE — never introduce two of these with the same lead-in, and don't default to "As [name] once said" every single time. Rotate across different natural framings depending on what fits the sentence — for example: naming the year first ("Back in [year]..."), naming the number first ("Here's a number that still surprises people..."), naming the source first ("A [institution] survey found..."), framing it as a belief held before it was proven right ("Long before anyone agreed with them, [name] was convinced that..."), or framing it as an established custom ("This isn't new — [place] has treated it as ordinary for [time period]..."). Pick whichever reads most naturally for that specific fact; never force the same lead-in twice in one script.`;
+}
+
 export async function generateScript(book, format = FORMAT_POOL[0], channelOffset = 0) {
   const disclaimer = pickTodaysDisclaimer(book.complianceTopic, new Date(), channelOffset);
+  const grounding = pickTodaysGrounding(book.slug, 3, new Date(), channelOffset);
   const prompt = `You are the Universal Master Narrator — a polymathic, warm, sharply engaging storyteller equally at home with a curious teenager and a skeptical adult, fluent across science, history, technology, culture, and everyday life. You blend real intellectual rigor with plain-spoken clarity, dry wit, and genuine emotional depth — never dry-lecture, never robotic.
 
 You are writing a 10-minute YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group.
@@ -319,7 +423,7 @@ Strict rules:
 - PAYOFF RULE — the curiosity built throughout must feel rewarded by the end, even though the book's actual chapters/frameworks/conclusions stay withheld. The closing scenes should land as a genuine synthesis or a satisfying "here's the real shape of the problem" moment, not just one more promise stacked on the pile — a script that only ever teases and never pays off trains the viewer to stop trusting the next hook.
 - AUTHORITY RULE — don't stay in constant "expert mode." Alternate a sharp, precise, authoritative line ("this is the single biggest ranking factor almost nobody optimizes for") with a plain, relatable one right after it ("and yeah, most creators get this wrong for years without knowing it"). That shift between "insider explaining something precisely" and "friend leveling with you" is what makes a narrator sound like a real expert rather than a script reciting facts. Never more than 2-3 sentences of pure declaration before a plainer beat.
 - POLYMATH-TO-CHILD RULE — whenever a line touches a dense, technical, or abstract idea, follow it immediately with a vivid, everyday metaphor or an ELI5-style analogy that makes it instantly picturable, without ever sounding condescending.
-- GROUNDING RULE — where it fits naturally, root a claim in something concrete and well-established (a well-known historical episode, a widely-reported trend, a commonly cited pattern) to lend it authority. Never invent a specific study, statistic, named researcher, or institution — if you're not certain a cited fact is real and correctly attributed, stay general ("researchers have found," "it's well documented that") instead of manufacturing a precise-sounding citation. A fabricated "2016 study" is worse than no citation at all.
+- GROUNDING RULE — see the VERIFIED GROUNDING LIBRARY block below for the specific citations you're allowed to use, and its rules for how many to include and how to phrase them.
 - REVERSAL RULE — use at least one "you'd think X — but actually Y" moment per script: state an expectation, then contradict it. It works because it briefly makes the listener wrong, which is inherently engaging.
 - RHETORICAL QUESTION RULE — ask 1-2 rhetorical questions across the whole script (not more — overuse flattens the effect), engaging the listener's inner voice directly instead of only asserting. Let the question hang for a beat before answering it.
 - CALLBACK RULE — reference something said 2-3 scenes earlier at least once ("remember that number from before?"). This makes the video feel like one connected argument built by someone in command of the material, not a disconnected list of facts.
@@ -346,7 +450,7 @@ Strict rules:
     disclaimer
       ? `\n- COMPLIANCE RULE — somewhere in the first third of the scenes, work in this exact idea as a natural, spoken aside (not a legal footnote): ${disclaimer}`
       : ""
-  }`;
+  }${renderGroundingBlock(grounding)}`;
 
   return requestSceneScript(prompt, SCRIPT_MIN_SCENES, SCRIPT_MAX_SCENES, 6000);
 }
@@ -690,4 +794,4 @@ export async function translateTermToEnglish(term, sourceLang) {
     console.warn(`translateTermToEnglish: "${original}" (${sourceLang}) failed, keeping original:`, e.message);
     return original;
   }
-  }
+      }
