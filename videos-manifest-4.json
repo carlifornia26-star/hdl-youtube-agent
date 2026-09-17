@@ -1,6 +1,20 @@
 {
   "videos": [
     {
+      "video_id": "shVUHTAG56A",
+      "short_video_id": "fZyizzRZiGM",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "Science Of Happiness Impacts 136,103,915 Lives",
+      "description": "Curious about the science of happiness? Art of Joy breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/shVUHTAG56A/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "script_format": "stat-hook",
+      "caption_style": "wide-orange",
+      "duration_seconds": 539,
+      "published_at": "2026-09-17T12:45:47.616Z"
+    },
+    {
       "video_id": "4NX808DoBvE",
       "short_video_id": "020Ac6HWOeI",
       "book_slug": "science-of-feeling-great",
@@ -15,5 +29,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-09-16T12:53:44.752Z"
+  "updated_at": "2026-09-17T12:45:47.617Z"
 }
