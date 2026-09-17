@@ -1,6 +1,20 @@
 {
   "videos": [
     {
+      "video_id": "eDvodkXjLN4",
+      "short_video_id": "Tc90BbtH7-s",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Wellness & vitality | HDL Group",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/eDvodkXjLN4/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "script_format": "cold-open",
+      "caption_style": "lower-third",
+      "duration_seconds": 567,
+      "published_at": "2026-09-17T18:04:30.329Z"
+    },
+    {
       "video_id": "QJs2md8zbAk",
       "short_video_id": "6WYgewwRKaw",
       "book_slug": "bitcoin-standard",
@@ -163,5 +177,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-09-16T17:55:48.577Z"
+  "updated_at": "2026-09-17T18:04:30.329Z"
 }
