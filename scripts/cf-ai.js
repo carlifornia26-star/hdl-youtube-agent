@@ -312,6 +312,8 @@ const GROUNDING_LIBRARY = {
     { type: "historical", fact: "in May 1997, IBM's Deep Blue became the first computer to defeat a reigning world chess champion, Garry Kasparov, in a full match under standard tournament time controls", source: "IBM Deep Blue vs. Garry Kasparov rematch, May 1997" },
     { type: "historical", fact: "in 2024, John Hopfield and Geoffrey Hinton won the Nobel Prize in Physics for foundational neural-network discoveries that underpin today's machine learning — the first time a Nobel science prize went to AI research", source: "Royal Swedish Academy of Sciences, 2024 Nobel Prize in Physics" },
     { type: "historical", fact: "AI has crashed before — a critical 1973 government report by mathematician James Lighthill led the UK to slash academic AI funding almost overnight, kicking off what researchers still call the first 'AI winter'", source: "The Lighthill Report, UK Science Research Council, 1973" },
+    { type: "book", fact: "the book walks through today's leading AI platforms one by one — Anthropic's Claude, OpenAI's ChatGPT and GPT-5, Google's Gemini, DeepSeek, and visual-generation tools like Runway, Sora, Kling, Veo and Seedance — mapping out what each one is actually built to do", source: "AGE ONE, Part II: Mastering AI Platforms" },
+    { type: "book", fact: "it frames mass communication as having moved through three distinct historical eras — the printing press, then broadcast television and radio, then today's AI-driven internet — with each shift quietly lowering the barrier for an ordinary person to reach an audience", source: "AGE ONE, Chapter 1" },
   ],
   "bitcoin-standard": [
     { type: "historical", fact: "on October 31, 2008, someone using the pseudonym Satoshi Nakamoto published the Bitcoin white paper, and their real identity has never been confirmed", source: "Bitcoin: A Peer-to-Peer Electronic Cash System, 2008" },
@@ -321,6 +323,9 @@ const GROUNDING_LIBRARY = {
     { type: "quote", fact: "back in 1999 — nearly a decade before Bitcoin existed — the economist Milton Friedman predicted that a reliable, anonymous form of electronic cash would soon develop on the internet", source: "Milton Friedman, National Taxpayers Union/Foundation interview, 1999" },
     { type: "historical", fact: "the Mt. Gox exchange once handled over 70% of all bitcoin trades worldwide before it collapsed in 2014, after roughly 850,000 bitcoin went missing in a years-long, undetected theft", source: "Mt. Gox collapse, February 2014" },
     { type: "stat", fact: "Bitcoin's mining reward is programmed to cut in half roughly every four years — from 50 coins per block in 2009 down to 3.125 today after the most recent halving in April 2024 — a built-in scarcity mechanism that runs until around the year 2140", source: "Bitcoin protocol halving schedule; most recent halving, April 2024" },
+    { type: "book", fact: "the book breaks Bitcoin's security down to the cryptographic primitives underneath it — SHA-256 hashing, ECDSA and Schnorr signatures, and the elliptic curve math that actually guarantees a coin can't be forged", source: "The Bitcoin Standard, Ch. 3: Cryptographic Primitives and Monetary Sovereignty" },
+    { type: "book", fact: "it includes a full institutional-grade self-custody audit protocol and a catalog of over 100 documented wallet and hardware failure modes, each paired with its own recovery path", source: "The Bitcoin Standard, Ch. 7 & Ch. 11" },
+    { type: "book", fact: "one entire chapter is built around reading a live mempool for fee-timing and trading signals, rather than just treating fees as a fixed cost", source: "The Bitcoin Standard, Ch. 9: Node Operations and Mempool Intelligence" },
   ],
   "science-of-feeling-great": [
     { type: "stat", fact: "the Harvard Study of Adult Development, running since 1938 and still active today, found that the strongest predictor of long-term health and happiness wasn't wealth or fame — it was the quality of a person's close relationships", source: "Harvard Study of Adult Development; Waldinger & Schulz, 'The Good Life', 2023" },
@@ -330,6 +335,8 @@ const GROUNDING_LIBRARY = {
     { type: "stat", fact: "the CDC recommends that adults get at least 7 hours of sleep per night, and identifies chronic short sleep as linked to higher long-term risk for conditions like obesity and heart disease", source: "US Centers for Disease Control and Prevention, sleep guidance" },
     { type: "stat", fact: "the World Health Organization recommends adults get at least 150 to 300 minutes of moderate-intensity physical activity every week, or 75 to 150 minutes of vigorous activity, to meaningfully cut the risk of heart disease, diabetes, and some cancers", source: "WHO Guidelines on Physical Activity and Sedentary Behaviour, updated 2020" },
     { type: "custom", fact: "in 2010, UNESCO added the Mediterranean diet to its list of Intangible Cultural Heritage, recognizing it as a shared way of eating, farming, and gathering across communities in Italy, Greece, Spain, and Morocco — not just a list of foods", source: "UNESCO Intangible Cultural Heritage inscription, November 2010" },
+    { type: "book", fact: "the book opens with sleep, walking through the glymphatic system — the brain's own overnight waste-clearance process — and how a disrupted night quietly carries over into next-day emotional regulation", source: "The Science of Feeling Great, Ch. 1: Sleep — The Master Reset" },
+    { type: "book", fact: "it devotes a full chapter to the gut-brain axis, covering how food choices interact with gene expression in what the book calls epigenetic eating", source: "The Science of Feeling Great, Ch. 2: Nutrition as Information" },
   ],
   "art-of-joy": [
     { type: "stat", fact: "the Harvard Study of Adult Development, running since 1938, found that close relationships mattered more for long-term happiness than money or career success", source: "Harvard Study of Adult Development; Waldinger & Schulz, 'The Good Life', 2023" },
@@ -339,6 +346,8 @@ const GROUNDING_LIBRARY = {
     { type: "custom", fact: "in 1972, Bhutan's king declared that Gross National Happiness mattered more than Gross National Product, and the country still tracks an official Gross National Happiness Index today alongside its economic statistics", source: "Bhutan's Gross National Happiness policy, established 1972" },
     { type: "historical", fact: "over 2,300 years ago, Aristotle argued in his Nicomachean Ethics that eudaimonia — often translated as flourishing or living well — was the ultimate goal of human life, not pleasure or wealth for their own sake", source: "Aristotle, Nicomachean Ethics" },
     { type: "historical", fact: "psychologists Philip Brickman and Donald Campbell coined the term 'hedonic treadmill' in 1971, and a 1978 follow-up study found lottery winners were no happier than a control group about a year after their win, while accident victims who'd been paralyzed had returned close to their prior baseline happiness too", source: "Brickman & Campbell, 1971; Brickman, Coates & Janoff-Bulman, 'Lottery Winners and Accident Victims: Is Happiness Relative?', 1978" },
+    { type: "book", fact: "the book opens with a 20-question Joy Audit designed to pinpoint exactly where a reader's own sense of joy has gone missing, before offering a single technique to fix it", source: "The Art of Joy, Introduction: The Joy Diagnosis" },
+    { type: "book", fact: "it includes a dedicated section on staying joyful during genuinely hard times, including how grief and joy can coexist in the same moment rather than canceling each other out", source: "The Art of Joy, Part Four: Joy in Hard Times" },
   ],
   "youtube-algorithms": [
     { type: "stat", fact: "YouTube's own engineering team confirmed in 2017 that viewers were collectively watching over 1 billion hours of video on the platform every single day", source: "YouTube VP of Engineering Cristos Goodrow, 2017 announcement" },
@@ -347,6 +356,8 @@ const GROUNDING_LIBRARY = {
     { type: "historical", fact: "YouTube was founded in 2005 by three former PayPal employees, and the very first video ever uploaded to the platform — an 18-second clip called 'Me at the zoo' — went up on April 23, 2005", source: "YouTube company history; first upload, April 23, 2005" },
     { type: "historical", fact: "YouTube launched its short-form video feature, Shorts, in 2020, explicitly built to compete with the format popularized by TikTok", source: "YouTube Shorts launch, 2020" },
     { type: "historical", fact: "Google bought YouTube for $1.65 billion in an all-stock deal in November 2006 — just under two years after YouTube's founding, and at the time the largest acquisition in Google's history", source: "Google-YouTube acquisition, announced October 2006, closed November 2006" },
+    { type: "book", fact: "the book traces YouTube's recommendation system back to a 2016 Google Brain research paper on deep neural networks for YouTube recommendations, and walks through the two-stage system it described — first narrowing down candidates, then ranking them", source: "YouTube Algorithms, Ch. 1: The Architecture of Influence" },
+    { type: "book", fact: "it names the specific technique, Multi-gate Mixture of Experts, that YouTube's ranking model reportedly uses to balance watch time, satisfaction, and engagement all at the same time rather than optimizing for just one signal", source: "YouTube Algorithms, Ch. 1" },
   ],
   "pet-friendly": [
     { type: "historical", fact: "dogs are believed to have been domesticated from wolves at least 15,000 years ago, making them humanity's oldest domestic animal companion", source: "widely cited archaeological and genetic dating of dog domestication" },
@@ -356,9 +367,20 @@ const GROUNDING_LIBRARY = {
     { type: "stat", fact: "cats typically sleep 12 to 16 hours a day — meaning an average house cat spends roughly 70% of its entire life asleep", source: "widely documented feline sleep behavior" },
     { type: "historical", fact: "the world's first guide dog school opened in Germany in August 1916, founded by Dr. Gerhard Stalling to train dogs for soldiers who'd been blinded in World War I", source: "Dr. Gerhard Stalling's guide dog school, Oldenburg, Germany, 1916" },
     { type: "stat", fact: "a dog's nose holds up to 300 million olfactory receptors, compared to roughly 6 million in a human nose — one reason dogs can be trained to detect everything from explosives to certain diseases by scent alone", source: "widely documented canine olfaction research" },
+    { type: "book", fact: "the book notes that some genetic estimates now push dog domestication back as far as 40,000 years — well beyond the widely cited 15,000-year figure — suggesting an even longer shared history between the two species", source: "Pet Friendly, Ch. 3: Dogs — Your Loyal Adventure Partner" },
+    { type: "book", fact: "it points to real neuroscience research showing a dog's caudate nucleus — a brain region tied to positive emotion — activates the same way when they see their owner as when humans feel romantic love", source: "Pet Friendly, Ch. 3" },
   ],
 };
-GROUNDING_LIBRARY["age-one-premium"] = GROUNDING_LIBRARY["age-one"];
+// age-one-premium starts from the same base facts as age-one (same brand, same broad AI/business
+// topic), then adds its own entries below for the premium edition's additional chapters — prompt
+// engineering, no-code AI agents, and Lightning Network business strategy — which age-one (the
+// standard edition) doesn't cover. Spread (not alias) so future edits to one book's array never
+// silently affect the other.
+GROUNDING_LIBRARY["age-one-premium"] = [
+  ...GROUNDING_LIBRARY["age-one"],
+  { type: "book", fact: "beyond the basics, the premium edition treats prompt engineering as its own professional discipline and walks through building no-code AI agents with tools like Make, Zapier, and n8n", source: "AGE ONE: Premium Edition, Part II & III" },
+  { type: "book", fact: "it also covers the Lightning Network as a business tool for instant Bitcoin payments, and closes with five real, fully worked business-blueprint case studies", source: "AGE ONE: Premium Edition, Ch. 12 & Ch. 20" },
+];
 
 // Rotates in a small, varying subset of a book's verified facts — same day-of-year +
 // channelOffset pattern as pickTodaysFormat/pickTodaysDisclaimer, but stepped by a different
@@ -794,4 +816,4 @@ export async function translateTermToEnglish(term, sourceLang) {
     console.warn(`translateTermToEnglish: "${original}" (${sourceLang}) failed, keeping original:`, e.message);
     return original;
   }
-      }
+    }
