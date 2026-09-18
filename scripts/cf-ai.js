@@ -118,18 +118,98 @@ function countRepetition(scenes, priorLines = []) {
   return dupes;
 }
 
+// Catches the "tells me to go buy the book constantly" retention killer: the prompt's CTA
+// CONCENTRATION RULE tells the model buy/visit-the-website language belongs in exactly one
+// scene, but nothing used to VERIFY that — an LLM instruction with no check behind it fails
+// silently often enough to matter. `ctaMode` is "finalOnly" for the main script (CTA belongs in
+// the last scene only), "never" for top-up scenes (no CTA belongs anywhere in them), or "none"
+// to skip this check entirely. Counts once per OFFENDING SCENE (not per phrase match within a
+// scene), consistent with countRepetition's "count of problems to fix," not "count of matches."
+const CTA_LEAK_PATTERNS = [
+  /\bread it now\b/i,
+  /\bwhy wait\b/i,
+  /\bdon'?t miss out\b/i,
+  /\bwhat are you waiting for\b/i,
+  /\bget your copy\b/i,
+  /\bstart your journey today\b/i,
+  /\bvisit (the )?(website|site)\b/i,
+  /\bhead (over |on )?to (the )?website\b/i,
+  /\bgo to (the )?website\b/i,
+  /\bcheck out (the )?website\b/i,
+  /\blink in (the )?description\b/i,
+  /\bavailable now on\b/i,
+  /\bbuy (the |this )?book\b/i,
+  /\bread the full book\b/i,
+  /\bhigh definition learning( group)?('s)? website\b/i,
+];
+
+function countCTALeakage(scenes, ctaMode = "none") {
+  if (ctaMode === "none" || !scenes.length) return 0;
+  const lastIndex = scenes.length - 1;
+  let leaks = 0;
+  scenes.forEach((s, i) => {
+    const isAllowedScene = ctaMode === "finalOnly" && i === lastIndex;
+    if (isAllowedScene) return;
+    if (CTA_LEAK_PATTERNS.some((p) => p.test(s.line))) leaks++;
+  });
+  return leaks;
+}
+
+// Catches the "keeps saying the same subject word over and over" retention killer (e.g. a
+// Pet Friendly script leaning on "pet" in nearly every scene) — a real word, correctly on-topic,
+// but monotonous when it's the ONLY word used for the book's subject scene after scene. Counts
+// a word once per scene it appears in (not per raw occurrence), so a single scene using it twice
+// doesn't skew the result — this is about SPREAD across the script, not local repetition.
+// Short/common words are excluded via STOPWORDS so this only ever flags a real content word.
+const OVERUSE_STOPWORDS = new Set([
+  "the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "for", "with", "at", "by", "from",
+  "as", "is", "are", "was", "were", "be", "been", "being", "this", "that", "these", "those", "it",
+  "its", "you", "your", "yours", "yourself", "they", "their", "them", "he", "she", "his", "her",
+  "we", "our", "us", "not", "so", "if", "because", "while", "when", "where", "what", "who",
+  "which", "how", "why", "just", "really", "actually", "one", "every", "most", "some", "all",
+  "no", "yes", "do", "does", "did", "done", "can", "could", "will", "would", "should", "might",
+  "have", "has", "had", "get", "gets", "getting", "into", "out", "up", "down", "about", "than",
+  "then", "now", "today", "here", "there", "more", "much", "many", "even", "still", "again",
+  "also", "only", "like", "around", "over", "under", "after", "before", "between", "without",
+  "book", "guide",
+]);
+
+function findOverusedWord(scenes) {
+  const sceneCounts = new Map();
+  for (const s of scenes) {
+    const words = (s.line.toLowerCase().match(/[a-z']+/g) || []).filter(
+      (w) => w.length >= 3 && !OVERUSE_STOPWORDS.has(w)
+    );
+    for (const w of new Set(words)) {
+      sceneCounts.set(w, (sceneCounts.get(w) || 0) + 1);
+    }
+  }
+  let worst = null;
+  for (const [word, count] of sceneCounts) {
+    if (!worst || count > worst.count) worst = { word, count };
+  }
+  // Flag only when it's landing in a large majority of scenes AND at least 6 times outright —
+  // avoids false-triggering on a book's genuinely central term used at a normal rate.
+  const threshold = Math.max(6, Math.ceil(scenes.length * 0.6));
+  return worst && worst.count >= threshold ? worst : null;
+}
+
 // Shared by generateScript and generateBonusScenes — requests a `{ scenes: [{line, visual}] }`
 // array via Workers AI's JSON Schema mode (validated/parsed server-side, so no manual JSON.parse
 // tripping over an unescaped quote in a sentence) and normalizes the response shape.
 //
-// If the model still produces repeated phrasing/openings despite the prompt's rules against it,
-// this retries ONCE with an extra, sharper reminder appended — an LLM given the same prompt
-// twice usually varies enough on the second pass to break out of the repeated pattern, and one
-// retry is cheap compared to shipping a script that repeats itself on camera.
+// If the model still produces repeated phrasing/openings, leaks CTA/buy language into scenes
+// where it doesn't belong, or leans on one subject word in nearly every scene despite the
+// prompt's rules against all three, this retries (up to 3 total attempts) with an extra, sharper
+// reminder appended — an LLM given the same prompt again usually varies enough on the next pass,
+// and a couple of retries is cheap compared to shipping a video that repeats itself or nags the
+// viewer to buy the book every other scene.
 // `priorLines` (optional): lines from scenes that already exist elsewhere in this same video
 // (main script and/or earlier top-up rounds). Passed through to countRepetition() so dupes are
 // caught across the whole video, not just within this one batch — see countRepetition above.
-async function requestSceneScript(prompt, minItems, maxItems, maxTokens, priorLines = []) {
+// `ctaMode` (optional): "finalOnly" (main script — buy/visit-website language belongs ONLY in the
+// last scene), "never" (top-up scenes — it belongs nowhere), or "none" (skip the check).
+async function requestSceneScript(prompt, minItems, maxItems, maxTokens, priorLines = [], ctaMode = "none") {
   async function attempt(promptText) {
     const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
       messages: [{ role: "user", content: promptText }],
@@ -191,17 +271,56 @@ async function requestSceneScript(prompt, minItems, maxItems, maxTokens, priorLi
     return scenes.map((s) => ({ line: s.line, visual: s.visual || "" }));
   }
 
+  // Composite issue score: phrase/opening repetition + CTA leakage (weighted higher — a stray
+  // "visit the website" mid-video is a worse retention hit than a repeated sentence structure) +
+  // whether one subject word is carrying nearly every scene. Logged separately so it's still
+  // clear from the console which specific problem(s) triggered a retry.
+  function scoreIssues(scenes) {
+    const dupes = countRepetition(scenes, priorLines);
+    const ctaLeaks = countCTALeakage(scenes, ctaMode);
+    const overused = findOverusedWord(scenes);
+    return { dupes, ctaLeaks, overused, total: dupes + ctaLeaks * 2 + (overused ? 2 : 0) };
+  }
+
   let scenes = await attempt(prompt);
-  const dupes = countRepetition(scenes, priorLines);
-  if (dupes > 0) {
-    console.warn(`Script generation: detected ${dupes} repeated opening(s)/phrase(s) (${priorLines.length ? "against earlier scenes in this video" : "within this batch"}), retrying once with a stronger anti-repetition reminder.`);
+  let issues = scoreIssues(scenes);
+
+  const ctaReminder =
+    ctaMode === "finalOnly"
+      ? `\nAlso: buy/read-now/website-visit language ("read it now," "visit the website," "get your copy," etc.) leaked into a scene where it doesn't belong. That language may appear in ONLY the final call-to-action scene — remove it from every other scene and replace it with pure curiosity-building instead.`
+      : ctaMode === "never"
+      ? `\nAlso: buy/read-now/website-visit language leaked into these top-up scenes, where it must NEVER appear — remove it entirely and replace it with pure curiosity-building instead.`
+      : "";
+  const overuseReminder = (overused) =>
+    overused
+      ? `\nAlso: the word "${overused.word}" was used in nearly every scene, which reads as monotonous rather than deliberate. Rotate it with natural synonyms, more specific references, or pronouns where the meaning is already clear from context.`
+      : "";
+
+  // Keep retrying (up to 2 extra attempts, 3 total) as long as ANY of these issues remain,
+  // always tracking the best (lowest total-score) attempt seen so far — a single retry too often
+  // still left the video shipping with a repeated line or a leaked CTA, since accepting any retry
+  // that was merely "somewhat better" than the first wasn't a high enough bar. Stops early once a
+  // fully clean attempt is found, so it doesn't burn extra calls once nothing is left to fix.
+  for (let i = 0; issues.total > 0 && i < 2; i++) {
+    console.warn(
+      `Script generation: attempt ${i + 1}/3 had ${issues.dupes} repeated opening(s)/phrase(s), ${issues.ctaLeaks} CTA leak(s)${issues.overused ? `, overused word "${issues.overused.word}" (${issues.overused.count} scenes)` : ""} — retrying with a stronger reminder.`
+    );
     const retryPrompt =
       prompt +
-      `\n\nIMPORTANT CORRECTION: your previous attempt at this reused the same sentence opening or the same phrase (6+ words) in more than one scene${priorLines.length ? ", OR reused an opening/phrase that was already used earlier in this same video (listed above as ALREADY COVERED)" : ""}. Every scene must start differently from every other scene${priorLines.length ? ", and differently from anything already covered earlier in the video" : ""}, and no phrase of 6 or more words may appear in more than one scene anywhere in the script${priorLines.length ? " or repeat something already said earlier in the video" : ""}. Re-write the whole script from scratch with this fixed.`;
+      `\n\nIMPORTANT CORRECTION: your previous attempt at this reused the same sentence opening or the same phrase (6+ words) in more than one scene${priorLines.length ? ", OR reused an opening/phrase that was already used earlier in this same video (listed above as ALREADY COVERED)" : ""}. Every scene must start differently from every other scene${priorLines.length ? ", and differently from anything already covered earlier in the video" : ""}, and no phrase of 6 or more words may appear in more than one scene anywhere in the script${priorLines.length ? " or repeat something already said earlier in the video" : ""}.${ctaReminder}${overuseReminder(issues.overused)} Re-write the whole script from scratch with all of this fixed.`;
     const retryScenes = await attempt(retryPrompt);
+    const retryIssues = scoreIssues(retryScenes);
     // Only keep the retry if it actually improved things — a worse or equal retry isn't worth
-    // discarding the first (still-usable) attempt over.
-    if (countRepetition(retryScenes, priorLines) < dupes) scenes = retryScenes;
+    // discarding a still-usable earlier attempt over.
+    if (retryIssues.total < issues.total) {
+      scenes = retryScenes;
+      issues = retryIssues;
+    }
+  }
+  if (issues.total > 0) {
+    console.warn(
+      `Script generation: shipping with ${issues.dupes} unresolved repeat(s), ${issues.ctaLeaks} CTA leak(s)${issues.overused ? `, overused word "${issues.overused.word}"` : ""} after 3 attempts — this is the best of the attempts tried.`
+    );
   }
   return scenes;
 }
@@ -424,12 +543,14 @@ You are writing a 10-minute YouTube TEASER video script for the ebook "${book.ti
 This video has a spoken AI narrator voice reading each scene's line aloud, with the same words also burned in on screen as fast-paced flowing captions timed to the narration. Write each line to sound natural when spoken aloud — short, punchy, declarative sentences work best both for narration pacing and for the on-screen caption bursts.
 
 Strict rules:
+- EXAMPLE-ISOLATION RULE — this prompt illustrates several rules below with a quoted example line (e.g. the VIVIDNESS RULE's "3am, phone light on your face, refreshing numbers that haven't moved"). Those quoted examples exist ONLY to demonstrate a technique — they were written for a different book's topic and are almost certainly wrong for "${book.title}" (topic: ${book.angle}). NEVER copy, lightly reword, or adapt any quoted example from this prompt into the actual script. Every line you write must be invented fresh, specific to ${book.angle}, and something that could not be mistaken for content about a different book.
 - This is a TEASER, not a summary. Never reveal specific chapters, frameworks, numbered steps, or concrete conclusions from the book.
 - Build curiosity: pose the problem the book addresses, why it matters right now, and what kind of reader it's for — without giving away the answers.
 - Scene 1 is the single highest-leverage moment in the whole video for whether a viewer keeps watching past the first 15-22 seconds — most of the video's session-time performance is decided right there. Today's opening technique (${format.label}): ${format.opening} Do NOT open with throat-clearing, a generic greeting, or a soft, overused opener like "Have you ever wondered..." or "In today's fast-paced world...". The book's title mention (see below) can land in scene 1 or scene 2 — it doesn't have to be the first sentence itself.
 - Explicitly mention once, naturally, that the book is available in English only.
 - End with a call to action to read the full book on the High Definition Learning Group website.
-- CTA CONCENTRATION RULE — buy/read-now urgency language ("read it now," "why wait," "don't miss out," "what are you waiting for," "get your copy," "start your journey today," or any close paraphrase of these) may appear in EXACTLY ONE scene: the final call-to-action scene required above. Every other scene builds curiosity only and must not nudge the viewer toward action, even softly — a script that pushes the sale in six different scenes reads as desperate and trains viewers to tune it out well before the actual CTA lands.
+- CTA CONCENTRATION RULE — buy/read-now urgency language ("read it now," "why wait," "don't miss out," "what are you waiting for," "get your copy," "start your journey today," "visit the website," "check out the website," or any close paraphrase of these) may appear in EXACTLY ONE scene: the final call-to-action scene required above. This is the single most common way a script fails: every other scene must build curiosity ONLY and must not mention the website, mention buying/reading the book, or nudge the viewer toward action in any way, even softly. If you find yourself writing anything sale- or website-adjacent before the last scene, cut it and replace it with a pure curiosity beat instead — a script that pushes the sale in six different scenes reads as desperate and makes viewers leave well before the actual CTA lands.
+- VOCABULARY VARIETY RULE — when the book's core subject is a single common noun (e.g. "pet," "AI," "Bitcoin"), do not default to that exact same word in nearly every scene — it reads as monotonous and repetitive even though it's technically on-topic. Rotate between the plain term, natural synonyms, more specific references (a named type, a concrete example), and pronouns where the meaning is already clear from context, the same way a human writer would vary their word choice across a 10-minute piece.
 - Do not use quotation marks of any kind inside a line's text — rephrase instead of quoting anything.
 - Mention the book's exact title, "${book.title}", naturally exactly 3 times across the whole script — once early to introduce it, once in the middle to reinforce it, and once in the closing call to action. Do not use the title any other number of times; refer to it as "the book," "this guide," or similar in between.
 - Produce between ${SCRIPT_MIN_SCENES} and ${SCRIPT_MAX_SCENES} scenes — more, shorter scenes than a typical script, so the visuals cut more often. Each scene's line is 3-4 sentences (roughly 40-55 words) written to be spoken naturally in about 15-22 seconds — the total script across all scenes should land around 2000-2300 words so the finished narration runs close to 10 minutes.
@@ -437,7 +558,7 @@ Strict rules:
 - Avoid vague marketing filler that could apply to literally any topic — phrases like "a powerful tool," "a complex system," "a comprehensive approach," "valuable insights," "the ever-changing landscape," "take control of," "unlock your potential." Every line should say something SPECIFIC to this exact book's angle — a concrete scenario, a specific kind of person, a specific consequence — not an abstract claim that could be pasted into a script about any other topic.
 - For every scene, also write a "visual" field: a short, concrete, literally-filmable phrase (3-8 words) describing exactly what should be shown on screen while that line is spoken, matching the line's actual content. Only describe things a camera could actually film — a specific kind of person doing a specific action in a specific setting (e.g. "exhausted creator staring at laptop at night", "crowded city street rush hour", "person smiling reading book on couch"). Never describe an abstract concept, a graph, an icon, or anything not physically filmable. Vary the people/settings/actions across scenes — do not describe the same visual twice.
 - SPECIFICITY RULE — every scene must contain at least one concrete, checkable-feeling detail: a number, a named consequence, a precise scenario, a specific kind of person or moment. A line that could be pasted into a script about a completely different topic without anyone noticing has failed this rule — rewrite it until it could ONLY belong to this book's exact angle.
-- VIVIDNESS RULE — this isn't only scene 1's job. Throughout the script, put the listener inside a specific, sensory moment rather than describing things in the abstract: a time of day, a physical sensation, a sound, a small recognizable detail from real life. "3am, phone light on your face, refreshing numbers that haven't moved" beats "creators often feel discouraged."
+- VIVIDNESS RULE — this isn't only scene 1's job. Throughout the script, put the listener inside a specific, sensory moment rather than describing things in the abstract: a time of day, a physical sensation, a sound, a small recognizable detail from real life — but that moment must be something a reader of THIS exact book (${book.angle}) would recognize from their own life, not a generic anxiety scene borrowed from an unrelated topic. ("Creators often feel discouraged" is too abstract regardless of topic — but so is any vivid moment that doesn't specifically belong to ${book.angle}.)
 - OPEN LOOP RULE — plant a specific, concrete curiosity hook (something named but deliberately not yet explained) at least once every 3-4 scenes, and periodically resolve an earlier hook (just enough to reward attention, without revealing the book's actual chapters/frameworks/conclusions) while opening a new one. At almost any point in the script, at least one hook should be actively unresolved — that unresolved thread is what keeps someone listening into the next scene.
 - ESCALATION RULE — order the script so each new point raises the stakes beyond the last one (more surprising, more consequential, more personally pointed), not a flat list of equally-weighted facts. The back third of the script should feel like it's building toward something, not repeating the same register as the opening third.
 - RHYTHM RULE — vary sentence length within and across scenes: mix short, blunt sentences with a longer one that lets a thought build, then land on another short one. A scene where every sentence is roughly the same length reads as monotone even through narration — avoid that.
@@ -468,13 +589,14 @@ Strict rules:
 - PERMISSION RULE — at least once, briefly tell the listener it's okay to have felt a certain way ("it's not stupid that this confused you — almost nobody explains it right") right before delivering a correction, so the correction doesn't land as an attack.
 - INVENTED-TERM RULE — at least once, coin a short label for a mechanism and use that exact term again later in the script ("what I call the discovery ceiling"), introduced explicitly as a defined term rather than just dropped in — reads as specialized vocabulary, distinct from NAMED PATTERN RULE's more casual callback.
 - SCALE-CONTRAST RULE — at least once, state what the coming point is NOT before saying what it is ("this isn't a 1% tweak — it's a full rebuild of how you think about X"). Cheap, sharp, sets expectations for how big the point is about to be.
-- URGENCY RULE — AT MOST ONCE per script, a line implying the window to act is closing ("this only works while most people still don't know it"). Cap it like TRUST-STATEMENT RULE — overused it reads as manipulative rather than motivating.${
+- URGENCY RULE — AT MOST ONCE per script, a line implying the window to act is closing ("this only works while most people still don't know it"). Cap it like TRUST-STATEMENT RULE — overused it reads as manipulative rather than motivating.
+- MID-VIDEO PEAK RULE — place your single most surprising reversal, statistic, or hook of the entire script somewhere between the 45% and 55% mark of the scene count (the middle stretch) — a sharp, unmistakable jolt of curiosity timed for exactly when a long-form viewer's attention is statistically most likely to wander. Don't hold your best material for the end or spend it all in the opening third; something genuinely startling needs to land right in the middle.${
     disclaimer
-      ? `\n- COMPLIANCE RULE — somewhere in the first third of the scenes, work in this exact idea as a natural, spoken aside (not a legal footnote): ${disclaimer}`
+      ? `\n- COMPLIANCE RULE — somewhere between the one-third and two-thirds mark of the scenes (never in the first third, where it would undercut the opening hook right as it's landing), work in this exact idea as a natural, spoken aside (not a legal footnote): ${disclaimer}`
       : ""
   }${renderGroundingBlock(grounding)}`;
 
-  return requestSceneScript(prompt, SCRIPT_MIN_SCENES, SCRIPT_MAX_SCENES, 6000);
+  return requestSceneScript(prompt, SCRIPT_MIN_SCENES, SCRIPT_MAX_SCENES, 6000, [], "finalOnly");
 }
 
 // Builds a compact "already covered" list from previously generated scene lines (main script
@@ -509,6 +631,7 @@ export async function generateBonusScenes(book, count, existingLines = []) {
 Same style as the rest of the video: an AI narrator speaks each line aloud, natural and punchy, with the same words burned in on screen as fast-paced captions. Where it fits, follow the POLYMATH-TO-CHILD approach — a dense idea immediately paired with a vivid everyday metaphor. Ground claims in well-established, general terms rather than inventing specific studies, statistics, or named sources.
 
 Strict rules:
+- EXAMPLE-ISOLATION RULE — any quoted example line elsewhere in this prompt illustrates a technique only, written for a different book — never copy or reword it into the actual script. Every line must be invented fresh and specific to ${book.angle}.
 - Do NOT use the book's title, "${book.title}" — refer to it only as "the book," "this guide," or similar; the title is already covered elsewhere in the video.
 - Do NOT include a call to action or say where to read/buy it — that's already covered elsewhere.
 - Do NOT restate that it's available in English only — that's already covered elsewhere.
@@ -516,11 +639,13 @@ Strict rules:
 - Each scene's line is 3-4 sentences (roughly 40-55 words), written to be spoken naturally in about 15-22 seconds.
 - Produce exactly ${count} scenes building curiosity about who this book helps, what problem it solves, and why it matters right now — varied angles, no two scenes making the same point.
 - RETENTION RULE — no two scenes may start the same way or make the same point twice, and avoid vague filler ("a powerful tool," "a complex system," "valuable insights," "the ever-changing landscape") in favor of specific scenarios and consequences.
+- VOCABULARY VARIETY RULE — if the book's core subject is a single common noun (e.g. "pet," "AI," "Bitcoin"), don't default to that exact word in nearly every one of these scenes — rotate it with natural synonyms, more specific references, and pronouns where the meaning is already clear.
+- Do NOT include any buy/read-now/website-visit language ("read it now," "visit the website," "get your copy," or similar) anywhere in these scenes — that belongs only in the main script's dedicated closing scene, which already exists elsewhere in the video.
 - For every scene, also write a "visual" field: a short, concrete, literally-filmable phrase (3-8 words) describing exactly what should be shown on screen while that line is spoken — a specific person doing a specific action in a specific setting. Never an abstract concept, graph, or icon. Vary it across scenes.
 - Every scene needs a concrete, sensory detail (not an abstract claim) and should escalate slightly past the previous scene's stakes rather than repeating the same weight of point. Use direct "you" language addressing the viewer. Vary sentence length within each scene rather than uniform-length sentences. At least one of these scenes should plant a specific, unresolved curiosity hook without revealing the book's actual chapters/frameworks/conclusions.
 - DELIVERY — alternate sharp/authoritative lines with plain, human ones; don't stay in constant expert mode. If space allows across these ${count} scenes: one reversal ("you'd think X, but actually Y"), one rhetorical question, one callback-style reference to an earlier idea, one named pattern, one micro-scene instead of a flat claim, a brief self-correction beat, a stakes-forward line, a false-summary-then-twist, a named contrast pair, one single-sentence one-liner scene, an identity-address line, or a scale-contrast line. Never force more than one or two of these into a single scene.`;
 
-  return requestSceneScript(prompt, count, count, 3000, existingLines);
+  return requestSceneScript(prompt, count, count, 3000, existingLines, "never");
 }
 
 // Translates {title, description} into a small set of target languages for YouTube `localizations`.
@@ -652,6 +777,18 @@ const NARRATION_PAUSE_LITERAL_FIXES = [
   { pattern: /\b(or does it|think again|plot twist|spoiler|here's the catch|here's the thing)\s+([a-z])/gi, replace: "$1, $2" },
 ];
 
+// Catches accidental immediate word doubling ("the the", "is is", "to to") — a known LLM glitch
+// that shows up as a spoken/captioned stutter ("word errors" a viewer would notice mid-sentence).
+// Case-insensitive so "The the" is caught too; keeps the first occurrence's original casing.
+// Word boundary + same-word-twice-in-a-row only — never touches intentional repetition across
+// separate words ("very very" is arguably a style choice elsewhere, but back-to-back identical
+// function/content words reads as a glitch far more often than as intentional emphasis, so this
+// still collapses it; if a script ever wants "no no" or "come on come on" as a deliberate beat,
+// that's rare enough to not be worth carving out an exception for here).
+function fixDoubledWords(text) {
+  return text.replace(/\b(\w+)\s+\1\b/gi, "$1");
+}
+
 export function sanitizeNarrationPauses(text) {
   let out = text;
   out = fixDontRunOns(out);
@@ -659,6 +796,7 @@ export function sanitizeNarrationPauses(text) {
   for (const { pattern, replace } of NARRATION_PAUSE_LITERAL_FIXES) {
     out = out.replace(pattern, replace);
   }
+  out = fixDoubledWords(out);
   return out;
 }
 
@@ -816,4 +954,4 @@ export async function translateTermToEnglish(term, sourceLang) {
     console.warn(`translateTermToEnglish: "${original}" (${sourceLang}) failed, keeping original:`, e.message);
     return original;
   }
-    }
+  }
