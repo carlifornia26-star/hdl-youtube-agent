@@ -1,6 +1,20 @@
 {
   "videos": [
     {
+      "video_id": "b_T7xx-Pz-Y",
+      "short_video_id": "nLPWG1klJig",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "Bitcoin & digital finance | HDL Group",
+      "description": "Curious about Bitcoin & digital finance? Bitcoin Standard breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/b_T7xx-Pz-Y/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "script_format": "myth-bust",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 566,
+      "published_at": "2026-09-18T13:37:07.092Z"
+    },
+    {
       "video_id": "kUEiCeuDreY",
       "short_video_id": "-uDZk5-ZL4s",
       "book_slug": "age-one-premium",
@@ -216,5 +230,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-09-17T14:09:04.833Z"
+  "updated_at": "2026-09-18T13:37:07.093Z"
 }
