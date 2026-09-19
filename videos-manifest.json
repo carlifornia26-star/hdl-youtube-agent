@@ -1,6 +1,20 @@
 {
   "videos": [
     {
+      "video_id": "4AFcGVuqQLc",
+      "short_video_id": "0ZqqI-51HcA",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Wellness And Vitality Improves After 1,594,359,938 Moments",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/4AFcGVuqQLc/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "script_format": "cold-open",
+      "caption_style": "lower-third",
+      "duration_seconds": 551,
+      "published_at": "2026-09-19T13:10:53.133Z"
+    },
+    {
       "video_id": "b_T7xx-Pz-Y",
       "short_video_id": "nLPWG1klJig",
       "book_slug": "bitcoin-standard",
@@ -230,5 +244,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-09-18T13:37:07.093Z"
+  "updated_at": "2026-09-19T13:10:53.134Z"
 }
