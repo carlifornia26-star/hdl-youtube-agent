@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pickTodaysBook } from "./catalog.js";
-import { generateScript, generateBonusScenes, translateMeta, VIDEO_LANGS, pickTodaysFormat, sanitizeScenePauses, generateCuriosityTitle, generateNumberTitle } from "./cf-ai.js";
+import { generateScript, generateBonusScenes, translateMeta, VIDEO_LANGS, pickTodaysFormat, sanitizeScenePauses, generateCuriosityTitle, generateNumberTitle, pickTitleStyleIndex } from "./cf-ai.js";
 import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./assets.js";
 import { loadUsedClipIds, saveUsedClipIds } from "./scene-history.js";
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
@@ -10,7 +10,7 @@ import { loadUsedMusicTitles, saveUsedMusicTitles } from "./music-history.js";
 import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic, normalizeLoudness, pickTodaysCaptionStyle, tagVideoMetadata, tagThumbnailMetadata } from "./render.js";
 import { exiftool } from "exiftool-vendored";
 import { uploadVideo, uploadCaptionTrack, uploadThumbnail, addVideoToPlaylist, publishVideo, checkVideoTrainability } from "./youtube.js";
-import { appendVideoEntry } from "./manifest.js";
+import { appendVideoEntry, loadRecentTitles } from "./manifest.js";
 import { buildDailyCommunityPost } from "./community-post.js";
 
 // Runs `items` through `fn` with at most `limit` in flight at once, preserving output order.
@@ -600,23 +600,41 @@ async function main() {
   // (same pattern as pickTodaysFormat/pickTodaysVoice elsewhere in this file), so it drifts
   // independently of which book/format/voice landed on that channel today. Falls back to the
   // plain title (and drops the number, so nothing gets bolded on the thumbnail either) on any
-  // generation failure, so a bad AI call never blocks the day's upload. generateCuriosityTitle()
-  // in cf-ai.js is left in place, just unused here, in case number titles get turned back off.
+  // generation failure, so a bad AI call never blocks the day's upload. The non-number channel
+  // now gets a curiosity title (generateCuriosityTitle) instead of the plain one — see below.
   const todaysDayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
   const plainChannelToday = (todaysDayOfYear % 3) + 1; // 1, 2, or 3 — the ONE channel staying plain today
   const isNumberChannelToday = Number(CHANNEL_ID) !== plainChannelToday;
   const plainTitle = `${capitalizeFirst(book.angle)} | HDL Group`;
   let enTitle = plainTitle;
   let todaysNumber = null; // set only once a number has actually landed in enTitle
+  let titleIsGenerated = false; // true when enTitle came from the AI (number OR curiosity), not the plain fallback
+  // Title variety: each channel/day gets a different title STYLE, and the model is shown the recent
+  // titles from every channel so it can't fall back into the same shape (see cf-ai.js TITLE_STYLES).
+  const titleStyleIdx = pickTitleStyleIndex(todaysDayOfYear, CHANNEL_ID);
+  const recentTitles = await loadRecentTitles();
   if (isNumberChannelToday) {
     todaysNumber = formatBigNumber();
     try {
-      enTitle = await generateNumberTitle(book, todaysNumber);
+      enTitle = await generateNumberTitle(book, todaysNumber, titleStyleIdx, recentTitles);
+      titleIsGenerated = true;
       console.log(`Number title (channel ${CHANNEL_ID}): "${enTitle}"`);
     } catch (e) {
       console.warn("Number title generation failed, falling back to the plain title:", e.message);
       enTitle = plainTitle;
       todaysNumber = null;
+    }
+  } else {
+    // The former "plain" channel used to post the identical "<angle> | HDL Group" title every time
+    // that book came round. It now gets a number-free curiosity title in its own style instead;
+    // the plain title only remains as the fallback.
+    try {
+      enTitle = await generateCuriosityTitle(book, titleStyleIdx, recentTitles);
+      titleIsGenerated = true;
+      console.log(`Curiosity title (channel ${CHANNEL_ID}): "${enTitle}"`);
+    } catch (e) {
+      console.warn("Curiosity title generation failed, falling back to the plain title:", e.message);
+      enTitle = plainTitle;
     }
   }
 
@@ -940,7 +958,7 @@ async function main() {
       // bold-number treatment together, not just the long-form upload. Otherwise keeps the
       // original plain pattern exactly as before.
       const shortPlainTitle = `${capitalizeFirst(book.angle)} #Shorts`;
-      const shortTitle = (todaysNumber ? `${enTitle} #Shorts` : shortPlainTitle).slice(0, 100); // YouTube's 100-char title cap
+      const shortTitle = titleIsGenerated ? `${enTitle.slice(0, 91)} #Shorts` : shortPlainTitle.slice(0, 100); // YouTube's 100-char title cap (91 + " #Shorts" keeps the tag from being cut off)
       // Same URL-safety fix as the main video's description above: only the plain sentence goes
       // to the translation model. The two URLs (YouTube link + book link) and the hashtags are
       // appended after, untranslated, so they can't come back corrupted in any language.
