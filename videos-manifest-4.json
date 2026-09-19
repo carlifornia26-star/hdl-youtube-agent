@@ -1,6 +1,20 @@
 {
   "videos": [
     {
+      "video_id": "-z5h6KdFJm0",
+      "short_video_id": "eomt2BF1IAc",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "New Pet Owners Face 1,325,998,694 Modern Care Choices",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/-z5h6KdFJm0/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "script_format": "direct-hook",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 668,
+      "published_at": "2026-09-19T12:11:17.370Z"
+    },
+    {
       "video_id": "dmHsygcddS0",
       "short_video_id": "AUHALiFlYEE",
       "book_slug": "youtube-algorithms",
@@ -43,5 +57,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-09-18T12:26:35.193Z"
+  "updated_at": "2026-09-19T12:11:17.370Z"
 }
