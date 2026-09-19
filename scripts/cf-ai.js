@@ -806,34 +806,76 @@ export function sanitizeScenePauses(scenes) {
   return scenes.map((s) => ({ ...s, line: sanitizeNarrationPauses(s.line) }));
 }
 
-// --- Curiosity-based titles -------------------------------------------------------------------
-// Only ONE of the 3 channels uses a curiosity-based title on any given day (rotation handled by
-// caller, see pickCuriosityChannel in generate-video.js) — the other two keep the plain,
-// functional "<angle> | HDL Group" title. This keeps the channels from all looking like they're
-// running the same clickbait-title playbook on the same day, and keeps at least 2/3 of daily
-// uploads reading as calm and literal.
+// --- Video titles -------------------------------------------------------------------------------
+// Every channel gets a generated title every day (number-driven on some channels, curiosity-driven
+// on the rest — rotation lives in generate-video.js). The old plain "<angle> | HDL Group" title is
+// now only a fallback if generation fails, because with just six books it repeated verbatim.
 //
-// Deliberately steered AWAY from generic AI clickbait shape ("You Won't Believe...", "This One
-// Trick...", ALL CAPS, excessive punctuation/emoji) and toward a real editorial curiosity title:
-// specific to the book's actual topic, reads like a human editor wrote it, no more than one
-// rhetorical device per title (a question OR a specific-but-withheld detail OR a contrast — not
-// all three stacked). Falls back to the plain title format on any failure.
-export async function generateCuriosityTitle(book) {
-  const prompt = `Write ONE YouTube video title for a teaser video about the topic "${book.angle}" (the video does not name the ebook title itself, only the topic).
+// Why titles used to look identical: the prompts always asked for the same shape ("X Impacts N
+// Lives", "X Reveal N Secrets") and the model never saw what it had already written. Two fixes:
+//   1. TITLE_STYLES — each day/channel gets a DIFFERENT structural style (question, mistake,
+//      contrast, scenario, list, ...), so the sentence shape itself changes, not just the topic.
+//   2. RECENT TITLES — the last titles used across all channels are shown to the model as "do not
+//      echo these", and the result is checked in code (first/last 3 words) and regenerated with a
+//      different style if it still resembles one of them.
+const TITLE_STYLES = [
+  { id: "question", rule: "Write it as one specific question a curious person would really ask about this topic (not a rhetorical 'Did You Know')." },
+  { id: "mistake", rule: "Name one specific, common mistake or misunderstanding about this topic — what people do or believe that quietly works against them." },
+  { id: "contrast", rule: "Set two things against each other: two approaches, a before/after, or 'what most people do' vs 'what works'. Do not use the word 'vs' more than once." },
+  { id: "scenario", rule: "Open with a tiny concrete scenario in plain words (what happens when someone does or skips a specific thing). No invented personal stories, no claims to have personally tested anything." },
+  { id: "explainer", rule: "Make it a plain 'how' or 'why' explainer about one specific mechanism inside this topic, like a good documentary episode title." },
+  { id: "counterintuitive", rule: "State an expectation and hint that reality runs the other way — something that sounds backwards but is checkable." },
+  { id: "list", rule: "Structure it as a count of concrete things (signs, habits, steps, reasons, questions) that genuinely fits this topic." },
+  { id: "direct-address", rule: "Speak to one specific kind of person (a beginner, a busy parent, a first-time creator — whoever fits the topic) rather than a generic viewer." },
+  { id: "plain-statement", rule: "A calm, flat declarative statement of one interesting fact or idea about the topic. No question, no hook trick, no teaser — confident and plain." },
+  { id: "beginner-lens", rule: "Frame it around what beginners usually get backwards, skip, or misjudge at the start of this topic." },
+  { id: "timeline", rule: "Frame it around time: what changes after a week, a month, a year — or the first day versus the ninetieth. Keep it believable, not a miracle claim." },
+  { id: "short-punchy", rule: "Very short: 2 to 5 words, evocative and specific, no colon, no subtitle." },
+];
 
-Requirements:
-- Under 70 characters.
-- Curiosity-driven: it should make someone want to know the answer/outcome, WITHOUT resorting to generic clickbait phrasing.
-- Do NOT use any of these overused patterns: "You Won't Believe...", "This One Trick...", "The Truth About...", "Nobody Talks About...", "Here's Why...", ALL CAPS words, excessive punctuation (no "!!", no "?!"), emoji.
-- Sound like a specific, well-informed editor wrote it about this exact topic — not a generic template that could apply to any video.
-- Use AT MOST one of: a direct question, a specific-but-withheld detail, a stated contrast/tension. Do not stack more than one of these devices in the same title.
-- If a concrete number fits naturally (a count of items, mistakes, steps, minutes, signs, etc. — something structurally true of the content, NOT a fabricated statistic or claim), include it. Skip it if it would feel forced for this particular topic.
-- Title Case every major word (capitalize each significant word, skip small connector words like "a", "the", "of", "to") — matches the convention most high-performing video titles use. Do not write in ALL CAPS or plain sentence case.
-- Output ONLY the title text, nothing else — no quotes, no explanation.`;
+// Different channels get different styles on the same day (offset 3 apart, 12 styles / 4 channels
+// = all distinct), and every channel moves to a new style each day.
+export function pickTitleStyleIndex(dayOfYear, channelId) {
+  return (dayOfYear + (Number(channelId) - 1) * 3) % TITLE_STYLES.length;
+}
 
+const TITLE_STOPWORDS_RE = /[^a-z0-9\s]/g;
+function normalizeTitleWords(title, number) {
+  let t = String(title || "").toLowerCase();
+  if (number) t = t.replace(String(number).toLowerCase(), " ");
+  return t.replace(TITLE_STOPWORDS_RE, " ").split(/\s+/).filter(Boolean);
+}
+
+// True if `title` starts or ends like any recent title (first 3 words or last 2 words match).
+// Catches the "X Impacts N Lives" / "<angle> | HDL Group" style repeats even when the topic differs.
+function titleTooSimilar(title, recentTitles, number = null) {
+  const words = normalizeTitleWords(title, number);
+  if (!words.length) return false;
+  const head = words.slice(0, 3).join(" ");
+  const tail = words.slice(-2).join(" ");
+  return recentTitles.some((r) => {
+    const rw = normalizeTitleWords(r, /\d{1,3}(,\d{3})+/.exec(r)?.[0] || null);
+    if (!rw.length) return false;
+    if (rw.slice(0, 3).join(" ") === head) return true;
+    return rw.length >= 3 && words.length >= 3 && rw.slice(-2).join(" ") === tail;
+  });
+}
+
+function buildTitleStyleBlock(styleIdx, recentTitles) {
+  const style = TITLE_STYLES[styleIdx % TITLE_STYLES.length];
+  const recent = recentTitles.length
+    ? `\n- VARIETY: these titles were already used recently on our channels. Do NOT reuse or closely echo their opening words, closing words, or sentence shape:\n${recentTitles.map((t) => `  * ${t}`).join("\n")}`
+    : "";
+  return `- TITLE STYLE (required for this title): ${style.rule}${recent}
+- Never invent statistics, studies, quotes, or claims of personal experience. The title must be true to what a general video on this topic can honestly promise.`;
+}
+
+// Shared by both title generators: one Workers AI call in JSON-schema mode, returns the cleaned
+// title text (or "" if the model returned nothing usable).
+async function requestTitle(prompt, maxTokens) {
   const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
     messages: [{ role: "user", content: prompt }],
-    max_tokens: 60,
+    max_tokens: maxTokens,
     response_format: {
       type: "json_schema",
       json_schema: {
@@ -854,58 +896,62 @@ Requirements:
       title = result.response;
     }
   }
-  title = (title || "").trim().replace(/^["']|["']$/g, "");
-  if (!title) throw new Error("generateCuriosityTitle: model returned no title");
+  return (title || "").trim().replace(/^["']|["']$/g, "");
+}
+
+// Up to 3 attempts, each with a different style, until the title no longer resembles a recent one.
+// If all 3 still look similar the last one is used anyway — a slightly familiar title beats failing.
+async function generateDistinctTitle({ label, buildPrompt, styleIdx, recentTitles, number = null, maxTokens }) {
+  let title = "";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const idx = (styleIdx + attempt * 5) % TITLE_STYLES.length;
+    title = await requestTitle(buildPrompt(idx), maxTokens);
+    if (!title) throw new Error(`${label}: model returned no title`);
+    if (!titleTooSimilar(title, recentTitles, number)) return title;
+    console.warn(`${label}: "${title}" too close to a recent title, retrying with a different style (attempt ${attempt + 1}/3).`);
+  }
+  return title;
+}
+
+// Curiosity title (no number). Steered AWAY from generic AI clickbait ("You Won't Believe...",
+// ALL CAPS, emoji) toward a specific, human-editor-sounding title in today's TITLE_STYLE.
+export async function generateCuriosityTitle(book, styleIdx = 0, recentTitles = []) {
+  const buildPrompt = (idx) => `Write ONE YouTube video title for a teaser video about the topic "${book.angle}" (the video does not name the ebook title itself, only the topic).
+
+Requirements:
+- Under 70 characters.
+- Curiosity-driven: it should make someone want to know the answer/outcome, WITHOUT resorting to generic clickbait phrasing.
+- Do NOT use any of these overused patterns: "You Won't Believe...", "This One Trick...", "The Truth About...", "Nobody Talks About...", "Here's Why...", "Impacts ... Lives", "Experts Reveal", ALL CAPS words, excessive punctuation (no "!!", no "?!"), emoji.
+- Sound like a specific, well-informed editor wrote it about this exact topic — not a generic template that could apply to any video.
+${buildTitleStyleBlock(idx, recentTitles)}
+- Use a concrete number only if it fits naturally and is structurally true of the content (a count of items, signs, steps, minutes). Skip it if forced.
+- Title Case every major word (capitalize each significant word, skip small connector words like "a", "the", "of", "to"). Do not write in ALL CAPS or plain sentence case.
+- Output ONLY the title text, nothing else — no quotes, no explanation.`;
+
+  const title = await generateDistinctTitle({ label: "generateCuriosityTitle", buildPrompt, styleIdx, recentTitles, maxTokens: 60 });
   return title.slice(0, 100); // YouTube's hard title cap, same as everywhere else titles are used
 }
 
-// --- Number titles (2 of 3 channels per day) ---------------------------------------------------
-// generateCuriosityTitle above is left in place but unused for now — this is the replacement
-// title generator: 2 of the 3 channels each day use a number-driven title (rotation handled by
-// the caller, see plainChannelToday in generate-video.js), the third keeps the plain "<angle> |
-// HDL Group" title. formattedNumber is generated in generate-video.js (a random integer between
+// Number title. formattedNumber is generated in generate-video.js (random integer between
 // 100,000,000 and 2,000,000,000, comma-formatted) — NOT by this model, since an LLM can't be
-// trusted to reproduce a specific long digit string with exact comma placement reliably. This
-// function's job is just to build a natural-sounding title AROUND that exact number.
-export async function generateNumberTitle(book, formattedNumber) {
-  const prompt = `Write ONE YouTube video title for a teaser video about the topic "${book.angle}" (the video does not name the ebook title itself, only the topic).
+// trusted to reproduce a long digit string with exact comma placement. This function builds a
+// natural-sounding title AROUND that exact number, in today's TITLE_STYLE.
+export async function generateNumberTitle(book, formattedNumber, styleIdx = 0, recentTitles = []) {
+  const buildPrompt = (idx) => `Write ONE YouTube video title for a teaser video about the topic "${book.angle}" (the video does not name the ebook title itself, only the topic).
 
 The title MUST include this exact number, written EXACTLY as given below, somewhere natural in the sentence: ${formattedNumber}
 
 Requirements:
 - Under 100 characters total (the number itself is long, so budget space for it).
 - Reproduce the number EXACTLY as given — same digits, same comma placement. Do not spell it out in words, do not round it, do not add or remove a comma or digit.
-- Curiosity-driven and specific to this exact topic — treat the big, oddly-specific number as the hook itself (MrBeast-style: "$1,234,567,890 App Idea Nobody's Tried"). This is a stylistic curiosity device, not a literal financial claim about the book or company.
-- Do NOT use generic clickbait phrases: "You Won't Believe...", "This One Trick...", "The Truth About...", ALL CAPS words, excessive punctuation (no "!!", no "?!"), emoji.
+- Curiosity-driven and specific to this exact topic — treat the big, oddly-specific number as the hook itself. This is a stylistic curiosity device, not a literal financial claim about the book or company.
+- Do NOT use these overused frames: "<Topic> Impacts <number> Lives", "<Topic> Experts Reveal <number> ...", "<number> People ...", "You Won't Believe...", "This One Trick...", "The Truth About...", ALL CAPS words, excessive punctuation (no "!!", no "?!"), emoji.
 - Sound like a specific, well-informed editor wrote it about this exact topic — not a generic template that could apply to any video.
+${buildTitleStyleBlock(idx, recentTitles)}
 - Title Case every major word (capitalize each significant word, skip small connector words like "a", "the", "of", "to"). Do not write in ALL CAPS or plain sentence case.
 - Output ONLY the title text, nothing else — no quotes, no explanation.`;
 
-  const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
-    messages: [{ role: "user", content: prompt }],
-    max_tokens: 80,
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        type: "object",
-        properties: { title: { type: "string" } },
-        required: ["title"],
-      },
-    },
-  });
-
-  let title;
-  if (result?.response && typeof result.response === "object" && typeof result.response.title === "string") {
-    title = result.response.title;
-  } else if (typeof result?.response === "string") {
-    try {
-      title = JSON.parse(result.response).title;
-    } catch {
-      title = result.response;
-    }
-  }
-  title = (title || "").trim().replace(/^["']|["']$/g, "");
-  if (!title) throw new Error("generateNumberTitle: model returned no title");
+  let title = await generateDistinctTitle({ label: "generateNumberTitle", buildPrompt, styleIdx, recentTitles, number: formattedNumber, maxTokens: 80 });
 
   // The model is unreliable at preserving an exact long digit string verbatim — if it dropped,
   // rounded, or reformatted the number, append it directly rather than trusting a retry to get
@@ -954,4 +1000,4 @@ export async function translateTermToEnglish(term, sourceLang) {
     console.warn(`translateTermToEnglish: "${original}" (${sourceLang}) failed, keeping original:`, e.message);
     return original;
   }
-  }
+    }
