@@ -24,6 +24,26 @@ export async function loadManifest() {
   }
 }
 
+// Newest titles across ALL channels' manifests (each file is newest-first), used by
+// generate-video.js so a new title can be checked against what every channel has recently posted.
+// Reads the sibling manifest files directly (channel 1 unsuffixed, 2-4 suffixed) — a missing or
+// unreadable file is just skipped.
+export async function loadRecentTitles(perChannel = 6) {
+  const files = ["videos-manifest.json", "videos-manifest-2.json", "videos-manifest-3.json", "videos-manifest-4.json"];
+  const titles = [];
+  for (const f of files) {
+    try {
+      const parsed = JSON.parse(await fs.readFile(path.resolve(f), "utf8"));
+      for (const v of (parsed.videos || []).slice(0, perChannel)) {
+        if (v?.title) titles.push(String(v.title));
+      }
+    } catch {
+      // file missing or unreadable — skip
+    }
+  }
+  return titles;
+}
+
 // entry: { video_id, short_video_id, book_slug, page_url, title, description,
 //          thumbnail_url, duration_seconds, published_at }
 export async function appendVideoEntry(entry) {
@@ -33,4 +53,4 @@ export async function appendVideoEntry(entry) {
   manifest.updated_at = new Date().toISOString();
   await fs.writeFile(MANIFEST_PATH, JSON.stringify(manifest, null, 2) + "\n");
   return manifest;
-      }
+  }
