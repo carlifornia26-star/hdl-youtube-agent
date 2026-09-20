@@ -15,11 +15,11 @@ const AUDIO_BASE = "https://incompetech.com/music/royalty-free/mp3-royaltyfree/"
 // day-of-year — which meant only 6 possible tracks ever played, and with 3 channels sharing the
 // same day-of-year value, all 3 channels got the SAME track on a given day (so across a typical
 // week of watching, a viewer would really only ever hear a couple of them stand out). This now
-// pulls from the FULL live catalog (2000+ pieces) and filters it down to ones that fit a calm,
-// neutral book-teaser mood, so the pool is much larger and each channel gets its own pick. The
-// old 6 tracks are kept below only as a FALLBACK, used solely if the live catalog can't be
-// fetched (network hiccup, incompetech API change, etc.) — so a catalog outage can't fail the
-// whole day's video.
+// pulls from the live catalog but ONLY uses the hand-approved tracks listed in APPROVED_TITLES
+// below, so each channel gets its own pick from a short, vetted list. The 6 tracks in
+// FALLBACK_TRACKS (all also on the approved list) are used only if the live catalog can't be
+// fetched or none of the approved titles are found in it — so a catalog outage can't fail the
+// whole day's video, and no track outside the approved list can ever play.
 const FALLBACK_TRACKS = [
   { title: "Sincerely", filename: "Sincerely.mp3" },
   { title: "Wholesome", filename: "Wholesome.mp3" },
@@ -29,34 +29,51 @@ const FALLBACK_TRACKS = [
   { title: "Kalimba Relaxation Music", filename: "Kalimba Relaxation Music.mp3" },
 ];
 
-// pieces.json's "feel" field is a free-text, comma-separated list (e.g. "Calm, Grooving,
-// Relaxed"). A track qualifies for background use here if it carries at least one GOOD_FEEL and
-// none of the BAD_FEELS — this is what keeps the (much larger) live catalog from ever picking
-// something like a horror soundscape or a chase cue under a calm book narration.
-const GOOD_FEELS = ["calm", "calming", "relaxed", "bright", "mellow", "uplifting"];
-const BAD_FEELS = [
-  "dark", "aggressive", "intense", "eerie", "unnerving", "somber", "suspenseful",
-  "humorous", "action", "epic",
+// APPROVED TRACKS — the ONLY tracks the pipeline will ever use as background music. One title per
+// line, exactly as it appears on incompetech.com. To remove a track you don't like, delete its
+// line; to add one, add its title. Titles are matched against the live catalog ignoring
+// capitalisation and punctuation, and any title that isn't found is simply skipped (it is logged
+// at the start of each run, so you can see which ones matched). The download uses the catalog's
+// own filename, so a matched title always downloads correctly.
+const APPROVED_TITLES = [
+  // Already in use by the pipeline before, known to work
+  "Sincerely",
+  "Wholesome",
+  "Late Night Radio",
+  "Ancient Winds",
+  "Deep Relaxation",
+  "Kalimba Relaxation Music",
+  // Calm / gentle / light background tracks
+  "Airport Lounge",
+  "Relaxing Piano Music",
+  "Almost in F - Tranquility",
+  "Wallpaper",
+  "Carefree",
+  "Easy Lemon",
+  "Dreamy Flashback",
+  "Local Forecast - Elevator",
+  "Meditation Impromptu 01",
+  "Meditation Impromptu 02",
+  "Meditation Impromptu 03",
+  "Healing",
+  "Heartwarming",
+  "Inspired",
+  "Gymnopedie No 1",
+  "Floating Cities",
+  "Water Lily",
+  "Ripples",
+  "River Flute",
+  "Morning",
+  "Open Those Bright Eyes",
+  "Elf Meditation",
+  "Fluidscape",
+  "Dreams Become Real",
 ];
 
-// Belt-and-suspenders exclusion by title, independent of the feel filter above — catches
-// novelty/joke pieces (real entries in the catalog) that could slip through on mislabeled or
-// missing "feel" data, e.g. a piece tagged only "Bright, Bouncy" with no bad-feel words but a
-// title that makes it obviously wrong for a book teaser.
-const EXCLUDE_TITLE_SUBSTRINGS = [
-  "farting", "fart", "circus of freaks", "krampus", "onion capers", "goblin",
-  "car horns", "le grand chase", "dance of the tuba plum fairy",
-];
-
-function qualifies(entry) {
-  const filename = (entry.filename || "").trim();
-  if (!filename) return false;
-  const feel = (entry.feel || "").toLowerCase();
-  const title = (entry.title || "").toLowerCase();
-  if (EXCLUDE_TITLE_SUBSTRINGS.some((s) => title.includes(s))) return false;
-  if (BAD_FEELS.some((b) => feel.includes(b))) return false;
-  return GOOD_FEELS.some((g) => feel.includes(g));
+function normTitle(t) {
+  return String(t || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
+const APPROVED_SET = new Set(APPROVED_TITLES.map(normTitle));
 
 let cachedCandidates = null; // per-process cache — one catalog fetch per run, not per candidate check
 
@@ -70,14 +87,17 @@ async function loadQualifyingTracks() {
   const seen = new Set(); // pieces.json has occasional duplicate titles (different arrangements
   const qualifying = [];  // of the same piece) — keep the first filename seen per title
   for (const entry of all) {
-    if (!qualifies(entry)) continue;
-    const title = entry.title.trim();
-    if (seen.has(title)) continue;
-    seen.add(title);
-    qualifying.push({ title, filename: entry.filename.trim() });
+    const title = String(entry.title || "").trim();
+    const filename = String(entry.filename || "").trim();
+    if (!title || !filename || !APPROVED_SET.has(normTitle(title))) continue;
+    if (seen.has(normTitle(title))) continue;
+    seen.add(normTitle(title));
+    qualifying.push({ title, filename });
   }
 
-  if (qualifying.length === 0) throw new Error("No qualifying tracks found in catalog");
+  const missing = APPROVED_TITLES.filter((t) => !seen.has(normTitle(t)));
+  console.log(`Approved music: ${qualifying.length}/${APPROVED_TITLES.length} titles found in the catalog.` + (missing.length ? ` Not found (skipped): ${missing.join(", ")}` : ""));
+  if (qualifying.length === 0) throw new Error("None of the approved tracks were found in the catalog");
   cachedCandidates = qualifying;
   return qualifying;
 }
