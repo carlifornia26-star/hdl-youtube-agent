@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "YP42dl58mhs",
+      "short_video_id": "8lQmiJjxvsA",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "Happiness Science Reaches 1,378,400,318",
+      "description": "Curious about the science of happiness? Art of Joy breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/YP42dl58mhs/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "stat-hook",
+      "caption_style": "wide-orange",
+      "duration_seconds": 517,
+      "published_at": "2026-09-20T13:46:07.412Z"
+    },
+    {
       "video_id": "4AFcGVuqQLc",
       "short_video_id": "0ZqqI-51HcA",
       "book_slug": "science-of-feeling-great",
@@ -244,5 +262,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-09-19T13:10:53.134Z"
+  "updated_at": "2026-09-20T13:46:07.413Z"
 }
