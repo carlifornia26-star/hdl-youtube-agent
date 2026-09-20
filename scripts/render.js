@@ -198,6 +198,164 @@ export async function buildScene({ clipPath, duration, text, outPath, voicePath,
   return { outPath, duration };
 }
 
+// --- News headline card + animated scene -----------------------------------------------------
+// The daily trending-topic beat (see daily-trend.js): a clean, self-drawn "news card" showing the
+// top headline for today's trending word, slid over a darkened, blurred stock clip with motion.
+// It is drawn from scratch with ffmpeg (text + boxes) rather than screenshotting a publisher's
+// page: no browser to install, no cookie banners/paywalls/captchas to fail on, and no publisher
+// page content reproduced — only the headline text and the outlet's name, credited on the card
+// and in the description. Deliberately does NOT copy Google's or any outlet's logo/branding.
+const NEWS_CARD_W = 1180;
+const NEWS_CARD_H = 560;
+const NEWS_CARD_PAD = 70; // transparent margin around the card, holds the drop shadow
+const NEWS_CARD_FONT_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
+
+function wrapForCard(text, maxCharsPerLine = 31, maxLines = 4) {
+  const words = String(text || "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  const lines = [];
+  let cur = "";
+  let truncated = false;
+  for (const w of words) {
+    const candidate = cur ? `${cur} ${w}` : w;
+    if (candidate.length > maxCharsPerLine && cur) {
+      if (lines.length === maxLines - 1) {
+        truncated = true; // this would need a line past the limit — stop and mark the cut
+        break;
+      }
+      lines.push(cur);
+      cur = w;
+    } else {
+      cur = candidate;
+    }
+  }
+  if (cur) lines.push(cur);
+  if (truncated && lines.length) lines[lines.length - 1] = lines[lines.length - 1].replace(/[.,;:!?\s]+$/, "") + "…";
+  return lines.join("\n");
+}
+
+export async function renderNewsCard({ headline, source, dateText, outPath }) {
+  const dir = path.dirname(outPath);
+  const headlineFile = path.join(dir, "news_headline.txt");
+  const sourceFile = path.join(dir, "news_source.txt");
+  const dateFile = path.join(dir, "news_date.txt");
+  await fs.writeFile(headlineFile, wrapForCard(headline));
+  await fs.writeFile(sourceFile, String(source || "").slice(0, 40));
+  await fs.writeFile(dateFile, String(dateText || ""));
+
+  const F = escapeFilterPath;
+  const card =
+    `color=c=white:s=${NEWS_CARD_W}x${NEWS_CARD_H}:d=1,format=rgba,` +
+    `drawbox=x=0:y=0:w=iw:h=16:color=0xD32F2F:t=fill,` +
+    `drawtext=fontfile=${CAPTION_FONT}:text='IN THE NEWS':fontcolor=0xD32F2F:fontsize=32:x=64:y=54:expansion=none,` +
+    `drawtext=fontfile=${CAPTION_FONT}:textfile='${F(headlineFile)}':fontcolor=0x141414:fontsize=54:line_spacing=16:x=64:y=120:expansion=none,` +
+    `drawbox=x=64:y=h-118:w=iw-128:h=3:color=0xD9D9D9:t=fill,` +
+    `drawtext=fontfile=${CAPTION_FONT}:textfile='${F(sourceFile)}':fontcolor=0x4A4A4A:fontsize=34:x=64:y=h-88:expansion=none,` +
+    `drawtext=fontfile=${NEWS_CARD_FONT_REGULAR}:textfile='${F(dateFile)}':fontcolor=0x7A7A7A:fontsize=30:x=w-text_w-64:y=h-86:expansion=none`;
+
+  const fullW = NEWS_CARD_W + NEWS_CARD_PAD * 2;
+  const fullH = NEWS_CARD_H + NEWS_CARD_PAD * 2;
+  const filterComplex =
+    `${card}[card];` +
+    `[card]split[c][s];` +
+    `[s]colorchannelmixer=rr=0:gg=0:bb=0:aa=0.55,pad=w=${fullW}:h=${fullH}:x=${NEWS_CARD_PAD}:y=${NEWS_CARD_PAD + 14}:color=black@0,gblur=sigma=22[sh];` +
+    `[c]pad=w=${fullW}:h=${fullH}:x=${NEWS_CARD_PAD}:y=${NEWS_CARD_PAD}:color=black@0[cp];` +
+    `[sh][cp]overlay=format=auto[out]`;
+  await run("ffmpeg", ["-y", "-filter_complex", filterComplex, "-map", "[out]", "-frames:v", "1", outPath]);
+  return { outPath, width: fullW, height: fullH };
+}
+
+// drawtext/textfile paths sit inside single quotes in a filtergraph — escape the characters that
+// would break out of that (the build dir path is normally plain, this is just a safety net).
+function escapeFilterPath(p) {
+  return String(p).replace(/\\/g, "/").replace(/'/g, "\\'").replace(/:/g, "\\:");
+}
+
+// Same output contract as buildScene (1920x1080, 25fps cfr, 44.1kHz stereo AAC, same x264 settings)
+// so it concatenates with every other scene via `-c copy`. The stock clip becomes a dimmed, blurred
+// backdrop; the card slides in from the right with an ease-out, then keeps drifting — a slow zoom
+// plus a gentle float — for the rest of the scene so it never sits dead still. Captions use the
+// same style as every other scene, positioned below the card.
+export async function buildNewsScene({ clipPath, cardPath, duration, text, outPath, voicePath, captionStyle = CAPTION_STYLE_POOL[0] }) {
+  const dim = DIMENSIONS.landscape;
+  const clipHasAudio = await hasAudioStream(clipPath);
+  const hasVoice = Boolean(voicePath);
+
+  // Inputs: 0 = stock clip, 1 = card image, then voice (2) OR a silent track (2) if needed.
+  const inputs = ["-stream_loop", "-1", "-i", clipPath, "-loop", "1", "-framerate", String(OUTPUT_FPS), "-i", cardPath];
+  if (hasVoice) {
+    inputs.push("-i", voicePath);
+  } else if (!clipHasAudio) {
+    inputs.push("-f", "lavfi", "-i", `anullsrc=channel_layout=stereo:sample_rate=${OUTPUT_SAMPLE_RATE}`);
+  }
+
+  let audioFilter = null;
+  let audioMap;
+  if (hasVoice && clipHasAudio) {
+    audioFilter = `[0:a]volume=${AMBIENT_DUCK_VOLUME}[amb];[2:a]volume=1.0[voice];[amb][voice]amix=inputs=2:duration=first:normalize=0[a]`;
+    audioMap = ["-map", "[a]"];
+  } else if (hasVoice) {
+    audioFilter = `[2:a]volume=1.0,apad[a]`;
+    audioMap = ["-map", "[a]"];
+  } else if (clipHasAudio) {
+    audioMap = ["-map", "0:a"];
+  } else {
+    audioMap = ["-map", "2:a"];
+  }
+
+  const chunks = buildCaptionChunks(text, duration, captionStyle);
+  const captionFilters = chunks
+    .map(({ text: chunkText, start, end, color }) => {
+      const safe = escapeDrawtext(chunkText);
+      const s = start.toFixed(3);
+      const fadeEnd = Math.min(start + POP_IN_SECONDS, end).toFixed(3);
+      return (
+        `drawtext=fontfile=${CAPTION_FONT}:text='${safe}':fontcolor=${color}:fontsize=${dim.fontsize}:` +
+        `box=1:boxcolor=black@0.6:boxborderw=18:x=(w-text_w)/2:y=h*${captionStyle.yFrac}-text_h/2:` +
+        `alpha='if(lt(t,${s}),0,if(lt(t,${fadeEnd}),(t-${s})/${POP_IN_SECONDS},1))':` +
+        `enable='between(t,${s},${end.toFixed(3)})'`
+      );
+    })
+    .join(",");
+
+  const D = Math.max(duration, 1).toFixed(3);
+  const cardW = NEWS_CARD_W + NEWS_CARD_PAD * 2;
+  const SLIDE = 0.7; // seconds for the slide-in
+  const filterComplex =
+    `[0:v]scale=${dim.w}:${dim.h}:force_original_aspect_ratio=increase,crop=${dim.w}:${dim.h},` +
+    `eq=saturation=0.7:brightness=-0.12,boxblur=luma_radius=16:luma_power=2[bg];` +
+    // Slow zoom-in on the card over the whole scene (0.92x -> 0.99x of its native size).
+    `[1:v]format=rgba,scale=w='trunc(${cardW}*(0.92+0.07*t/${D})/2)*2':h=-2:eval=frame[card];` +
+    // Ease-out slide from off-screen right, then a small vertical float. Card centre sits a bit
+    // above the middle of the frame so the captions below it stay clear.
+    `[bg][card]overlay=` +
+    `x='(W-w)/2+pow(max(0,1-t/${SLIDE}),3)*W':` +
+    `y='(H-h)/2-70+10*sin(2*PI*t/5)':eval=frame:format=auto,format=yuv420p` +
+    (captionFilters ? `,${captionFilters}` : "") +
+    `[v]` +
+    (audioFilter ? `;${audioFilter}` : "");
+
+  await run("ffmpeg", [
+    "-y",
+    ...inputs,
+    "-filter_complex",
+    filterComplex,
+    "-map", "[v]",
+    ...audioMap,
+    "-t", String(duration),
+    "-r", String(OUTPUT_FPS),
+    "-fps_mode", "cfr",
+    "-ar", String(OUTPUT_SAMPLE_RATE),
+    "-ac", String(OUTPUT_CHANNELS),
+    "-c:v", "libx264",
+    "-preset", "veryfast",
+    "-crf", "18",
+    "-c:a", "aac",
+    "-shortest",
+    outPath,
+  ]);
+  return { outPath, duration };
+}
+
 // Mixes a looped background music track under a finished video's existing audio (narration +
 // ambient, already mixed by buildScene). Runs as a separate pass AFTER concatScenes rather than
 // per-scene, so the music plays continuously across scene cuts instead of restarting each scene.
@@ -282,7 +440,7 @@ function wrapTitle(text, maxCharsPerLine = 18, maxLines = 2) {
 // style callout lower on the frame, MrBeast-thumbnail convention for a big headline number —
 // visually distinct from the white title text above it so it reads as the standout element.
 const THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024; // YouTube's hard cap on thumbnails.set
-export async function generateThumbnail({ imagePath, outPath, titleText, numberText }) {
+export async function generateThumbnail({ imagePath, outPath, titleText, numberText, grayscale = false }) {
   const vf = [
     `scale=1280:720:force_original_aspect_ratio=increase`,
     `crop=1280:720`,
@@ -307,6 +465,13 @@ export async function generateThumbnail({ imagePath, outPath, titleText, numberT
       `drawtext=fontfile=${CAPTION_FONT}:text='${safeNumber}':fontcolor=yellow:fontsize=110:` +
         `bordercolor=black:borderw=14:x=(w-text_w)/2:y=h-220`
     );
+  }
+  // Black-and-white day (see blackAndWhiteSlotForToday in generate-video.js): desaturate the
+  // finished frame LAST, after any text is drawn, so the yellow number callout goes monochrome
+  // too — the whole thumbnail is genuinely black and white, not black and white plus one yellow
+  // accent. A small contrast lift keeps a desaturated photo from looking flat/grey.
+  if (grayscale) {
+    vf.push(`hue=s=0`, `eq=contrast=1.12`);
   }
   // qscale 2 = ffmpeg's near-max JPEG quality (scale is 2-31, lower is better). At 1280x720
   // this normally lands well under the 2MB cap on its own; the loop below is a safety net for
@@ -382,4 +547,4 @@ export function buildSrt(scenesWithDurations, translatedLines) {
     const ms = String(Math.floor((sec % 1) * 1000)).padStart(3, "0");
     return `${h}:${m}:${s},${ms}`;
   }
-    }
+                                 }
