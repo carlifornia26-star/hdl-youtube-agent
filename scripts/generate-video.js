@@ -7,11 +7,12 @@ import { loadUsedClipIds, saveUsedClipIds } from "./scene-history.js";
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
 import { fetchBackgroundMusic, attributionLine } from "./music.js";
 import { loadUsedMusicTitles, saveUsedMusicTitles } from "./music-history.js";
-import { buildScene, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic, normalizeLoudness, pickTodaysCaptionStyle, tagVideoMetadata, tagThumbnailMetadata } from "./render.js";
+import { buildScene, buildNewsScene, renderNewsCard, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic, normalizeLoudness, pickTodaysCaptionStyle, tagVideoMetadata, tagThumbnailMetadata } from "./render.js";
 import { exiftool } from "exiftool-vendored";
 import { uploadVideo, uploadCaptionTrack, uploadThumbnail, addVideoToPlaylist, publishVideo, checkVideoTrainability } from "./youtube.js";
 import { appendVideoEntry, loadRecentTitles } from "./manifest.js";
 import { buildDailyCommunityPost } from "./community-post.js";
+import { pickTodaysTrend, fetchTopHeadline, buildNewsSceneLine } from "./daily-trend.js";
 
 // Runs `items` through `fn` with at most `limit` in flight at once, preserving output order.
 // Used for the per-scene caption translation loop below, which previously awaited each of
@@ -34,6 +35,29 @@ async function mapWithConcurrency(items, limit, fn) {
 // its existing history isn't disturbed; channels 2/3 get their own suffixed files so their
 // playlists/manifest don't overwrite each other.
 const CHANNEL_ID = process.env.CHANNEL_ID || "1";
+
+// Black-and-white thumbnail schedule. On any given day exactly ONE channel gets a black-and-white
+// thumbnail (every other channel keeps its normal colour one), and the B&W slot moves to the next
+// channel each day. The B&W thumbnail also alternates between the plain and text versions day to
+// day, so over a full cycle every channel gets both. Anchor day = 2026-09-20: channel 4 (plain),
+// then 2026-09-21: channel 3 (text), then 2026-09-22: channel 1 (plain), then back to channel 4
+// (text), and so on. Channel 2 is paused, so it isn't in the rotation — add "2" to the array
+// (in the position you want) when it resumes. UTC days, same as the scheduled runs.
+const BW_CHANNEL_ROTATION = ["4", "3", "1"];
+const BW_ANCHOR_EPOCH_DAY = Math.floor(Date.UTC(2026, 8, 20) / 86400000);
+function blackAndWhiteSlotForToday() {
+  const epochDay = Math.floor(Date.now() / 86400000);
+  const n = epochDay - BW_ANCHOR_EPOCH_DAY;
+  const mod = (a, m) => ((a % m) + m) % m;
+  return {
+    channel: BW_CHANNEL_ROTATION[mod(n, BW_CHANNEL_ROTATION.length)],
+    variant: mod(n, 2) === 0 ? "A" : "B", // A = plain photo, B = title-text version
+  };
+}
+// thumbnail-report.js can lock in a single "winner" variant for every video once it has enough
+// CTR data. That would end the daily plain/text alternation, so it is OFF by default — the report
+// still runs and records the numbers. Set to true to let a decided winner override the rotation.
+const USE_THUMBNAIL_WINNER_LOCK = false;
 
 // Audio policy: background music stays on, but only calm/relaxed/mellow/uplifting tracks —
 // see GOOD_FEELS/BAD_FEELS in music.js, which already excludes anything dark, aggressive,
@@ -420,12 +444,46 @@ async function main() {
   // channelOffset passed here (previously omitted) so the disclaimer rotation and the
   // grounding-fact rotation (both keyed by day-of-year + channelOffset — see cf-ai.js)
   // actually differ across the 3 channels on the same calendar day, same as book/format/voice.
-  const rawScenes = await generateScript(book, format, Number(CHANNEL_ID) - 1);
+  // Today's trending Google search term (or null) — worked into the narration, the title, and the
+  // description, and it drives the news-headline scene below. Picked BEFORE the script is written
+  // so the narration can use it. Any failure just means "no trend today": the video is built
+  // exactly the way it always was.
+  let trend = null;
+  try {
+    trend = await pickTodaysTrend({ book, channelId: CHANNEL_ID });
+  } catch (e) {
+    console.warn("Trend selection failed, continuing without a trend tie-in:", e.message);
+  }
+  const rawScenes = await generateScript(book, format, Number(CHANNEL_ID) - 1, trend);
   // Deterministic text-level fix for the "skip this don't" run-on-pause issue — see
   // sanitizeNarrationPauses in cf-ai.js. Applied here (not inside generateScript) so it also
   // catches anything a future prompt change might introduce, without relying on the model.
   const scenes = sanitizeScenePauses(rawScenes);
   console.log(`Generated ${scenes.length} scenes`);
+
+  // News-headline beat: the top fresh headline for today's trending term, drawn as a card that
+  // slides in over a blurred clip (see buildNewsScene in render.js), inserted right after scene 2 —
+  // i.e. after the hook that first mentions the trend. Skipped (video is unchanged) if there is no
+  // trend, no safe headline, or the card fails to render.
+  let newsInfo = null;
+  if (trend) {
+    try {
+      newsInfo = await fetchTopHeadline(trend);
+      if (newsInfo) {
+        const newsCardPath = path.join(BUILD_DIR, "news_card.png");
+        await renderNewsCard({ headline: newsInfo.headline, source: newsInfo.source, dateText: newsInfo.dateText, outPath: newsCardPath });
+        scenes.splice(Math.min(2, scenes.length), 0, {
+          line: buildNewsSceneLine(trend.term, CHANNEL_ID),
+          visual: "person scrolling news on phone",
+          newsCardPath,
+        });
+        console.log(`Inserted news-headline scene at position ${Math.min(2, scenes.length - 1) + 1}.`);
+      }
+    } catch (e) {
+      console.warn("News-headline scene failed, continuing without it:", e.message);
+      newsInfo = null;
+    }
+  }
 
   // Pexels video IDs used across recent runs (any channel-scoped history file), so a repeat
   // keyword doesn't deterministically re-download the exact same clip every time this book comes
@@ -470,7 +528,19 @@ async function main() {
       duration = Math.min(MAX_SCENE_SECONDS, Math.max(MIN_SCENE_SECONDS, words / 2.3 + PADDING_SECONDS));
     }
 
-    const built_scene = await buildScene({ clipPath, duration, text: scene.line, outPath, voicePath: usableVoicePath, captionStyle });
+    let built_scene;
+    if (scene.newsCardPath) {
+      // Animated news card over a blurred clip. If ffmpeg rejects it for any reason, fall back to a
+      // normal captioned scene with the same narration, so the day's video never fails over this.
+      try {
+        built_scene = await buildNewsScene({ clipPath, cardPath: scene.newsCardPath, duration, text: scene.line, outPath, voicePath: usableVoicePath, captionStyle });
+      } catch (e) {
+        console.warn("News card scene failed to render, using a normal scene instead:", e.message);
+        built_scene = await buildScene({ clipPath, duration, text: scene.line, outPath, voicePath: usableVoicePath, captionStyle });
+      }
+    } else {
+      built_scene = await buildScene({ clipPath, duration, text: scene.line, outPath, voicePath: usableVoicePath, captionStyle });
+    }
     return { ...scene, duration, outPath: built_scene.outPath, clipPath, voicePath: usableVoicePath };
   }
 
@@ -613,10 +683,26 @@ async function main() {
   // titles from every channel so it can't fall back into the same shape (see cf-ai.js TITLE_STYLES).
   const titleStyleIdx = pickTitleStyleIndex(todaysDayOfYear, CHANNEL_ID);
   const recentTitles = await loadRecentTitles();
+  // With a trending term today, the title must contain it (honestly framed — see the prompt in
+  // cf-ai.js). If the model can't produce one that does after 3 tries, ask again WITHOUT the term
+  // rather than ship a title that doesn't match the narration's tie-in or a stuffed one.
+  let titleHasTrend = false;
+  async function makeTitle(generate) {
+    if (trend?.term) {
+      try {
+        const t = await generate(trend.term);
+        titleHasTrend = true;
+        return t;
+      } catch (e) {
+        console.warn(`Title with trending term "${trend.term}" failed (${e.message}) — generating one without it.`);
+      }
+    }
+    return generate(null);
+  }
   if (isNumberChannelToday) {
     todaysNumber = formatBigNumber();
     try {
-      enTitle = await generateNumberTitle(book, todaysNumber, titleStyleIdx, recentTitles);
+      enTitle = await makeTitle((term) => generateNumberTitle(book, todaysNumber, titleStyleIdx, recentTitles, term));
       titleIsGenerated = true;
       console.log(`Number title (channel ${CHANNEL_ID}): "${enTitle}"`);
     } catch (e) {
@@ -629,7 +715,7 @@ async function main() {
     // that book came round. It now gets a number-free curiosity title in its own style instead;
     // the plain title only remains as the fallback.
     try {
-      enTitle = await generateCuriosityTitle(book, titleStyleIdx, recentTitles);
+      enTitle = await makeTitle((term) => generateCuriosityTitle(book, titleStyleIdx, recentTitles, term));
       titleIsGenerated = true;
       console.log(`Curiosity title (channel ${CHANNEL_ID}): "${enTitle}"`);
     } catch (e) {
@@ -691,16 +777,30 @@ async function main() {
   // winner yet, or not enough data) this keeps alternating exactly as before.
   const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
   let thumbnailVariant = dayOfYear % 2 === 0 ? "A" : "B";
-  try {
-    const winnerRaw = await fs.readFile(path.resolve("thumbnail-winner.json"), "utf8");
-    const winnerData = JSON.parse(winnerRaw);
-    if (winnerData.winner === "A" || winnerData.winner === "B") {
-      thumbnailVariant = winnerData.winner;
-      console.log(`thumbnail-winner.json has a decided winner: variant ${thumbnailVariant}. Using it (no more alternating).`);
+  if (USE_THUMBNAIL_WINNER_LOCK) {
+    try {
+      const winnerRaw = await fs.readFile(path.resolve("thumbnail-winner.json"), "utf8");
+      const winnerData = JSON.parse(winnerRaw);
+      if (winnerData.winner === "A" || winnerData.winner === "B") {
+        thumbnailVariant = winnerData.winner;
+        console.log(`thumbnail-winner.json has a decided winner: variant ${thumbnailVariant}. Using it (no more alternating).`);
+      }
+    } catch {
+      // No winner file yet (first run before thumbnail-report.js has ever run) — keep alternating.
     }
-  } catch {
-    // No winner file yet (first run before thumbnail-report.js has ever run) — keep alternating.
   }
+  // Black-and-white day? Exactly one channel per day (see blackAndWhiteSlotForToday at the top of
+  // this file). On that channel the B&W thumbnail's plain/text version is set by the schedule,
+  // overriding the colour alternation above; every other channel today keeps its colour thumbnail.
+  const bwSlot = blackAndWhiteSlotForToday();
+  const isBlackAndWhiteToday = bwSlot.channel === String(CHANNEL_ID);
+  if (isBlackAndWhiteToday) {
+    thumbnailVariant = bwSlot.variant;
+  }
+  console.log(
+    `Thumbnail: variant ${thumbnailVariant} (${thumbnailVariant === "A" ? "plain" : "text"}), ` +
+      `${isBlackAndWhiteToday ? "BLACK & WHITE" : "colour"} — today's B&W slot is channel ${bwSlot.channel} (${bwSlot.variant === "A" ? "plain" : "text"}).`
+  );
   // Variant A stays the plain, text-free photo exactly as before. Variant B now gets a short,
   // high-contrast title overlay (book's Ch. 8: face/text thumbnails beat plain photos 2-4x on
   // CTR) — this is a deliberate A/B test between the two styles, not a replacement of A. Built
@@ -720,13 +820,13 @@ async function main() {
   // stays completely plain/text-free, per the existing A/B design.
   const thumbNumberTextForVariant = thumbnailVariant === "B" ? todaysNumber : null;
   try {
-    await generateThumbnail({ imagePath: thumbSourcePath, outPath: thumbPath, titleText: thumbTitleTextForVariant, numberText: thumbNumberTextForVariant });
+    await generateThumbnail({ imagePath: thumbSourcePath, outPath: thumbPath, titleText: thumbTitleTextForVariant, numberText: thumbNumberTextForVariant, grayscale: isBlackAndWhiteToday });
   } catch (e) {
     const otherSourcePath = thumbnailVariant === "A" ? thumbSourcePathB : thumbSourcePathA;
     console.warn(`Thumbnail generation (variant ${thumbnailVariant}) failed, retrying with the other photo:`, e.message);
     // Keep the same text/no-text treatment on the fallback photo — only the source image
     // changes, not which variant's style is being attempted.
-    await generateThumbnail({ imagePath: otherSourcePath, outPath: thumbPath, titleText: thumbTitleTextForVariant, numberText: thumbNumberTextForVariant });
+    await generateThumbnail({ imagePath: otherSourcePath, outPath: thumbPath, titleText: thumbTitleTextForVariant, numberText: thumbNumberTextForVariant, grayscale: isBlackAndWhiteToday });
   }
 
   // 3d) Chapters — built from the already-measured scene durations, zero extra API calls or
@@ -765,6 +865,16 @@ async function main() {
     `\n\n#HDLGroup #${book.slug.replace(/-/g, "")}`;
   const baseDescription = translatableDescription + chaptersBlock + untranslatedSuffix;
   let attributionSuffix = "";
+  // Trending-term disclosure + headline credit (English only, appended after translation like the
+  // credit lines below). Says plainly why the term appears, and credits the outlet whose headline
+  // is shown in the video.
+  if (trend?.term) {
+    attributionSuffix += `\n\nTrending in searches right now: ${trend.term}`;
+    if (newsInfo) {
+      attributionSuffix += `\nHeadline shown in the video: ${newsInfo.headline} (${newsInfo.source})`;
+      if (/^https?:\/\//.test(newsInfo.url || "")) attributionSuffix += `\n${newsInfo.url}`;
+    }
+  }
   if (musicTrack) attributionSuffix += `\n\n${attributionLine(musicTrack)}`;
   // Credit both thumbnail photographers, not just whichever photo ended up as the actual
   // thumbnail — both photos were sourced and rendered for this video's A/B test.
@@ -801,7 +911,7 @@ async function main() {
   // an empty tags array — a real test of "no tags," not just an empty-looking field.
   let tags = [];
   if (TAGS_ENABLED) {
-    const baseTags = [book.title, "HDL Group", book.angle, "ebook"];
+    const baseTags = [book.title, "HDL Group", book.angle, "ebook", ...(trend?.term ? [trend.term] : [])];
     const weeklyKeywordsData = await loadWeeklyKeywordsFile();
     const dailyKeywordsData = await loadDailyKeywordsFile();
     const fixedWeeklyKeywords = loadFixedWeeklyKeywords(weeklyKeywordsData);
@@ -898,6 +1008,9 @@ async function main() {
     const shortScenes = [];
     let shortTotal = 0;
     for (const scene of built) {
+      // The news-card scene only makes sense with its card on screen (landscape) — the vertical
+      // Short is rebuilt from clip + captions only, so it skips that scene.
+      if (scene.newsCardPath) continue;
       if (shortTotal >= SHORT_MIN_SECONDS && shortTotal + scene.duration > SHORT_MAX_SECONDS) break;
       shortScenes.push(scene);
       shortTotal += scene.duration;
@@ -971,7 +1084,9 @@ async function main() {
         `Read the full book: ${SITE_URL}\n\n` +
         `#Shorts #HDLGroup #${book.slug.replace(/-/g, "")}`;
       const shortBaseDescription = shortTranslatableDescription + shortUntranslatedSuffix;
-      const shortAttributionSuffix = musicTrack ? `\n\n${attributionLine(musicTrack)}` : "";
+      const shortAttributionSuffix =
+        (trend?.term ? `\n\nTrending in searches right now: ${trend.term}` : "") +
+        (musicTrack ? `\n\n${attributionLine(musicTrack)}` : "");
       const shortDescription = shortBaseDescription + shortAttributionSuffix;
 
       // Translated title/description, matching the main video — same 15 languages + English.
@@ -995,7 +1110,7 @@ async function main() {
       let shortBaseTags = [];
       let shortTags = [];
       if (TAGS_ENABLED) {
-        shortBaseTags = [book.title, "HDL Group", book.angle, "Shorts"];
+        shortBaseTags = [book.title, "HDL Group", book.angle, "Shorts", ...(trend?.term ? [trend.term] : [])];
         const shortWeeklyKeywordsData = await loadWeeklyKeywordsFile();
         const shortDailyKeywordsData = await loadDailyKeywordsFile();
         const shortFixedWeeklyKeywords = loadFixedWeeklyKeywords(shortWeeklyKeywordsData);
@@ -1215,6 +1330,10 @@ async function main() {
       description: translatableDescription,
       thumbnail_url: `https://i.ytimg.com/vi/${uploaded.id}/maxresdefault.jpg`,
       thumbnail_variant: thumbnailVariant,
+      thumbnail_bw: isBlackAndWhiteToday,
+      trend_term: trend?.term || null,
+      trend_in_title: titleHasTrend,
+      news_headline: newsInfo?.headline || null,
       script_format: format.id,
       caption_style: captionStyle.id,
       duration_seconds: Math.round(totalSeconds),
