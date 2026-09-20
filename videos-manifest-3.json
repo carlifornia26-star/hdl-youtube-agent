@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "hixITV3CxP0",
+      "short_video_id": "O9I5BkP82Ew",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "Most Pets Receive Less Care Than Expected",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/hixITV3CxP0/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "direct-hook",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 652,
+      "published_at": "2026-09-20T17:13:56.012Z"
+    },
+    {
       "video_id": "kV9O2FvWun8",
       "short_video_id": "AJRwVSCDOR0",
       "book_slug": "youtube-algorithms",
@@ -191,5 +209,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-09-19T16:39:13.882Z"
+  "updated_at": "2026-09-20T17:13:56.012Z"
 }
