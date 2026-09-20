@@ -533,8 +533,15 @@ ${list}
 - PHRASING VARIETY RULE — never introduce two of these with the same lead-in, and don't default to "As [name] once said" every single time. Rotate across different natural framings depending on what fits the sentence — for example: naming the year first ("Back in [year]..."), naming the number first ("Here's a number that still surprises people..."), naming the source first ("A [institution] survey found..."), framing it as a belief held before it was proven right ("Long before anyone agreed with them, [name] was convinced that..."), or framing it as an established custom ("This isn't new — [place] has treated it as ordinary for [time period]..."). Pick whichever reads most naturally for that specific fact; never force the same lead-in twice in one script.`;
 }
 
-export async function generateScript(book, format = FORMAT_POOL[0], channelOffset = 0) {
+export async function generateScript(book, format = FORMAT_POOL[0], channelOffset = 0, trend = null) {
   const disclaimer = pickTodaysDisclaimer(book.complianceTopic, new Date(), channelOffset);
+  // Today's trending Google search term (see daily-trend.js), or null. When present the script must
+  // work that exact term in twice — as an honest hook, never as a claim about the term itself,
+  // since the model can't verify current events. A news-headline scene is inserted by
+  // generate-video.js right after scene 2, so the script is told not to describe any headline.
+  const trendRule = trend?.term
+    ? `\n- TRENDING TIE-IN RULE — the search term ${trend.term} is trending on Google right now. Say that exact term (spelled exactly like that) in EXACTLY two lines of the script: once in scene 1 or scene 2, as a quick hook that connects it to ${book.angle} (a suggested connection: ${trend.tieIn || `what people search for right now says something about ${book.angle}`} — improve on it if you can), and once more in the middle stretch (roughly the 45%-55% mark) as a brief callback or analogy. Each time, keep it to ONE sentence. Say only that people are searching for it or that it is in the conversation right now — do NOT state any facts, events, scores, results, quotes, or claims about ${trend.term} itself (you cannot verify current events), and never suggest the book is about ${trend.term}. The tie-in must feel honest, not forced, and everything else in the script stays about the book. A separate news-headline beat is inserted automatically right after scene 2, so do NOT mention or describe any headline yourself.`
+    : "";
   const grounding = pickTodaysGrounding(book.slug, 3, new Date(), channelOffset);
   const prompt = `You are the Universal Master Narrator — a polymathic, warm, sharply engaging storyteller equally at home with a curious teenager and a skeptical adult, fluent across science, history, technology, culture, and everyday life. You blend real intellectual rigor with plain-spoken clarity, dry wit, and genuine emotional depth — never dry-lecture, never robotic.
 
@@ -594,7 +601,7 @@ Strict rules:
     disclaimer
       ? `\n- COMPLIANCE RULE — somewhere between the one-third and two-thirds mark of the scenes (never in the first third, where it would undercut the opening hook right as it's landing), work in this exact idea as a natural, spoken aside (not a legal footnote): ${disclaimer}`
       : ""
-  }${renderGroundingBlock(grounding)}`;
+  }${trendRule}${renderGroundingBlock(grounding)}`;
 
   return requestSceneScript(prompt, SCRIPT_MIN_SCENES, SCRIPT_MAX_SCENES, 6000, [], "finalOnly");
 }
@@ -901,21 +908,42 @@ async function requestTitle(prompt, maxTokens) {
 
 // Up to 3 attempts, each with a different style, until the title no longer resembles a recent one.
 // If all 3 still look similar the last one is used anyway — a slightly familiar title beats failing.
-async function generateDistinctTitle({ label, buildPrompt, styleIdx, recentTitles, number = null, maxTokens }) {
+// mustInclude (optional): a phrase (today's trending search term) the title has to contain. Checked
+// case-insensitively with whitespace normalised. If 3 attempts still miss it this THROWS instead of
+// returning a title without it, so the caller can fall back to a normal, non-trend title.
+function titleHasPhrase(title, phrase) {
+  const norm = (x) => String(x || "").toLowerCase().replace(/\s+/g, " ").trim();
+  return norm(title).includes(norm(phrase));
+}
+
+async function generateDistinctTitle({ label, buildPrompt, styleIdx, recentTitles, number = null, maxTokens, mustInclude = null }) {
   let title = "";
   for (let attempt = 0; attempt < 3; attempt++) {
     const idx = (styleIdx + attempt * 5) % TITLE_STYLES.length;
     title = await requestTitle(buildPrompt(idx), maxTokens);
     if (!title) throw new Error(`${label}: model returned no title`);
+    if (mustInclude && !titleHasPhrase(title, mustInclude)) {
+      console.warn(`${label}: "${title}" is missing the trending term "${mustInclude}", retrying (attempt ${attempt + 1}/3).`);
+      continue;
+    }
     if (!titleTooSimilar(title, recentTitles, number)) return title;
     console.warn(`${label}: "${title}" too close to a recent title, retrying with a different style (attempt ${attempt + 1}/3).`);
+  }
+  if (mustInclude && !titleHasPhrase(title, mustInclude)) {
+    throw new Error(`${label}: no title containing the trending term "${mustInclude}" after 3 attempts`);
   }
   return title;
 }
 
+// Prompt line shared by both title generators when a trending term is in play.
+function trendTitleLine(trendTerm) {
+  if (!trendTerm) return "";
+  return `\n- TRENDING WORD (required): the title MUST contain this exact word/phrase, spelled exactly like this: ${trendTerm}. Use it as an honest tie-in to the topic (for example what it shows about, or how it relates to, the topic) — never imply the video is about ${trendTerm} itself or about the news, never invent facts about it, and keep the title readable, not stuffed.`;
+}
+
 // Curiosity title (no number). Steered AWAY from generic AI clickbait ("You Won't Believe...",
 // ALL CAPS, emoji) toward a specific, human-editor-sounding title in today's TITLE_STYLE.
-export async function generateCuriosityTitle(book, styleIdx = 0, recentTitles = []) {
+export async function generateCuriosityTitle(book, styleIdx = 0, recentTitles = [], trendTerm = null) {
   const buildPrompt = (idx) => `Write ONE YouTube video title for a teaser video about the topic "${book.angle}" (the video does not name the ebook title itself, only the topic).
 
 Requirements:
@@ -924,11 +952,11 @@ Requirements:
 - Do NOT use any of these overused patterns: "You Won't Believe...", "This One Trick...", "The Truth About...", "Nobody Talks About...", "Here's Why...", "Impacts ... Lives", "Experts Reveal", ALL CAPS words, excessive punctuation (no "!!", no "?!"), emoji.
 - Sound like a specific, well-informed editor wrote it about this exact topic — not a generic template that could apply to any video.
 ${buildTitleStyleBlock(idx, recentTitles)}
-- Use a concrete number only if it fits naturally and is structurally true of the content (a count of items, signs, steps, minutes). Skip it if forced.
+- Use a concrete number only if it fits naturally and is structurally true of the content (a count of items, signs, steps, minutes). Skip it if forced.${trendTitleLine(trendTerm)}
 - Title Case every major word (capitalize each significant word, skip small connector words like "a", "the", "of", "to"). Do not write in ALL CAPS or plain sentence case.
 - Output ONLY the title text, nothing else — no quotes, no explanation.`;
 
-  const title = await generateDistinctTitle({ label: "generateCuriosityTitle", buildPrompt, styleIdx, recentTitles, maxTokens: 60 });
+  const title = await generateDistinctTitle({ label: "generateCuriosityTitle", buildPrompt, styleIdx, recentTitles, maxTokens: trendTerm ? 80 : 60, mustInclude: trendTerm });
   return title.slice(0, 100); // YouTube's hard title cap, same as everywhere else titles are used
 }
 
@@ -936,7 +964,7 @@ ${buildTitleStyleBlock(idx, recentTitles)}
 // 100,000,000 and 2,000,000,000, comma-formatted) — NOT by this model, since an LLM can't be
 // trusted to reproduce a long digit string with exact comma placement. This function builds a
 // natural-sounding title AROUND that exact number, in today's TITLE_STYLE.
-export async function generateNumberTitle(book, formattedNumber, styleIdx = 0, recentTitles = []) {
+export async function generateNumberTitle(book, formattedNumber, styleIdx = 0, recentTitles = [], trendTerm = null) {
   const buildPrompt = (idx) => `Write ONE YouTube video title for a teaser video about the topic "${book.angle}" (the video does not name the ebook title itself, only the topic).
 
 The title MUST include this exact number, written EXACTLY as given below, somewhere natural in the sentence: ${formattedNumber}
@@ -947,11 +975,11 @@ Requirements:
 - Curiosity-driven and specific to this exact topic — treat the big, oddly-specific number as the hook itself. This is a stylistic curiosity device, not a literal financial claim about the book or company.
 - Do NOT use these overused frames: "<Topic> Impacts <number> Lives", "<Topic> Experts Reveal <number> ...", "<number> People ...", "You Won't Believe...", "This One Trick...", "The Truth About...", ALL CAPS words, excessive punctuation (no "!!", no "?!"), emoji.
 - Sound like a specific, well-informed editor wrote it about this exact topic — not a generic template that could apply to any video.
-${buildTitleStyleBlock(idx, recentTitles)}
+${buildTitleStyleBlock(idx, recentTitles)}${trendTitleLine(trendTerm)}
 - Title Case every major word (capitalize each significant word, skip small connector words like "a", "the", "of", "to"). Do not write in ALL CAPS or plain sentence case.
 - Output ONLY the title text, nothing else — no quotes, no explanation.`;
 
-  let title = await generateDistinctTitle({ label: "generateNumberTitle", buildPrompt, styleIdx, recentTitles, number: formattedNumber, maxTokens: 80 });
+  let title = await generateDistinctTitle({ label: "generateNumberTitle", buildPrompt, styleIdx, recentTitles, number: formattedNumber, maxTokens: 90, mustInclude: trendTerm });
 
   // The model is unreliable at preserving an exact long digit string verbatim — if it dropped,
   // rounded, or reformatted the number, append it directly rather than trusting a retry to get
@@ -1000,4 +1028,58 @@ export async function translateTermToEnglish(term, sourceLang) {
     console.warn(`translateTermToEnglish: "${original}" (${sourceLang}) failed, keeping original:`, e.message);
     return original;
   }
+    }
+
+// --- Trending-term selection ---------------------------------------------------------------
+// daily-trend.js hands over a shortlist of today's trending Google search terms (already stripped
+// of obviously sensitive ones). This asks the model to pick the ONE that can be tied to the book's
+// topic most honestly — or none. Returns { index (0-based), fit (0-10), tieIn } or null when
+// nothing fits. Kept in this file because `run` (the Workers AI caller) is private here.
+export async function selectTrendTieIn(book, candidates) {
+  if (!candidates?.length) return null;
+  const list = candidates.map((t, i) => `${i + 1}. ${t}`).join("\n");
+  const prompt = `A book-teaser YouTube channel wants to weave ONE currently trending Google search term into a video about the topic "${book.angle}" (from the ebook "${book.title}").
+
+Trending search terms right now:
+${list}
+
+Pick the ONE term that can be tied to the topic most honestly and naturally — as an analogy, a contrast, or a hook like "this is what people are searching for right now, and here is what it says about ${book.angle}".
+
+Hard rules:
+- Never pick anything about a death, illness, crime, disaster, war, politics or elections, lawsuits, scandal, or adult content.
+- Avoid terms that are the name of one specific real person (celebrity, athlete, politician, victim, suspect) — tying a real individual to a book they have nothing to do with is misleading. Teams, shows, games, products, events, holidays, places and general topics are fine.
+- If nothing can be tied in honestly without stretching, answer choice 0.
+
+Answer as JSON: choice = the number of the term (1-${candidates.length}) or 0 for none; fit = 0-10 for how natural and honest the tie-in is; tie_in = ONE short sentence (max 25 words) describing the connection between the term and ${book.angle}, making no claims about news or facts regarding the term.`;
+
+  const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
+    messages: [{ role: "user", content: prompt }],
+    max_tokens: 200,
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        type: "object",
+        properties: {
+          choice: { type: "integer" },
+          fit: { type: "integer" },
+          tie_in: { type: "string" },
+        },
+        required: ["choice", "fit", "tie_in"],
+      },
+    },
+  });
+
+  let parsed = result?.response;
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return null;
+    }
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const choice = Number(parsed.choice);
+  const fit = Number(parsed.fit);
+  if (!Number.isInteger(choice) || choice < 1 || choice > candidates.length) return null;
+  return { index: choice - 1, fit: Number.isFinite(fit) ? fit : 0, tieIn: String(parsed.tie_in || "").trim().slice(0, 240) };
     }
