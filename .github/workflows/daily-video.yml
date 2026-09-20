@@ -444,6 +444,13 @@ jobs:
             automation-health/ \
             2>/dev/null || true
 
+          # Trending-term history (shared by all channels, so a term isn't reused the same day or
+          # within a week). Added on its own: `git add` with a missing path fails the whole command,
+          # and this file may not exist yet on a first run.
+          if [ -f trend-history.json ]; then
+            git add trend-history.json || true
+          fi
+
           if git diff --cached --quiet; then
             echo "No repository state changes to commit."
             exit 0
