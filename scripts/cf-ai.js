@@ -658,7 +658,11 @@ Strict rules:
 // Translates {title, description} into a small set of target languages for YouTube `localizations`.
 // Kept intentionally smaller than the 56-language article pipeline to stay inside the daily
 // Workers AI neuron budget you're already spending on articles — see SETUP.md.
-export const VIDEO_LANGS = ["es", "fr", "pt", "de", "hi", "ar", "id", "sw", "ja", "ru", "ko", "zh", "it", "tr", "vi"];
+// SKIP_TRANSLATIONS=true (set per channel in daily-video.yml) turns translation off: an empty list
+// means no localized titles/descriptions and no translated caption tracks — English only.
+export const VIDEO_LANGS = process.env.SKIP_TRANSLATIONS === "true"
+  ? []
+  : ["es", "fr", "pt", "de", "hi", "ar", "id", "sw", "ja", "ru", "ko", "zh", "it", "tr", "vi"];
 
 // YouTube caps snippet.title (and each localization's title) at 100 characters, and
 // description at 5000 characters: https://developers.google.com/youtube/v3/docs/videos
@@ -1082,4 +1086,4 @@ Answer as JSON: choice = the number of the term (1-${candidates.length}) or 0 fo
   const fit = Number(parsed.fit);
   if (!Number.isInteger(choice) || choice < 1 || choice > candidates.length) return null;
   return { index: choice - 1, fit: Number.isFinite(fit) ? fit : 0, tieIn: String(parsed.tie_in || "").trim().slice(0, 240) };
-    }
+        }
