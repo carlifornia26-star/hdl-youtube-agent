@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "wRo50J7nibw",
+      "short_video_id": "0qIkbGv54ic",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "Advanced Ai Business Leaders Explore Google Gemini Amid 239,660,538 Data Points",
+      "description": "Curious about advanced AI business strategy? AGE ONE: Premium Edition breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/wRo50J7nibw/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Google Gemini",
+      "trend_in_title": true,
+      "news_headline": "Google Confirms Gemini AI Breached Three Firms",
+      "script_format": "cold-open",
+      "caption_style": "wide-orange",
+      "duration_seconds": 536,
+      "published_at": "2026-09-21T13:50:40.830Z"
+    },
+    {
       "video_id": "-z5h6KdFJm0",
       "short_video_id": "eomt2BF1IAc",
       "book_slug": "pet-friendly",
@@ -57,5 +75,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-09-19T12:11:17.370Z"
+  "updated_at": "2026-09-21T13:50:40.831Z"
 }

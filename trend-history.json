@@ -1,3 +1,11 @@
 {
-  "picks": []
+  "picks": [
+    {
+      "date": "2026-09-21",
+      "channel": "4",
+      "term": "Google Gemini",
+      "headline": null
+    }
+  ],
+  "updated_at": "2026-09-21T13:26:28.180Z"
 }
