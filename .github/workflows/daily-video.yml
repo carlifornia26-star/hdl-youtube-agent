@@ -25,8 +25,8 @@ on:
     # one plain UTC cron per channel is now sufficient.
     - cron: "0 7 * * *"  # Channel 4 trigger — 07:00 UTC (9h buffer before the 16:00 UTC publish target)
     - cron: "0 9 * * *"  # Channel 1 trigger — 09:00 UTC (7h buffer)
-    # Channel 2 trigger — PAUSED. To resume, delete the leading "# " on the next line.
-    # - cron: "0 11 * * *" # Channel 2 trigger — 11:00 UTC (5h buffer)
+    # Channel 2 trigger — resumed, English-only (translations off for channel 2, see SKIP_TRANSLATIONS below).
+    - cron: "0 11 * * *" # Channel 2 trigger — 11:00 UTC (5h buffer)
     - cron: "0 13 * * *" # Channel 3 trigger — 13:00 UTC (3h buffer)
 
   workflow_dispatch:
@@ -288,6 +288,8 @@ jobs:
 
           DRY_RUN_PRIVATE: ${{ vars.DRY_RUN_PRIVATE }}
           CHANNEL_ID: ${{ steps.resolve.outputs.channel }}
+          # Channel 2 only: no translations (saves Cloudflare AI quota). Empty for other channels.
+          SKIP_TRANSLATIONS: ${{ steps.resolve.outputs.channel == '2' && 'true' || '' }}
           YT_VIDEO_LOCATION_DESCRIPTION: ${{ vars.YT_VIDEO_LOCATION_DESCRIPTION }}
           PUBLISH_HOUR_UTC: ${{ steps.resolve.outputs.publish_hour_utc }}
           PUBLISH_MINUTE_UTC: ${{ steps.resolve.outputs.publish_minute_utc }}
