@@ -2,10 +2,16 @@
   "picks": [
     {
       "date": "2026-09-21",
+      "channel": "1",
+      "term": "Games",
+      "headline": null
+    },
+    {
+      "date": "2026-09-21",
       "channel": "4",
       "term": "Google Gemini",
       "headline": null
     }
   ],
-  "updated_at": "2026-09-21T13:26:28.180Z"
+  "updated_at": "2026-09-21T15:27:41.230Z"
 }

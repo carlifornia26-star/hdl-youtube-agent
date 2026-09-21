@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "HtQ0LtJ6Evc",
+      "short_video_id": "2j7oBcGG3kw",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "Growing a channel with the algorithm | HDL Group",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/HtQ0LtJ6Evc/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Games",
+      "trend_in_title": false,
+      "news_headline": "India at Asian Games 2026: Full schedule of medal events and fixtures on September 22, Tuesday",
+      "script_format": "direct-address",
+      "caption_style": "classic-pop",
+      "duration_seconds": 557,
+      "published_at": "2026-09-21T15:49:33.473Z"
+    },
+    {
       "video_id": "YP42dl58mhs",
       "short_video_id": "8lQmiJjxvsA",
       "book_slug": "art-of-joy",
@@ -262,5 +280,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-09-20T13:46:07.413Z"
+  "updated_at": "2026-09-21T15:49:33.474Z"
 }
