@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "Nh07tuQF7dk",
+      "short_video_id": "_q0XAssUh1g",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "Fewer Than 1,190,472,231 Businesses Adopt Advanced Ai Strategies",
+      "description": "Curious about advanced AI business strategy? AGE ONE: Premium Edition breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/Nh07tuQF7dk/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "cold-open",
+      "caption_style": "wide-orange",
+      "duration_seconds": 661,
+      "published_at": "2026-09-22T18:11:56.247Z"
+    },
+    {
       "video_id": "FnAJoUJa0OU",
       "short_video_id": "zKuL37s52aY",
       "book_slug": "age-one",
@@ -227,5 +245,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-09-21T19:07:29.852Z"
+  "updated_at": "2026-09-22T18:11:56.248Z"
 }
