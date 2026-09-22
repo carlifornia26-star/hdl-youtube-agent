@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-09-22",
+      "channel": "2",
+      "term": "Chat Gpt",
+      "headline": null
+    },
+    {
       "date": "2026-09-21",
       "channel": "3",
       "term": "Google",
@@ -19,5 +25,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-09-21T18:34:55.104Z"
+  "updated_at": "2026-09-22T15:26:13.661Z"
 }

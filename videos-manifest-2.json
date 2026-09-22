@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "0iyBdLtQCys",
+      "short_video_id": "Ee7j99NuPLk",
+      "book_slug": "age-one",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-complete-ai-business-mastery",
+      "title": "How Chat Gpt Reveals Information Economy Shifts",
+      "description": "Curious about AI & the information economy? AGE ONE breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/0iyBdLtQCys/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Chat Gpt",
+      "trend_in_title": true,
+      "news_headline": "Ask ChatGPT ‘What are you unsure about?’ — it’s the simplest trick I’ve found for getting better responses",
+      "script_format": "myth-bust",
+      "caption_style": "lower-third",
+      "duration_seconds": 536,
+      "published_at": "2026-09-22T15:45:32.354Z"
+    },
+    {
       "video_id": "CNQz44EiCpc",
       "short_video_id": "WWO02Cwbe5A",
       "book_slug": "science-of-feeling-great",
@@ -149,5 +167,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-09-18T15:05:18.491Z"
+  "updated_at": "2026-09-22T15:45:32.355Z"
 }
