@@ -225,9 +225,13 @@ function findOverusedWord(scenes) {
 // caught across the whole video, not just within this one batch — see countRepetition above.
 // `ctaMode` (optional): "finalOnly" (main script — buy/visit-website language belongs ONLY in the
 // last scene), "never" (top-up scenes — it belongs nowhere), or "none" (skip the check).
-async function requestSceneScript(prompt, minItems, maxItems, maxTokens, priorLines = [], ctaMode = "none") {
+// `model` (optional): Workers AI model id. Defaults to the 70B model; top-up scenes pass the much
+// cheaper 8B model (~6x fewer neurons) to stay inside the free 10,000-neuron daily allowance.
+const SCRIPT_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+const CHEAP_SCRIPT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
+async function requestSceneScript(prompt, minItems, maxItems, maxTokens, priorLines = [], ctaMode = "none", model = SCRIPT_MODEL) {
   async function attempt(promptText) {
-    const result = await run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
+    const result = await run(model, {
       messages: [{ role: "user", content: promptText }],
       max_tokens: maxTokens,
       response_format: {
@@ -317,7 +321,10 @@ async function requestSceneScript(prompt, minItems, maxItems, maxTokens, priorLi
   // still left the video shipping with a repeated line or a leaked CTA, since accepting any retry
   // that was merely "somewhat better" than the first wasn't a high enough bar. Stops early once a
   // fully clean attempt is found, so it doesn't burn extra calls once nothing is left to fix.
-  for (let i = 0; issues.total > 0 && i < 2; i++) {
+  // Free-tier budget (Sep 23): retries were the biggest neuron cost (up to 3 full 70B calls per
+  // batch, mostly chasing repeated phrases). Now: at most ONE retry, and only when CTA/brand/urgency
+  // language leaked — the owner's priority. Repeats are logged but no longer trigger a retry.
+  for (let i = 0; issues.ctaLeaks > 0 && i < 1; i++) {
     console.warn(
       `Script generation: attempt ${i + 1}/3 had ${issues.dupes} repeated opening(s)/phrase(s), ${issues.ctaLeaks} CTA leak(s)${issues.overused ? `, overused word "${issues.overused.word}" (${issues.overused.count} scenes)` : ""} — retrying with a stronger reminder.`
     );
@@ -668,7 +675,7 @@ Strict rules:
 - Every scene needs a concrete, sensory detail (not an abstract claim) and should escalate slightly past the previous scene's stakes rather than repeating the same weight of point. Use direct "you" language addressing the viewer. Vary sentence length within each scene rather than uniform-length sentences. At least one of these scenes should plant a specific, unresolved curiosity hook without revealing the book's actual chapters/frameworks/conclusions.
 - DELIVERY — alternate sharp/authoritative lines with plain, human ones; don't stay in constant expert mode. If space allows across these ${count} scenes: one reversal ("you'd think X, but actually Y"), one rhetorical question, one callback-style reference to an earlier idea, one named pattern, one micro-scene instead of a flat claim, a brief self-correction beat, a stakes-forward line, a false-summary-then-twist, a named contrast pair, one single-sentence one-liner scene, an identity-address line, or a scale-contrast line. Never force more than one or two of these into a single scene.`;
 
-  return requestSceneScript(prompt, count, count, 3000, existingLines, "never");
+  return requestSceneScript(prompt, count, count, 3000, existingLines, "never", CHEAP_SCRIPT_MODEL);
 }
 
 // Trending-news segment (owner request, Sep 23): instead of one "this is trending today" line,
