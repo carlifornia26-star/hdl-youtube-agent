@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "-Xnte1Ogq0I",
+      "short_video_id": "npkUUrivKD4",
+      "book_slug": "age-one",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-complete-ai-business-mastery",
+      "title": "Rethinking Retirement Through AI Driven Information Economy Insights 1,012,265,419",
+      "description": "Curious about AI & the information economy? AGE ONE breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/-Xnte1Ogq0I/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Retirement",
+      "trend_in_title": true,
+      "news_headline": "Bill Would Credit All Active Time To Early Retirement",
+      "script_format": "myth-bust",
+      "caption_style": "lower-third",
+      "duration_seconds": 556,
+      "published_at": "2026-09-23T07:56:55.702Z"
+    },
+    {
       "video_id": "HtQ0LtJ6Evc",
       "short_video_id": "2j7oBcGG3kw",
       "book_slug": "youtube-algorithms",
@@ -280,5 +298,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-09-21T15:49:33.474Z"
+  "updated_at": "2026-09-23T07:56:55.702Z"
 }
