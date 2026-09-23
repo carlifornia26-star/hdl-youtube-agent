@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "WQMfsw4BWK0",
+      "short_video_id": "7bMXpa2k77A",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Weather Cape Town Influences 1,485,275,167 Wellness",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/WQMfsw4BWK0/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": true,
+      "trend_term": "Weather Cape Town",
+      "trend_in_title": true,
+      "news_headline": "Thunderstorms clear out, leaving a calmer, milder day – Wednesday weather forecast",
+      "script_format": "direct-address",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 591,
+      "published_at": "2026-09-23T07:27:45.142Z"
+    },
+    {
       "video_id": "wRo50J7nibw",
       "short_video_id": "0qIkbGv54ic",
       "book_slug": "age-one-premium",
@@ -75,5 +93,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-09-21T13:50:40.831Z"
+  "updated_at": "2026-09-23T07:27:45.143Z"
 }
