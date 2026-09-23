@@ -141,6 +141,19 @@ const CTA_LEAK_PATTERNS = [
   /\bbuy (the |this )?book\b/i,
   /\bread the full book\b/i,
   /\bhigh definition learning( group)?('s)? website\b/i,
+  // Owner request (Sep 23): the brand name belongs ONLY in the closing scene, said once.
+  /\bhigh definition learning\b/i,
+  /\bthe time is now\b/i,
+];
+
+// Pushy urgency lines the owner asked to drop entirely — counted as a leak in EVERY scene,
+// including the closing one ("what are you waiting for... the time is now" said too much).
+const URGENCY_PATTERNS = [
+  /\bwhat are you waiting for\b/i,
+  /\bthe time is now\b/i,
+  /\bdon'?t miss out\b/i,
+  /\bwhy wait\b/i,
+  /\bact now\b/i,
 ];
 
 function countCTALeakage(scenes, ctaMode = "none") {
@@ -149,7 +162,10 @@ function countCTALeakage(scenes, ctaMode = "none") {
   let leaks = 0;
   scenes.forEach((s, i) => {
     const isAllowedScene = ctaMode === "finalOnly" && i === lastIndex;
-    if (isAllowedScene) return;
+    if (isAllowedScene) {
+      if (URGENCY_PATTERNS.some((p) => p.test(s.line))) leaks++;
+      return;
+    }
     if (CTA_LEAK_PATTERNS.some((p) => p.test(s.line))) leaks++;
   });
   return leaks;
@@ -555,11 +571,11 @@ Strict rules:
 - Build curiosity: pose the problem the book addresses, why it matters right now, and what kind of reader it's for — without giving away the answers.
 - Scene 1 is the single highest-leverage moment in the whole video for whether a viewer keeps watching past the first 15-22 seconds — most of the video's session-time performance is decided right there. Today's opening technique (${format.label}): ${format.opening} Do NOT open with throat-clearing, a generic greeting, or a soft, overused opener like "Have you ever wondered..." or "In today's fast-paced world...". The book's title mention (see below) can land in scene 1 or scene 2 — it doesn't have to be the first sentence itself.
 - Explicitly mention once, naturally, that the book is available in English only.
-- End with a call to action to read the full book on the High Definition Learning Group website.
+- End with ONE short, calm closing scene (the final scene only) that says the full book, "${book.title}", is on the High Definition Learning Group website. Say "High Definition Learning Group" exactly once and the title exactly once in that line, and nowhere else in the script. Keep it to one or two plain sentences with no urgency phrases at all (never "what are you waiting for," "the time is now," "don't miss out," "why wait," or similar).
 - CTA CONCENTRATION RULE — buy/read-now urgency language ("read it now," "why wait," "don't miss out," "what are you waiting for," "get your copy," "start your journey today," "visit the website," "check out the website," or any close paraphrase of these) may appear in EXACTLY ONE scene: the final call-to-action scene required above. This is the single most common way a script fails: every other scene must build curiosity ONLY and must not mention the website, mention buying/reading the book, or nudge the viewer toward action in any way, even softly. If you find yourself writing anything sale- or website-adjacent before the last scene, cut it and replace it with a pure curiosity beat instead — a script that pushes the sale in six different scenes reads as desperate and makes viewers leave well before the actual CTA lands.
 - VOCABULARY VARIETY RULE — when the book's core subject is a single common noun (e.g. "pet," "AI," "Bitcoin"), do not default to that exact same word in nearly every scene — it reads as monotonous and repetitive even though it's technically on-topic. Rotate between the plain term, natural synonyms, more specific references (a named type, a concrete example), and pronouns where the meaning is already clear from context, the same way a human writer would vary their word choice across a 10-minute piece.
 - Do not use quotation marks of any kind inside a line's text — rephrase instead of quoting anything.
-- Mention the book's exact title, "${book.title}", naturally exactly 3 times across the whole script — once early to introduce it, once in the middle to reinforce it, and once in the closing call to action. Do not use the title any other number of times; refer to it as "the book," "this guide," or similar in between.
+- Mention the book's exact title, "${book.title}", exactly ONCE in the whole script — only in the final closing scene. Everywhere else, refer to it as "the book," "this guide," or similar. Do not say "High Definition Learning Group" anywhere except that same final scene.
 - Produce between ${SCRIPT_MIN_SCENES} and ${SCRIPT_MAX_SCENES} scenes — more, shorter scenes than a typical script, so the visuals cut more often. Each scene's line is 3-4 sentences (roughly 40-55 words) written to be spoken naturally in about 15-22 seconds — the total script across all scenes should land around 2000-2300 words so the finished narration runs close to 10 minutes.
 - RETENTION RULE — no two scenes may start the same way or make the same point twice. Every single scene must open with a different sentence structure than every other scene: do not let more than one scene begin with the same few words (e.g. never open two scenes with "The algorithm is...", "You'll learn how to...", "But to do so, you need...", or any other repeated template). If you notice yourself about to reuse an opening or restate a point already made earlier in the script, rewrite it as a genuinely new angle, a new example, or skip it.
 - Avoid vague marketing filler that could apply to literally any topic — phrases like "a powerful tool," "a complex system," "a comprehensive approach," "valuable insights," "the ever-changing landscape," "take control of," "unlock your potential." Every line should say something SPECIFIC to this exact book's angle — a concrete scenario, a specific kind of person, a specific consequence — not an abstract claim that could be pasted into a script about any other topic.
@@ -653,6 +669,33 @@ Strict rules:
 - DELIVERY — alternate sharp/authoritative lines with plain, human ones; don't stay in constant expert mode. If space allows across these ${count} scenes: one reversal ("you'd think X, but actually Y"), one rhetorical question, one callback-style reference to an earlier idea, one named pattern, one micro-scene instead of a flat claim, a brief self-correction beat, a stakes-forward line, a false-summary-then-twist, a named contrast pair, one single-sentence one-liner scene, an identity-address line, or a scale-contrast line. Never force more than one or two of these into a single scene.`;
 
   return requestSceneScript(prompt, count, count, 3000, existingLines, "never");
+}
+
+// Trending-news segment (owner request, Sep 23): instead of one "this is trending today" line,
+// the narrator spends 2+ minutes explaining WHY the term is trending, over 3+ real news-headline
+// screenshots. The model is given the actual headlines (from Google News RSS, see
+// fetchTopHeadlines in daily-trend.js) and must stay strictly inside what they say — it cannot
+// verify current events on its own, so it may only restate, connect, and give general background.
+// No book title, no brand, no call to action in this segment (those stay in the closing scene).
+export async function generateTrendExplainer(book, trend, headlines, sceneCount = 14) {
+  const headlineBlock = headlines
+    .map((h, i) => `${i + 1}. "${h.headline}" (${h.source || "News"}, ${h.dateText || "recent"})`)
+    .join("\n");
+  const prompt = `You are the narrator of a YouTube video. Mid-video there is a short news segment about why the search term ${trend.term} is trending on Google right now. The viewer sees these real news headlines on screen, one after another:
+
+${headlineBlock}
+
+Write ${sceneCount} scenes that explain, in plain spoken English, why ${trend.term} is trending right now, walking through the headlines above in order.
+
+Strict rules:
+- Use ONLY what the headlines above actually say, plus widely known general background (what the term is, who is involved in general terms). Never invent numbers, scores, quotes, dates, names, or events that are not in the headlines. If the headlines leave something unclear, say it is still developing instead of guessing.
+- Scene 1 sets up the segment (people are searching ${trend.term}, here is why). The last scene briefly connects the story to ${book.angle} in one sentence, without naming the book.
+- Refer to headline 1, headline 2 and headline 3 (and more if listed) by what they report, in that order, spreading them across the segment.
+- Do NOT mention the book, its title, High Definition Learning Group, a website, or anything to buy or read. No call to action of any kind.
+- Each scene's line is 2-3 sentences (roughly 28-40 words), natural when spoken aloud. The whole segment must run at least 2 minutes when read aloud (at least 330 words total).
+- No quotation marks inside a line's text. No two scenes start the same way.
+- For every scene, also write a "visual" field: a short, concrete, literally-filmable phrase (3-8 words) for generic stock footage that fits the line (people, places, actions). Never a real named person, logo, broadcast, or news footage.`;
+  return requestSceneScript(prompt, Math.max(10, sceneCount - 2), sceneCount + 4, 2500, [], "never");
 }
 
 // Translates {title, description} into a small set of target languages for YouTube `localizations`.
