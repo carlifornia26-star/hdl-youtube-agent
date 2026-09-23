@@ -700,7 +700,7 @@ async function main() {
   // 3bb) Title — computed HERE, before the thumbnail block below, so the thumbnail's text
   // overlay (variant B) can draw the ACTUAL final title/number instead of a separate
   // approximation built from the book alone. Title deliberately does NOT include the book name
-  // (e.g. "Art of Joy", "Bitcoin Standard") — just the topic/angle. Anyone who wants the book
+  // (e.g. "Art of Joy", "Bitcoin Infrastructure") — just the topic/angle. Anyone who wants the book
   // name gets it from the description (translatableDescription below) and the narration.
   //
   // Number-title rotation: 2 of the 3 channels use a number-driven title on any given day, the
