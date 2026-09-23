@@ -684,7 +684,9 @@ Strict rules:
 // fetchTopHeadlines in daily-trend.js) and must stay strictly inside what they say — it cannot
 // verify current events on its own, so it may only restate, connect, and give general background.
 // No book title, no brand, no call to action in this segment (those stay in the closing scene).
-export async function generateTrendExplainer(book, trend, headlines, sceneCount = 14) {
+// `cheap` (optional): use the 8B model instead of 70B for this segment. Channel 2 passes true
+// (owner asked for less AI use on channel 2, Sep 23).
+export async function generateTrendExplainer(book, trend, headlines, sceneCount = 14, cheap = false) {
   const headlineBlock = headlines
     .map((h, i) => `${i + 1}. "${h.headline}" (${h.source || "News"}, ${h.dateText || "recent"})`)
     .join("\n");
@@ -702,7 +704,7 @@ Strict rules:
 - Each scene's line is 2-3 sentences (roughly 28-40 words), natural when spoken aloud. The whole segment must run at least 2 minutes when read aloud (at least 330 words total).
 - No quotation marks inside a line's text. No two scenes start the same way.
 - For every scene, also write a "visual" field: a short, concrete, literally-filmable phrase (3-8 words) for generic stock footage that fits the line (people, places, actions). Never a real named person, logo, broadcast, or news footage.`;
-  return requestSceneScript(prompt, Math.max(10, sceneCount - 2), sceneCount + 4, 2500, [], "never");
+  return requestSceneScript(prompt, Math.max(10, sceneCount - 2), sceneCount + 4, 2500, [], "never", cheap ? CHEAP_SCRIPT_MODEL : SCRIPT_MODEL);
 }
 
 // Translates {title, description} into a small set of target languages for YouTube `localizations`.
