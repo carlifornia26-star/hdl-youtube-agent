@@ -38,8 +38,8 @@ export const CATALOG = [
   },
   {
     slug: "bitcoin-standard",
-    title: "Bitcoin Standard",
-    titleVariants: ["Bitcoin Standard", "The Bitcoin Standard", "Bitcoin Standard: Digital Money Explained"],
+    title: "Bitcoin Infrastructure",
+    titleVariants: ["Bitcoin Infrastructure", "Bitcoin Infrastructure: Digital Money Explained", "Bitcoin Infrastructure: The Math of Money"],
     angle: "Bitcoin & digital finance",
     pageUrl: "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
     stockKeywords: ["bitcoin", "cryptocurrency", "blockchain", "digital finance", "stock market", "gold coins"],
@@ -106,4 +106,4 @@ export function pickTodaysBook(date = new Date(), channelOffset = 0) {
   const variants = book.titleVariants?.length ? book.titleVariants : [book.title];
   const displayTitle = variants[lap % variants.length];
   return { ...book, displayTitle };
-    }
+}
