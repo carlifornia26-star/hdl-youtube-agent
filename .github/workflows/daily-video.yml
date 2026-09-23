@@ -2,6 +2,11 @@ name: HDL Daily YouTube Teaser
 
 on:
   schedule:
+    # Sep 23 update: triggers moved 6h earlier and off the top of the hour. GitHub was starting
+    # these scheduled runs 3-6 hours late (e.g. the 13:00 trigger actually ran at 17:34 UTC), so
+    # later channels missed the 16:00 UTC publish slot. Videos still wait as private until
+    # 16:00 UTC (publishAt), so finishing early is harmless. Running early in the UTC day also
+    # uses the Cloudflare Workers AI daily allowance (resets 00:00 UTC) before other jobs do.
     # All 4 channels target the SAME daily publish moment — 16:00:00 UTC, matching the exact
     # publish time found on MrBeast's videos in competitor analysis (16:00:0X UTC on all 4
     # samples). Trigger times below are NOT that publish time — they're staggered earlier so each
@@ -23,11 +28,11 @@ on:
     # no longer the goal (the goal is a fixed UTC publish time, matching a competitor who
     # publishes at a fixed UTC time year-round), so that whole DST mechanism is removed below —
     # one plain UTC cron per channel is now sufficient.
-    - cron: "0 7 * * *"  # Channel 4 trigger — 07:00 UTC (9h buffer before the 16:00 UTC publish target)
-    - cron: "0 9 * * *"  # Channel 1 trigger — 09:00 UTC (7h buffer)
+    - cron: "23 1 * * *"  # Channel 4 trigger — 01:23 UTC
+    - cron: "23 3 * * *"  # Channel 1 trigger — 03:23 UTC
     # Channel 2 trigger — resumed, English-only (translations off for channel 2, see SKIP_TRANSLATIONS below).
-    - cron: "0 11 * * *" # Channel 2 trigger — 11:00 UTC (5h buffer)
-    - cron: "0 13 * * *" # Channel 3 trigger — 13:00 UTC (3h buffer)
+    - cron: "23 5 * * *"  # Channel 2 trigger — 05:23 UTC
+    - cron: "23 7 * * *"  # Channel 3 trigger — 07:23 UTC
 
   workflow_dispatch:
     inputs:
@@ -98,10 +103,10 @@ jobs:
             # One plain UTC cron per channel now (see the `on.schedule` comment above for why
             # the old EDT/EST DST-pair dance is gone) — a straight lookup, no offset check needed.
             case "$SCHEDULE" in
-              "0 7 * * *")  CHANNEL=4 ;;
-              "0 9 * * *")  CHANNEL=1 ;;
-              "0 11 * * *") CHANNEL=2 ;;
-              "0 13 * * *") CHANNEL=3 ;;
+              "23 1 * * *") CHANNEL=4 ;;
+              "23 3 * * *") CHANNEL=1 ;;
+              "23 5 * * *") CHANNEL=2 ;;
+              "23 7 * * *") CHANNEL=3 ;;
               *)
                 echo "Unknown schedule: $SCHEDULE"
                 exit 1
