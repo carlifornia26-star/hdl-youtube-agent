@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pickTodaysBook } from "./catalog.js";
-import { generateScript, generateBonusScenes, translateMeta, VIDEO_LANGS, pickTodaysFormat, sanitizeScenePauses, generateCuriosityTitle, generateNumberTitle, pickTitleStyleIndex } from "./cf-ai.js";
+import { generateScript, generateBonusScenes, generateTrendExplainer, translateMeta, VIDEO_LANGS, pickTodaysFormat, sanitizeScenePauses, generateCuriosityTitle, generateNumberTitle, pickTitleStyleIndex } from "./cf-ai.js";
 import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./assets.js";
 import { loadUsedClipIds, saveUsedClipIds } from "./scene-history.js";
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
@@ -12,7 +12,7 @@ import { exiftool } from "exiftool-vendored";
 import { uploadVideo, uploadCaptionTrack, uploadThumbnail, addVideoToPlaylist, publishVideo, checkVideoTrainability } from "./youtube.js";
 import { appendVideoEntry, loadRecentTitles } from "./manifest.js";
 import { buildDailyCommunityPost } from "./community-post.js";
-import { pickTodaysTrend, fetchTopHeadline, buildNewsSceneLine } from "./daily-trend.js";
+import { pickTodaysTrend, fetchTopHeadline, fetchTopHeadlines, buildNewsSceneLine } from "./daily-trend.js";
 
 // Runs `items` through `fn` with at most `limit` in flight at once, preserving output order.
 // Used for the per-scene caption translation loop below, which previously awaited each of
@@ -466,21 +466,50 @@ async function main() {
   // i.e. after the hook that first mentions the trend. Skipped (video is unchanged) if there is no
   // trend, no safe headline, or the card fails to render.
   let newsInfo = null;
+  // Scenes of the trending-news segment, tracked so the closing CTA stays last (see top-up below).
   if (trend) {
     try {
-      newsInfo = await fetchTopHeadline(trend);
-      if (newsInfo) {
-        const newsCardPath = path.join(BUILD_DIR, "news_card.png");
-        await renderNewsCard({ headline: newsInfo.headline, source: newsInfo.source, dateText: newsInfo.dateText, outPath: newsCardPath });
-        scenes.splice(Math.min(2, scenes.length), 0, {
-          line: buildNewsSceneLine(trend.term, CHANNEL_ID),
-          visual: "person scrolling news on phone",
-          newsCardPath,
+      // Owner request (Sep 23): 3+ real headline screenshots and 2+ minutes of narration on WHY
+      // the term is trending, instead of a single "this is trending today" line. Each headline
+      // gets its own news card; the narrator walks through them. Background footage stays Pexels
+      // stock (free license) picked from each scene's own visual, never news footage.
+      const headlines = await fetchTopHeadlines(trend, 4);
+      if (headlines.length) {
+        newsInfo = headlines[0];
+        const cardPaths = [];
+        for (let h = 0; h < headlines.length; h++) {
+          const cardPath = path.join(BUILD_DIR, `news_card_${h}.png`);
+          try {
+            await renderNewsCard({ headline: headlines[h].headline, source: headlines[h].source, dateText: headlines[h].dateText, outPath: cardPath });
+            cardPaths.push(cardPath);
+          } catch (e) {
+            console.warn(`News card ${h + 1} failed to render, skipping it:`, e.message);
+          }
+        }
+        if (headlines.length < 3) {
+          console.warn(`Only ${headlines.length} safe headline(s) found for "${trend.term}" — the news segment will have fewer than 3 screenshots today.`);
+        }
+        let newsScenes = [];
+        try {
+          newsScenes = sanitizeScenePauses(await generateTrendExplainer(book, trend, headlines, 14));
+        } catch (e) {
+          console.warn("Trend explainer generation failed, using the single news line instead:", e.message);
+        }
+        if (!newsScenes.length) {
+          newsScenes = [{ line: buildNewsSceneLine(trend.term, CHANNEL_ID), visual: "person scrolling news on phone" }];
+        }
+        // Spread the cards across the segment: card k lands on the first scene of its share.
+        cardPaths.forEach((cardPath, k) => {
+          const at = Math.min(newsScenes.length - 1, Math.floor((k * newsScenes.length) / cardPaths.length));
+          if (!newsScenes[at].newsCardPath) newsScenes[at] = { ...newsScenes[at], newsCardPath: cardPath };
         });
-        console.log(`Inserted news-headline scene at position ${Math.min(2, scenes.length - 1) + 1}.`);
+        const insertAt = Math.min(2, Math.max(0, scenes.length - 1));
+        newsScenes = newsScenes.map((sc) => ({ ...sc, isNewsSegment: true }));
+        scenes.splice(insertAt, 0, ...newsScenes);
+        console.log(`Inserted news segment: ${newsScenes.length} scenes, ${cardPaths.length} headline screenshot(s), starting at position ${insertAt + 1}.`);
       }
     } catch (e) {
-      console.warn("News-headline scene failed, continuing without it:", e.message);
+      console.warn("News segment failed, continuing without it:", e.message);
       newsInfo = null;
     }
   }
@@ -548,6 +577,7 @@ async function main() {
   for (let i = 0; i < scenes.length; i++) {
     built.push(await buildOneScene(scenes[i], i));
   }
+  let nextSceneIndex = built.length; // unique per-scene file index for any top-up scenes
   let totalSeconds = built.reduce((a, b) => a + b.duration, 0);
   console.log(`Runtime after main script: ~${Math.round(totalSeconds / 60)} min (${built.length} scenes)`);
 
@@ -575,9 +605,14 @@ async function main() {
       console.warn("Bonus scene generation failed, stopping top-up early:", e.message);
       break;
     }
+    // Insert top-up scenes BEFORE the closing call-to-action scene (always the last scene of
+    // the main script), so the CTA stays at the very end of the video instead of landing in the
+    // middle with more scenes after it. `nextIndex` keeps scene filenames unique.
+    const ctaScene = built.pop();
     for (const scene of bonusScenes) {
-      built.push(await buildOneScene(scene, built.length));
+      built.push(await buildOneScene(scene, nextSceneIndex++));
     }
+    if (ctaScene) built.push(ctaScene);
     totalSeconds = built.reduce((a, b) => a + b.duration, 0);
   }
 
@@ -603,15 +638,15 @@ async function main() {
     console.warn(`${voicelessCount}/${built.length} scenes (${Math.round(voicelessRatio * 100)}%) have no narration.`);
   }
 
-  // Soft check on the "mention the title exactly 3 times" prompt instruction — an LLM
+  // Soft check on the "mention the title exactly once" prompt instruction — an LLM
   // following a numeric instruction isn't guaranteed, so this just makes drift visible in the
   // log rather than silently trusting the model got it right. Bonus top-up scenes are
   // instructed never to mention the title at all, so they shouldn't move this count.
   const titleMentions = built
     .map((b) => b.line.toLowerCase().split(book.title.toLowerCase()).length - 1)
     .reduce((a, b) => a + b, 0);
-  if (titleMentions !== 3) {
-    console.warn(`Expected the title mentioned exactly 3 times, script actually has ${titleMentions}.`);
+  if (titleMentions !== 1) {
+    console.warn(`Expected the title mentioned exactly once (closing scene), script actually has ${titleMentions}.`);
   }
 
   // 3) Concat scenes — each scene already has its narration mixed in, no separate mix step needed
@@ -1010,7 +1045,9 @@ async function main() {
     for (const scene of built) {
       // The news-card scene only makes sense with its card on screen (landscape) — the vertical
       // Short is rebuilt from clip + captions only, so it skips that scene.
-      if (scene.newsCardPath) continue;
+      // Stop (not skip) at the news segment: the Short must be the LEADING scenes of `built`,
+      // because the Short-caption code below slices built/captions from index 0.
+      if (scene.newsCardPath || scene.isNewsSegment) break;
       if (shortTotal >= SHORT_MIN_SECONDS && shortTotal + scene.duration > SHORT_MAX_SECONDS) break;
       shortScenes.push(scene);
       shortTotal += scene.duration;
