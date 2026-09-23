@@ -766,6 +766,12 @@ export async function translateMeta(title, description, targetLang) {
   // content with proper names/query strings baked in. The model reliably mangles those
   // (corrupted domains, translated query-param values), and long repeated boilerplate is
   // exactly the kind of input that triggers the repetition-loop failure mode below.
+  // Sep 23: an empty scene line (e.g. a silent/visual-only scene) made m2m100 return 400
+  // "Length of '/text' must be >= 1", which failed that WHOLE caption language after ~60 other
+  // lines had already been translated (wasted neurons). Skip the call for empty text.
+  if (!title || !String(title).trim()) {
+    return { title: title || "", description: (description || "").slice(0, YT_DESCRIPTION_MAX) };
+  }
   const titleResult = await run("@cf/meta/m2m100-1.2b", {
     text: title,
     source_lang: "english",
