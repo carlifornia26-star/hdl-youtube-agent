@@ -189,7 +189,10 @@ const SHORT_MAX_SECONDS = 65; // limit under either the old 60s rule or the curr
 // scenes if it still lands under this floor — so "above 8 minutes" is enforced directly against
 // measured audio, not against a script-length assumption that can go stale.
 const TARGET_MIN_SECONDS = 8.5 * 60; // 510s — a bit above the 8:00 floor so small variance still clears it
-const MAX_TOPUP_ROUNDS = 2; // was 4 — cut to stay inside the free Workers AI daily allowance; the 2+ min news segment now covers most of the runtime gap
+// Channel 2 runs in a lighter AI mode (owner asked for less AI use on channel 2, Sep 23):
+// news segment on the cheaper 8B model and only 1 top-up round.
+const LOW_AI_CHANNEL = CHANNEL_ID === "2";
+const MAX_TOPUP_ROUNDS = LOW_AI_CHANNEL ? 1 : 2; // was 4 — cut to stay inside the free Workers AI daily allowance; the 2+ min news segment now covers most of the runtime gap
 const TOPUP_SCENES_PER_ROUND = 10;
 
 // YouTube's auto-rendered chapter bar requires: first chapter at 0:00, at least 3 chapters
@@ -491,7 +494,7 @@ async function main() {
         }
         let newsScenes = [];
         try {
-          newsScenes = sanitizeScenePauses(await generateTrendExplainer(book, trend, headlines, 14));
+          newsScenes = sanitizeScenePauses(await generateTrendExplainer(book, trend, headlines, 14, LOW_AI_CHANNEL));
         } catch (e) {
           console.warn("Trend explainer generation failed, using the single news line instead:", e.message);
         }
