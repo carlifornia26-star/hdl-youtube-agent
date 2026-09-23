@@ -326,7 +326,7 @@ async function requestSceneScript(prompt, minItems, maxItems, maxTokens, priorLi
   // language leaked — the owner's priority. Repeats are logged but no longer trigger a retry.
   for (let i = 0; issues.ctaLeaks > 0 && i < 1; i++) {
     console.warn(
-      `Script generation: attempt ${i + 1}/3 had ${issues.dupes} repeated opening(s)/phrase(s), ${issues.ctaLeaks} CTA leak(s)${issues.overused ? `, overused word "${issues.overused.word}" (${issues.overused.count} scenes)` : ""} — retrying with a stronger reminder.`
+      `Script generation: attempt ${i + 1}/2 had ${issues.dupes} repeated opening(s)/phrase(s), ${issues.ctaLeaks} CTA leak(s)${issues.overused ? `, overused word "${issues.overused.word}" (${issues.overused.count} scenes)` : ""} — retrying with a stronger reminder.`
     );
     const retryPrompt =
       prompt +
@@ -340,9 +340,31 @@ async function requestSceneScript(prompt, minItems, maxItems, maxTokens, priorLi
       issues = retryIssues;
     }
   }
+  // Sep 23: CTA leaks still shipped after the one retry (channel 4 run had 2). Instead of paying
+  // for more AI calls, remove them in code: drop any non-final scene that contains buy/website
+  // language, and strip urgency sentences from the final scene. Costs no neurons.
+  if (issues.ctaLeaks > 0 && ctaMode !== "none") {
+    const last = scenes.length - 1;
+    const cleaned = [];
+    scenes.forEach((s, i) => {
+      if (ctaMode === "finalOnly" && i === last) {
+        if (URGENCY_PATTERNS.some((p) => p.test(s.line))) {
+          const kept = s.line.split(/(?<=[.!?])\s+/).filter((x) => !URGENCY_PATTERNS.some((p) => p.test(x)));
+          cleaned.push({ ...s, line: kept.length ? kept.join(" ") : s.line });
+        } else cleaned.push(s);
+      } else if (!CTA_LEAK_PATTERNS.some((p) => p.test(s.line))) {
+        cleaned.push(s);
+      }
+    });
+    if (cleaned.length >= Math.max(1, Math.ceil(scenes.length / 2))) {
+      console.warn(`Script generation: removed ${scenes.length - cleaned.length} scene(s) with leaked CTA language (no extra AI call).`);
+      scenes = cleaned;
+      issues = scoreIssues(scenes);
+    }
+  }
   if (issues.total > 0) {
     console.warn(
-      `Script generation: shipping with ${issues.dupes} unresolved repeat(s), ${issues.ctaLeaks} CTA leak(s)${issues.overused ? `, overused word "${issues.overused.word}"` : ""} after 3 attempts — this is the best of the attempts tried.`
+      `Script generation: shipping with ${issues.dupes} unresolved repeat(s), ${issues.ctaLeaks} CTA leak(s)${issues.overused ? `, overused word "${issues.overused.word}"` : ""} — best available without more AI calls.`
     );
   }
   return scenes;
