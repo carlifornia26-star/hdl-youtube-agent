@@ -361,6 +361,42 @@ export async function fetchTopHeadline(trend) {
   return null;
 }
 
+// Up to `max` distinct, safe, relevant headlines for the trend (1-day window first, then 7-day,
+// then the trend's own news item) — feeds the multi-screenshot news segment. Returns [] if none.
+export async function fetchTopHeadlines(trend, max = 4) {
+  const term = trend?.term;
+  if (!term) return [];
+  const out = [];
+  const seen = new Set();
+  const add = (h) => {
+    const key = String(h.headline || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 60);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    out.push(h);
+  };
+  for (const window of ["1d", "7d"]) {
+    if (out.length >= max) break;
+    try {
+      const q = encodeURIComponent(`${term} when:${window}`);
+      const xml = await fetchText(`https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`);
+      for (const item of parseNewsFeed(xml)) {
+        if (out.length >= max) break;
+        if (isSensitive(item.headline)) continue;
+        if (!mentionsTerm(item.headline, term)) continue;
+        add({ headline: tidyHeadline(item.headline), source: item.source || "News", url: item.url, dateText: formatDateText(item.pubDate) });
+      }
+    } catch (e) {
+      console.warn(`Google News search (${window}) for "${term}" failed: ${e.message}`);
+    }
+  }
+  const tn = trend.trendsNews;
+  if (out.length < max && tn?.headline && !isSensitive(tn.headline)) {
+    add({ headline: tidyHeadline(tn.headline), source: tn.source || "News", url: tn.url || "", dateText: formatDateText(null) });
+  }
+  console.log(`News headlines for "${term}": ${out.length} found.` + out.map((h, i) => `\n  ${i + 1}. ${h.headline} (${h.source})`).join(""));
+  return out;
+}
+
 // ---------- the line spoken over the news card ----------
 
 const NEWS_LINE_TEMPLATES = [
