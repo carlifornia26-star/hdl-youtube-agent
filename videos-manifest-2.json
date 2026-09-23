@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "N_VF9S36bQQ",
+      "short_video_id": "UC2sZeeHoLA",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "Advanced AI business strategy | HDL Group",
+      "description": "Curious about advanced AI business strategy? AGE ONE: Premium Edition breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/N_VF9S36bQQ/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Nab Outage",
+      "trend_in_title": false,
+      "news_headline": "NAB customers back online after experiencing phone and internet banking outages",
+      "script_format": "cold-open",
+      "caption_style": "wide-orange",
+      "duration_seconds": 261,
+      "published_at": "2026-09-23T08:07:55.569Z"
+    },
+    {
       "video_id": "0iyBdLtQCys",
       "short_video_id": "Ee7j99NuPLk",
       "book_slug": "age-one",
@@ -167,5 +185,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-09-22T15:45:32.355Z"
+  "updated_at": "2026-09-23T08:07:55.570Z"
 }
