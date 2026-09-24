@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "QNNskgmOguw",
+      "short_video_id": "rAKoJP_tWSU",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "Advanced Ai Strategies Meet Electric Avenue",
+      "description": "Curious about advanced AI business strategy? AGE ONE: Premium Edition breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/QNNskgmOguw/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Electric Avenue",
+      "trend_in_title": true,
+      "news_headline": "Scalpers ask quadruple face value for sold-out Electric Avenue passes",
+      "script_format": "cold-open",
+      "caption_style": "wide-orange",
+      "duration_seconds": 543,
+      "published_at": "2026-09-24T09:03:54.115Z"
+    },
+    {
       "video_id": "-Xnte1Ogq0I",
       "short_video_id": "npkUUrivKD4",
       "book_slug": "age-one",
@@ -298,5 +316,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-09-23T07:56:55.702Z"
+  "updated_at": "2026-09-24T09:03:54.116Z"
 }
