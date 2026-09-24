@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "oFM6nbiMaLg",
+      "short_video_id": "CcrKLjLvGn8",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Common Wellness Mistakes Chatgpt Reveals",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/oFM6nbiMaLg/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": true,
+      "trend_term": "Chatgpt",
+      "trend_in_title": true,
+      "news_headline": "ChatGPT Ads expands to Southeast Asia and Taiwan",
+      "script_format": "direct-address",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 459,
+      "published_at": "2026-09-24T13:10:28.448Z"
+    },
+    {
       "video_id": "Nh07tuQF7dk",
       "short_video_id": "_q0XAssUh1g",
       "book_slug": "age-one-premium",
@@ -245,5 +263,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-09-22T18:11:56.248Z"
+  "updated_at": "2026-09-24T13:10:28.449Z"
 }
