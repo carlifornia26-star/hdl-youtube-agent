@@ -712,7 +712,9 @@ async function main() {
   // now gets a curiosity title (generateCuriosityTitle) instead of the plain one — see below.
   const todaysDayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
   const plainChannelToday = (todaysDayOfYear % 3) + 1; // 1, 2, or 3 — the ONE channel staying plain today
-  const isNumberChannelToday = Number(CHANNEL_ID) !== plainChannelToday;
+  // Random big-number titles/thumbnails are switched off: every channel gets the number-free
+  // curiosity title, and no number is drawn on thumbnails or Short titles.
+  const isNumberChannelToday = false;
   const plainTitle = `${capitalizeFirst(book.angle)} | HDL Group`;
   let enTitle = plainTitle;
   let todaysNumber = null; // set only once a number has actually landed in enTitle
