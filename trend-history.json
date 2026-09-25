@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-09-25",
+      "channel": "4",
+      "term": "Dstv New Channel Launch",
+      "headline": null
+    },
+    {
       "date": "2026-09-24",
       "channel": "3",
       "term": "Chatgpt",
@@ -67,5 +73,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-09-24T12:47:22.939Z"
+  "updated_at": "2026-09-25T06:13:12.033Z"
 }

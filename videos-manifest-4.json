@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "7FxcRnmPrsI",
+      "short_video_id": "dtb1c5UIEqg",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "Dstv New Channel Launch Reveals Common Algorithm Mistakes",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/7FxcRnmPrsI/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Dstv New Channel Launch",
+      "trend_in_title": true,
+      "news_headline": "DStv launches new channel as major overhaul takes effect",
+      "script_format": "myth-bust",
+      "caption_style": "wide-orange",
+      "duration_seconds": 427,
+      "published_at": "2026-09-25T06:36:52.342Z"
+    },
+    {
       "video_id": "lEgKE59XymE",
       "short_video_id": "E7KrX0tVV18",
       "book_slug": "art-of-joy",
@@ -111,5 +129,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-09-24T06:42:23.793Z"
+  "updated_at": "2026-09-25T06:36:52.343Z"
 }
