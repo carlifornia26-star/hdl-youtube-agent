@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "FWoWiWHZgeQ",
+      "short_video_id": "OttqZZ6bnUE",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "First Month Changes",
+      "description": "Curious about the science of happiness? Art of Joy breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/FWoWiWHZgeQ/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "direct-hook",
+      "caption_style": "lower-third",
+      "duration_seconds": 333,
+      "published_at": "2026-09-25T13:10:47.018Z"
+    },
+    {
       "video_id": "oFM6nbiMaLg",
       "short_video_id": "CcrKLjLvGn8",
       "book_slug": "science-of-feeling-great",
@@ -263,5 +281,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-09-24T13:10:28.449Z"
+  "updated_at": "2026-09-25T13:10:47.019Z"
 }
