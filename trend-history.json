@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-09-25",
+      "channel": "1",
+      "term": "Smartglasses",
+      "headline": null
+    },
+    {
+      "date": "2026-09-25",
       "channel": "4",
       "term": "Dstv New Channel Launch",
       "headline": null
@@ -73,5 +79,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-09-25T06:13:12.033Z"
+  "updated_at": "2026-09-25T08:57:21.963Z"
 }
