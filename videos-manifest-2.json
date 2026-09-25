@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "O4Dqemuuz0g",
+      "short_video_id": "de0lBX68azY",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "New Beginners Guide To Wellness And Vitality",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/O4Dqemuuz0g/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "direct-address",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 239,
+      "published_at": "2026-09-25T10:24:37.374Z"
+    },
+    {
       "video_id": "N_VF9S36bQQ",
       "short_video_id": "UC2sZeeHoLA",
       "book_slug": "age-one-premium",
@@ -185,5 +203,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-09-23T08:07:55.570Z"
+  "updated_at": "2026-09-25T10:24:37.375Z"
 }
