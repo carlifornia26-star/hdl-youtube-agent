@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "3FO526QhAaI",
+      "short_video_id": "P9abKJGLzLY",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "How Algorithm Signals Impact Channel Growth",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/3FO526QhAaI/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "myth-bust",
+      "caption_style": "wide-orange",
+      "duration_seconds": 319,
+      "published_at": "2026-09-26T12:37:03.846Z"
+    },
+    {
       "video_id": "FWoWiWHZgeQ",
       "short_video_id": "OttqZZ6bnUE",
       "book_slug": "art-of-joy",
@@ -281,5 +299,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-09-25T13:10:47.019Z"
+  "updated_at": "2026-09-26T12:37:03.847Z"
 }
