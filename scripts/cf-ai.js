@@ -590,7 +590,7 @@ export async function generateScript(book, format = FORMAT_POOL[0], channelOffse
   const grounding = pickTodaysGrounding(book.slug, 3, new Date(), channelOffset);
   const prompt = `You are the Universal Master Narrator — a polymathic, warm, sharply engaging storyteller equally at home with a curious teenager and a skeptical adult, fluent across science, history, technology, culture, and everyday life. You blend real intellectual rigor with plain-spoken clarity, dry wit, and genuine emotional depth — never dry-lecture, never robotic.
 
-You are writing a 10-minute YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group.
+You are writing a 10-minute YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), available in 50+ languages on Google Play Books via High Definition Learning Group.
 
 This video has a spoken AI narrator voice reading each scene's line aloud, with the same words also burned in on screen as fast-paced flowing captions timed to the narration. Write each line to sound natural when spoken aloud — short, punchy, declarative sentences work best both for narration pacing and for the on-screen caption bursts.
 
@@ -599,7 +599,7 @@ Strict rules:
 - This is a TEASER, not a summary. Never reveal specific chapters, frameworks, numbered steps, or concrete conclusions from the book.
 - Build curiosity: pose the problem the book addresses, why it matters right now, and what kind of reader it's for — without giving away the answers.
 - Scene 1 is the single highest-leverage moment in the whole video for whether a viewer keeps watching past the first 15-22 seconds — most of the video's session-time performance is decided right there. Today's opening technique (${format.label}): ${format.opening} Do NOT open with throat-clearing, a generic greeting, or a soft, overused opener like "Have you ever wondered..." or "In today's fast-paced world...". The book's title mention (see below) can land in scene 1 or scene 2 — it doesn't have to be the first sentence itself.
-- Explicitly mention once, naturally, that the book is available in English only.
+- Explicitly mention once, naturally, that the book is available in more than 50 languages.
 - End with ONE short, calm closing scene (the final scene only) that says the full book, "${book.title}", is on the High Definition Learning Group website. Say "High Definition Learning Group" exactly once and the title exactly once in that line, and nowhere else in the script. Keep it to one or two plain sentences with no urgency phrases at all (never "what are you waiting for," "the time is now," "don't miss out," "why wait," or similar).
 - CTA CONCENTRATION RULE — buy/read-now urgency language ("read it now," "why wait," "don't miss out," "what are you waiting for," "get your copy," "start your journey today," "visit the website," "check out the website," or any close paraphrase of these) may appear in EXACTLY ONE scene: the final call-to-action scene required above. This is the single most common way a script fails: every other scene must build curiosity ONLY and must not mention the website, mention buying/reading the book, or nudge the viewer toward action in any way, even softly. If you find yourself writing anything sale- or website-adjacent before the last scene, cut it and replace it with a pure curiosity beat instead — a script that pushes the sale in six different scenes reads as desperate and makes viewers leave well before the actual CTA lands.
 - VOCABULARY VARIETY RULE — when the book's core subject is a single common noun (e.g. "pet," "AI," "Bitcoin"), do not default to that exact same word in nearly every scene — it reads as monotonous and repetitive even though it's technically on-topic. Rotate between the plain term, natural synonyms, more specific references (a named type, a concrete example), and pronouns where the meaning is already clear from context, the same way a human writer would vary their word choice across a 10-minute piece.
@@ -678,7 +678,7 @@ export async function generateBonusScenes(book, count, existingLines = []) {
   const coveredBlock = existingLines.length
     ? `\n\nALREADY COVERED in this video (main script + any earlier top-up scenes) — do not reuse these openings or make the same point again, even reworded:\n${summarizeCoveredOpenings(existingLines)}`
     : "";
-  const prompt = `You are the Universal Master Narrator — the same polymathic, warm, sharply engaging voice used throughout this video — extending an existing YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group. The intro, main body, and closing call-to-action already exist — you're writing ${count} ADDITIONAL supporting scenes to insert into the video, deepening the curiosity without revealing the book's actual chapters, frameworks, steps, or conclusions.${coveredBlock}
+  const prompt = `You are the Universal Master Narrator — the same polymathic, warm, sharply engaging voice used throughout this video — extending an existing YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), available in 50+ languages on Google Play Books via High Definition Learning Group. The intro, main body, and closing call-to-action already exist — you're writing ${count} ADDITIONAL supporting scenes to insert into the video, deepening the curiosity without revealing the book's actual chapters, frameworks, steps, or conclusions.${coveredBlock}
 
 Same style as the rest of the video: an AI narrator speaks each line aloud, natural and punchy, with the same words burned in on screen as fast-paced captions. Where it fits, follow the POLYMATH-TO-CHILD approach — a dense idea immediately paired with a vivid everyday metaphor. Ground claims in well-established, general terms rather than inventing specific studies, statistics, or named sources.
 
@@ -686,7 +686,7 @@ Strict rules:
 - EXAMPLE-ISOLATION RULE — any quoted example line elsewhere in this prompt illustrates a technique only, written for a different book — never copy or reword it into the actual script. Every line must be invented fresh and specific to ${book.angle}.
 - Do NOT use the book's title, "${book.title}" — refer to it only as "the book," "this guide," or similar; the title is already covered elsewhere in the video.
 - Do NOT include a call to action or say where to read/buy it — that's already covered elsewhere.
-- Do NOT restate that it's available in English only — that's already covered elsewhere.
+- Do NOT restate that the book is available in 50+ languages — that's already covered elsewhere.
 - Do NOT use quotation marks of any kind inside a line's text.
 - Each scene's line is 3-4 sentences (roughly 40-55 words), written to be spoken naturally in about 15-22 seconds.
 - Produce exactly ${count} scenes building curiosity about who this book helps, what problem it solves, and why it matters right now — varied angles, no two scenes making the same point.
@@ -1166,4 +1166,4 @@ Answer as JSON: choice = the number of the term (1-${candidates.length}) or 0 fo
   const fit = Number(parsed.fit);
   if (!Number.isInteger(choice) || choice < 1 || choice > candidates.length) return null;
   return { index: choice - 1, fit: Number.isFinite(fit) ? fit : 0, tieIn: String(parsed.tie_in || "").trim().slice(0, 240) };
-}
+    }
