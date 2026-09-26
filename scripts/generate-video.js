@@ -899,7 +899,7 @@ async function main() {
   // that says "English only" into Spanish was always a little odd).
   const translatableDescription = `Curious about ${book.angle}? ${book.title} breaks it down.`;
   const untranslatedSuffix =
-    `\n\nAvailable in English only, exclusively on Google Play Books.` +
+    `\n\nAvailable in 50+ languages, exclusively on Google Play Books.` +
     `\nRead the full book: ${SITE_URL}` +
     buildSubscribeBlock(CHANNEL_ID) +
     `\n\n#HDLGroup #${book.slug.replace(/-/g, "")}`;
