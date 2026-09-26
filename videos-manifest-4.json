@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "lfUUegneInA",
+      "short_video_id": "kizf0tGthqI",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "Weather Influences Modern Pet Care Methods",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/lfUUegneInA/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": true,
+      "trend_term": "Weather",
+      "trend_in_title": true,
+      "news_headline": "Connecticut braces for severe weather: Governor activates Emergency Operations Center",
+      "script_format": "cold-open",
+      "caption_style": "classic-pop",
+      "duration_seconds": 323,
+      "published_at": "2026-09-26T06:28:28.721Z"
+    },
+    {
       "video_id": "7FxcRnmPrsI",
       "short_video_id": "dtb1c5UIEqg",
       "book_slug": "youtube-algorithms",
@@ -129,5 +147,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-09-25T06:36:52.343Z"
+  "updated_at": "2026-09-26T06:28:28.721Z"
 }
