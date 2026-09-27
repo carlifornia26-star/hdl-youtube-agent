@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "LUS24I0NNas",
+      "short_video_id": "pQenQZQgcsg",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "Seven Key Signs Of Happiness",
+      "description": "Curious about the science of happiness? Art of Joy breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/LUS24I0NNas/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "direct-hook",
+      "caption_style": "lower-third",
+      "duration_seconds": 602,
+      "published_at": "2026-09-27T09:48:45.416Z"
+    },
+    {
       "video_id": "0Q4xbDBDL9c",
       "short_video_id": "eQAdNdPb6Q4",
       "book_slug": "science-of-feeling-great",
@@ -352,5 +370,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-09-26T09:00:27.801Z"
+  "updated_at": "2026-09-27T09:48:45.416Z"
 }
