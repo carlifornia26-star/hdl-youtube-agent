@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "p89ajWttZOU",
+      "short_video_id": "UDXSEc4gWhU",
+      "book_slug": "age-one",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-complete-ai-business-mastery",
+      "title": "Skipping Ai Insights Affects Stock Market Today",
+      "description": "Curious about AI & the information economy? AGE ONE breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/p89ajWttZOU/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Stock Market Today",
+      "trend_in_title": true,
+      "news_headline": "The Stock Market Is Triggering a Warning Seen Only Once Before, and Warren Buffett Has a Stark Warning for Investors",
+      "script_format": "stat-hook",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 447,
+      "published_at": "2026-09-27T06:59:00.950Z"
+    },
+    {
       "video_id": "lfUUegneInA",
       "short_video_id": "kizf0tGthqI",
       "book_slug": "pet-friendly",
@@ -147,5 +165,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-09-26T06:28:28.721Z"
+  "updated_at": "2026-09-27T06:59:00.951Z"
 }
