@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "VCK7XMKuTAs",
+      "short_video_id": "DL-4rjs-jQM",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "How Spacex Innovations Influence Advanced Ai Business Strategy",
+      "description": "Curious about advanced AI business strategy? AGE ONE: Premium Edition breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/VCK7XMKuTAs/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Spacex",
+      "trend_in_title": true,
+      "news_headline": "SpaceX prepares to send Starship rocket to orbit for first time",
+      "script_format": "direct-address",
+      "caption_style": "lower-third",
+      "duration_seconds": 410,
+      "published_at": "2026-09-28T07:28:30.881Z"
+    },
+    {
       "video_id": "p89ajWttZOU",
       "short_video_id": "UDXSEc4gWhU",
       "book_slug": "age-one",
@@ -165,5 +183,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-09-27T06:59:00.951Z"
+  "updated_at": "2026-09-28T07:28:30.882Z"
 }
