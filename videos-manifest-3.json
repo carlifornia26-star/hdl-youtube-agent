@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "h5uCGino3xI",
+      "short_video_id": "XG0TNXerZ64",
+      "book_slug": "age-one",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-complete-ai-business-mastery",
+      "title": "Misunderstanding Ai Systems In Classroom Settings",
+      "description": "Curious about AI & the information economy? AGE ONE breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/h5uCGino3xI/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Classroom",
+      "trend_in_title": true,
+      "news_headline": "Oklahoma teachers need the authority to maintain classroom order",
+      "script_format": "stat-hook",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 433,
+      "published_at": "2026-09-28T16:02:23.522Z"
+    },
+    {
       "video_id": "53kF17YXj2I",
       "short_video_id": "POMhFYCmkQE",
       "book_slug": "pet-friendly",
@@ -317,5 +335,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-09-27T13:28:47.483Z"
+  "updated_at": "2026-09-28T16:02:23.523Z"
 }

@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-09-28",
+      "channel": "3",
+      "term": "Classroom",
+      "headline": null
+    },
+    {
+      "date": "2026-09-28",
       "channel": "1",
       "term": "Gold Price",
       "headline": null
@@ -115,5 +121,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-09-28T09:58:35.052Z"
+  "updated_at": "2026-09-28T15:39:29.415Z"
 }
