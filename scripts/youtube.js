@@ -187,21 +187,17 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
 // that scheduled publish time instead of `public` immediately, and YouTube itself flips it public
 // at that exact instant. This exists so the video's actual live-to-viewers timestamp is a fixed
 // daily wall-clock moment (see PUBLISH_HOUR_UTC/PUBLISH_MINUTE_UTC in daily-video.yml) instead of
-// "whenever this run happens to finish rendering" — competitor videos publish at the same second
-// every time, which this now matches. If publishAt is missing, already in the past (a run that
-// overran its buffer), or YouTube rejects it, this falls straight back to the original
-// immediate-public behavior so a scheduling edge case can never leave a finished video stuck.
-export async function publishVideo({ videoId, publishAt }) {
+// "whenever this run happens to finish rendering". The daily pipeline never falls back to
+// immediate publication; the explicit one-off repair command may opt into immediate publish.
+export async function publishVideo({ videoId, publishAt, allowImmediate = false }) {
   if (process.env.DRY_RUN_PRIVATE === "true") {
     console.log(`DRY_RUN_PRIVATE set — leaving ${videoId} private, not publishing.`);
     return;
   }
   const youtube = client();
 
-  const scheduledMode = Boolean(publishAt) && new Date(publishAt).getTime() > Date.now();
-  if (publishAt && !scheduledMode) {
-    console.warn(`publishVideo: publishAt (${publishAt}) is not in the future — publishing immediately instead.`);
-  }
+  const scheduledMode = Boolean(publishAt) && Number.isFinite(new Date(publishAt).getTime()) && new Date(publishAt).getTime() > Date.now();
+  if (!scheduledMode && !allowImmediate) throw new Error(`Missing or passed publish target ${publishAt}; leaving ${videoId} private.`);
 
   let lastErr;
   for (let attempt = 1; attempt <= 3; attempt++) {
@@ -233,7 +229,7 @@ export async function publishVideo({ videoId, publishAt }) {
       const livePublishAt = check.data.items?.[0]?.status?.publishAt;
 
       if (scheduledMode) {
-        if (liveStatus === "private" && livePublishAt) {
+        if (liveStatus === "private" && new Date(livePublishAt).getTime() === new Date(publishAt).getTime()) {
           console.log(`Scheduled (confirmed): https://youtube.com/watch?v=${videoId} goes public at ${livePublishAt}`);
           return;
         }

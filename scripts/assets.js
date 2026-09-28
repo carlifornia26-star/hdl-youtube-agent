@@ -16,11 +16,22 @@ import fs from "node:fs/promises";
 // recently used) pool, so multiple scenes sharing a keyword in the SAME video still tend to land
 // on different clips from each other, same as before.
 export async function fetchStockClip(keyword, outPath, { index = 0, avoidIds = new Set() } = {}) {
-  const res = await fetch(
-    `https://api.pexels.com/videos/search?query=${encodeURIComponent(keyword)}&orientation=landscape&size=medium&per_page=80`,
-    { headers: { Authorization: process.env.PEXELS_API_KEY } }
-  );
-  if (!res.ok) throw new Error(`Pexels search failed: ${res.status}`);
+  const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(keyword)}&orientation=landscape&size=medium&per_page=80`;
+  let res;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    res = await fetch(url, { headers: { Authorization: process.env.PEXELS_API_KEY } });
+    if (res.ok) break;
+    // Transient upstream failures must not kill the whole day's upload on first sight.
+    // Permanent auth/config errors still fail immediately rather than burning the quota.
+    if (![429, 500, 502, 503, 504].includes(res.status) || attempt === 4) {
+      throw new Error(`Pexels search failed: ${res.status} after ${attempt} attempt(s)`);
+    }
+    const retryAfter = Number(res.headers.get("retry-after"));
+    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+      ? Math.min(30000, retryAfter * 1000) : attempt * 2500;
+    console.warn(`Pexels search ${res.status} for scene keyword, retry ${attempt}/3 in ${waitMs}ms`);
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
   const data = await res.json();
   const results = data.videos || [];
   if (results.length === 0) throw new Error(`No Pexels results for "${keyword}"`);

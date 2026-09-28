@@ -351,23 +351,20 @@ async function loadDailyKeywordsFile() {
   }
 }
 
-// Builds today's fixed publish target (UTC) from PUBLISH_HOUR_UTC/PUBLISH_MINUTE_UTC (set by
-// daily-video.yml's resolve step — see comment there). Returns undefined if either env var is
-// missing (manual/local runs) or if today's target time has already passed, in which case
-// publishVideo() falls back to its original immediate-publish behavior — a missed schedule
-// window should never leave a finished video stuck private.
+// Return the next exact UTC publish slot. A late render must never go public at an
+// arbitrary time; if today's 16:00 has passed, hold private for tomorrow at 16:00.
 function computeScheduledPublishAt() {
   const hour = Number(process.env.PUBLISH_HOUR_UTC);
   const minute = Number(process.env.PUBLISH_MINUTE_UTC);
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return undefined;
-
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23 ||
+      !Number.isInteger(minute) || minute < 0 || minute > 59) {
+    throw new Error("Missing or invalid fixed publish target; refusing an unscheduled public upload");
+  }
   const now = new Date();
   const target = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour, minute, 0));
-  if (target.getTime() <= Date.now()) {
-    console.warn(
-      `computeScheduledPublishAt: target ${target.toISOString()} has already passed — publishing immediately instead of scheduling.`
-    );
-    return undefined;
+  if (target.getTime() <= now.getTime()) {
+    console.warn(`Missed ${target.toISOString()}; holding private until the next daily target instead of publishing late.`);
+    target.setUTCDate(target.getUTCDate() + 1);
   }
   return target.toISOString();
 }

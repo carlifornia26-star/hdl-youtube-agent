@@ -27,7 +27,8 @@ async function main() {
     if (ids.length) {
       const statusRes = await youtube.videos.list({ part: ["status"], id: ids });
       for (const v of statusRes.data.items || []) {
-        if (v.status?.privacyStatus === "private") privateVideoIds.push(v.id);
+        // Never unschedule a video already waiting for its target publish time.
+        if (v.status?.privacyStatus === "private" && !v.status?.publishAt) privateVideoIds.push(v.id);
       }
     }
     nextPageToken = playlistRes.data.nextPageToken;
@@ -39,7 +40,7 @@ async function main() {
   let failed = 0;
   for (const id of privateVideoIds) {
     try {
-      await publishVideo({ videoId: id });
+      await publishVideo({ videoId: id, allowImmediate: true });
       succeeded++;
     } catch (e) {
       failed++;
