@@ -73,6 +73,18 @@ export function pickTodaysCaptionStyle(date = new Date(), channelOffset = 0) {
   return CAPTION_STYLE_POOL[(dayOfYear + channelOffset) % CAPTION_STYLE_POOL.length];
 }
 
+// Keep an editorial look for a short sequence of scenes, then shift the caption
+// rhythm and position. Switching every scene feels as mechanical as never
+// switching; these beats last four scenes and are reproducible across retries.
+// A video's initial look remains the day's selected style. No extra API calls.
+export function captionStyleForScene(baseStyle, sceneIndex) {
+  if (!Number.isInteger(sceneIndex) || sceneIndex < 0) throw new Error("Invalid scene index");
+  const baseIndex = CAPTION_STYLE_POOL.findIndex((style) => style.id === baseStyle?.id);
+  if (baseIndex < 0) throw new Error("Unknown caption style");
+  const beat = Math.floor(sceneIndex / 4);
+  return CAPTION_STYLE_POOL[(baseIndex + beat) % CAPTION_STYLE_POOL.length];
+}
+
 function escapeDrawtext(str) {
   return str
     .replace(/\\/g, "\\\\")

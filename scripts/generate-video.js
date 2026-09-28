@@ -7,7 +7,7 @@ import { loadUsedClipIds, saveUsedClipIds } from "./scene-history.js";
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
 import { fetchBackgroundMusic, attributionLine } from "./music.js";
 import { loadUsedMusicTitles, saveUsedMusicTitles } from "./music-history.js";
-import { buildScene, buildNewsScene, renderNewsCard, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic, normalizeLoudness, pickTodaysCaptionStyle, tagVideoMetadata, tagThumbnailMetadata } from "./render.js";
+import { buildScene, buildNewsScene, renderNewsCard, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic, normalizeLoudness, pickTodaysCaptionStyle, captionStyleForScene, tagVideoMetadata, tagThumbnailMetadata } from "./render.js";
 import { exiftool } from "exiftool-vendored";
 import { uploadVideo, uploadCaptionTrack, uploadThumbnail, addVideoToPlaylist, publishVideo, checkVideoTrainability } from "./youtube.js";
 import { appendVideoEntry, loadRecentTitles } from "./manifest.js";
@@ -557,18 +557,19 @@ async function main() {
       duration = Math.min(MAX_SCENE_SECONDS, Math.max(MIN_SCENE_SECONDS, words / 2.3 + PADDING_SECONDS));
     }
 
+    const sceneCaptionStyle = captionStyleForScene(captionStyle, index);
     let built_scene;
     if (scene.newsCardPath) {
       // Animated news card over a blurred clip. If ffmpeg rejects it for any reason, fall back to a
       // normal captioned scene with the same narration, so the day's video never fails over this.
       try {
-        built_scene = await buildNewsScene({ clipPath, cardPath: scene.newsCardPath, duration, text: scene.line, outPath, voicePath: usableVoicePath, captionStyle });
+        built_scene = await buildNewsScene({ clipPath, cardPath: scene.newsCardPath, duration, text: scene.line, outPath, voicePath: usableVoicePath, captionStyle: sceneCaptionStyle });
       } catch (e) {
         console.warn("News card scene failed to render, using a normal scene instead:", e.message);
-        built_scene = await buildScene({ clipPath, duration, text: scene.line, outPath, voicePath: usableVoicePath, captionStyle });
+        built_scene = await buildScene({ clipPath, duration, text: scene.line, outPath, voicePath: usableVoicePath, captionStyle: sceneCaptionStyle });
       }
     } else {
-      built_scene = await buildScene({ clipPath, duration, text: scene.line, outPath, voicePath: usableVoicePath, captionStyle });
+      built_scene = await buildScene({ clipPath, duration, text: scene.line, outPath, voicePath: usableVoicePath, captionStyle: sceneCaptionStyle });
     }
     return { ...scene, duration, outPath: built_scene.outPath, clipPath, voicePath: usableVoicePath };
   }
@@ -1070,7 +1071,7 @@ async function main() {
           outPath,
           voicePath: s.voicePath, // null is fine — buildScene falls back to captions-only
           orientation: "vertical",
-          captionStyle,
+          captionStyle: captionStyleForScene(captionStyle, i),
         });
         shortBuilt.push(built_scene.outPath);
       }
