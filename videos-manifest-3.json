@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "TibH78Fkgng",
+      "short_video_id": "2aJteBblMBk",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "Business Leaders Explore Advanced Ai Strategy",
+      "description": "Curious about advanced AI business strategy? AGE ONE: Premium Edition breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/TibH78Fkgng/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "direct-address",
+      "caption_style": "lower-third",
+      "duration_seconds": 349,
+      "published_at": "2026-09-29T14:31:37.337Z"
+    },
+    {
       "video_id": "h5uCGino3xI",
       "short_video_id": "XG0TNXerZ64",
       "book_slug": "age-one",
@@ -335,5 +353,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-09-28T16:02:23.523Z"
+  "updated_at": "2026-09-29T14:31:37.337Z"
 }
