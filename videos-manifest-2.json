@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "5ZYSXL4Xulc",
+      "short_video_id": "-fQaHIM-fgQ",
+      "book_slug": "age-one",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-complete-ai-business-mastery",
+      "title": "Ai Information Shift",
+      "description": "Curious about AI & the information economy? AGE ONE breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/5ZYSXL4Xulc/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "stat-hook",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 202,
+      "published_at": "2026-09-29T11:32:23.432Z"
+    },
+    {
       "video_id": "sRju_bmXfiQ",
       "short_video_id": "LABYsSLrUUs",
       "book_slug": "pet-friendly",
@@ -239,5 +257,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-09-28T11:55:45.443Z"
+  "updated_at": "2026-09-29T11:32:23.433Z"
 }
