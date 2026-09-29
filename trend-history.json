@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-09-29",
+      "channel": "4",
+      "term": "Rba",
+      "headline": null
+    },
+    {
       "date": "2026-09-28",
       "channel": "3",
       "term": "Classroom",
@@ -121,5 +127,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-09-28T15:39:29.415Z"
+  "updated_at": "2026-09-29T07:02:55.972Z"
 }

@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "i5-P5NBNMSo",
+      "short_video_id": "vECQg3DbMXk",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "Bitcoin Growth May Not Depend On Rba Decisions",
+      "description": "Curious about Bitcoin & digital finance? Bitcoin Standard breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/i5-P5NBNMSo/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": true,
+      "trend_term": "Rba",
+      "trend_in_title": true,
+      "news_headline": "RBA interest rates: Reserve Bank hikes cash rate to 4.6%, the highest level since 2011",
+      "script_format": "direct-hook",
+      "caption_style": "wide-orange",
+      "duration_seconds": 529,
+      "published_at": "2026-09-29T07:22:06.308Z"
+    },
+    {
       "video_id": "VCK7XMKuTAs",
       "short_video_id": "DL-4rjs-jQM",
       "book_slug": "age-one-premium",
@@ -183,5 +201,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-09-28T07:28:30.882Z"
+  "updated_at": "2026-09-29T07:22:06.309Z"
 }
