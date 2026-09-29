@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "tFvfBbzkdT0",
+      "short_video_id": "II8NBiEbbeg",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "Modern Pet Care Involves New Technologies",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/tFvfBbzkdT0/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "cold-open",
+      "caption_style": "classic-pop",
+      "duration_seconds": 348,
+      "published_at": "2026-09-29T10:16:55.197Z"
+    },
+    {
       "video_id": "LUS24I0NNas",
       "short_video_id": "pQenQZQgcsg",
       "book_slug": "art-of-joy",
@@ -370,5 +388,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-09-27T09:48:45.416Z"
+  "updated_at": "2026-09-29T10:16:55.198Z"
 }
