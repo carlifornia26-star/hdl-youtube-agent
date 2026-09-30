@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "YrJW66C-5OU",
+      "short_video_id": "zMdVRxmxbvg",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "Missing Bitcoin Opportunities Affects Performance Improvement",
+      "description": "Curious about Bitcoin & digital finance? Bitcoin Standard breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/YrJW66C-5OU/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": true,
+      "trend_term": "Performance Improvement",
+      "trend_in_title": true,
+      "news_headline": "EntertainHR: Look What You Made Me Dough: How Taylor Swift and Sourdough Can Help Shape Employee Performance Improvement",
+      "script_format": "direct-hook",
+      "caption_style": "wide-orange",
+      "duration_seconds": 417,
+      "published_at": "2026-09-30T14:19:04.166Z"
+    },
+    {
       "video_id": "TibH78Fkgng",
       "short_video_id": "2aJteBblMBk",
       "book_slug": "age-one-premium",
@@ -353,5 +371,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-09-29T14:31:37.337Z"
+  "updated_at": "2026-09-30T14:19:04.166Z"
 }
