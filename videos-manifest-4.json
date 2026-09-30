@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "Elo-C-uLmvE",
+      "short_video_id": "c_o2FpMwR-U",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "John Goodman Weight Loss Transformation Insights",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/Elo-C-uLmvE/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "John Goodman Weight Loss Transformation",
+      "trend_in_title": true,
+      "news_headline": "John Goodman puts drastic weight loss transformation on display at ‘Digger’ premiere with wife",
+      "script_format": "myth-bust",
+      "caption_style": "classic-pop",
+      "duration_seconds": 510,
+      "published_at": "2026-09-30T07:18:24.633Z"
+    },
+    {
       "video_id": "i5-P5NBNMSo",
       "short_video_id": "vECQg3DbMXk",
       "book_slug": "bitcoin-standard",
@@ -201,5 +219,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-09-29T07:22:06.309Z"
+  "updated_at": "2026-09-30T07:18:24.633Z"
 }
