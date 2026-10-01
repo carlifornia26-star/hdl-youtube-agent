@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "FNvZBURFSGs",
+      "short_video_id": "MUj6j8urEBg",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "Digital Finance Investors Often Misjudge Market Trends Like El Niño",
+      "description": "Curious about Bitcoin & digital finance? Bitcoin Standard breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/FNvZBURFSGs/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "El Niño",
+      "trend_in_title": true,
+      "news_headline": "Studying this super El Niño could save lives. NOAA is scaling back research",
+      "script_format": "direct-hook",
+      "caption_style": "wide-orange",
+      "duration_seconds": 507,
+      "published_at": "2026-10-01T11:57:22.916Z"
+    },
+    {
       "video_id": "6iFjTQJCpu4",
       "short_video_id": "I9CegDD7K_8",
       "book_slug": "age-one-premium",
@@ -275,5 +293,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-09-30T11:24:20.812Z"
+  "updated_at": "2026-10-01T11:57:22.916Z"
 }
