@@ -494,8 +494,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: video-run-${{ github.run_number }}-ch${{ steps.resolve.outputs.channel }}
+          # build/ (rendered videos, 1-1.7GB) is intentionally NOT uploaded: this repo is public,
+          # so artifacts are downloadable by any signed-in GitHub user. No later step uses it.
           path: |
-            build/
             community-posts/
             automation-health/
           retention-days: 3
