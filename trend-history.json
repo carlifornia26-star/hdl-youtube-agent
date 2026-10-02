@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-10-02",
+      "channel": "1",
+      "term": "See Tickets",
+      "headline": null
+    },
+    {
       "date": "2026-10-01",
       "channel": "2",
       "term": "El Niño",
@@ -157,5 +163,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-01T11:39:57.953Z"
+  "updated_at": "2026-10-02T09:55:13.741Z"
 }
