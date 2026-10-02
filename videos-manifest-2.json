@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "IVY17C4s-kQ",
+      "short_video_id": "9BTOTH8LLz4",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Conventional Wellness Methods Meet Chatgpt Insights",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/IVY17C4s-kQ/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Chatgpt",
+      "trend_in_title": true,
+      "news_headline": "ChatGPT Can Now Help You Virtually Try On Clothes",
+      "script_format": "myth-bust",
+      "caption_style": "classic-pop",
+      "duration_seconds": 493,
+      "published_at": "2026-10-02T11:24:05.036Z"
+    },
+    {
       "video_id": "FNvZBURFSGs",
       "short_video_id": "MUj6j8urEBg",
       "book_slug": "bitcoin-standard",
@@ -293,5 +311,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-01T11:57:22.916Z"
+  "updated_at": "2026-10-02T11:24:05.037Z"
 }
