@@ -75,7 +75,15 @@ export function isQuotaExceeded(err) {
   return Number(status) === 403 && String(reason).toLowerCase() === "quotaexceeded";
 }
 
-export async function uploadVideo({ videoPath, title, description, tags, localizations, categoryId, privacyStatus, location }) {
+// Once YouTube says quotaExceeded, every further call today fails identically and failed calls
+// can still be counted against quota. Latch it so the rest of the run skips API calls instead of
+// retrying (captions used to retry 4x per language).
+let quotaLatched = false;
+export function isQuotaLatched() { return quotaLatched; }
+function latchIfQuota(err) { if (isQuotaExceeded(err)) quotaLatched = true; }
+
+export async function uploadVideo({ videoPath, title, description, tags, localizations, categoryId, privacyStatus, location, publishAt }) {
+  if (quotaLatched) throw new Error("YouTube quota already exhausted this run; skipping uploadVideo.");
   const youtube = client();
   const isPrivate = process.env.DRY_RUN_PRIVATE === "true";
   const parts = ["snippet", "status", "localizations"];
@@ -120,6 +128,9 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
       // publishVideo's comment for why. DRY_RUN_PRIVATE still overrides everything to
       // private, same as before, for review runs that should never go public at all.
       privacyStatus: isPrivate ? "private" : (privacyStatus || "public"),
+      // Schedule at upload time (saves a 50-unit videos.update per video, and removes the late
+      // call that was failing on quota). Only valid with private + a future time.
+      ...(!isPrivate && privacyStatus === "private" && publishAt && new Date(publishAt).getTime() > Date.now() ? { publishAt } : {}),
       selfDeclaredMadeForKids: false,
       license: "youtube", // matches Studio's "Licence: Standard YouTube licence" (the other
       // option, "creativeCommon", is a separate CC BY licence you'd opt into explicitly)
@@ -147,6 +158,7 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
 
     return res.data; // includes .id
   } catch (err) {
+    latchIfQuota(err);
     explainIfAuthError(err);
     // err.message alone is just the generic top-level reason ("The request metadata is
     // invalid.") — Google's actual per-field detail lives in err.response.data.error (or
@@ -199,8 +211,24 @@ export async function publishVideo({ videoId, publishAt, allowImmediate = false 
   const scheduledMode = Boolean(publishAt) && Number.isFinite(new Date(publishAt).getTime()) && new Date(publishAt).getTime() > Date.now();
   if (!scheduledMode && !allowImmediate) throw new Error(`Missing or passed publish target ${publishAt}; leaving ${videoId} private.`);
 
+  // Already scheduled at upload time? One videos.list (1 unit) replaces videos.update (50) + list.
+  if (scheduledMode) {
+    try {
+      const pre = await youtube.videos.list({ part: ["status"], id: [videoId] });
+      const st = pre.data.items?.[0]?.status;
+      if (st?.privacyStatus === "private" && st?.publishAt && new Date(st.publishAt).getTime() === new Date(publishAt).getTime()) {
+        console.log(`Scheduled (confirmed at upload): https://youtube.com/watch?v=${videoId} goes public at ${st.publishAt}`);
+        return;
+      }
+    } catch (err) {
+      latchIfQuota(err);
+      console.warn(`publishVideo pre-check failed (${err.message}); falling back to videos.update.`);
+    }
+  }
+
   let lastErr;
   for (let attempt = 1; attempt <= 3; attempt++) {
+    if (quotaLatched) break;
     try {
       const status = scheduledMode
         ? {
@@ -253,6 +281,8 @@ export async function publishVideo({ videoId, publishAt, allowImmediate = false 
       console.warn(`publishVideo: attempt ${attempt}/3 did not stick (still ${liveStatus}), retrying...`);
     } catch (err) {
       lastErr = err;
+      latchIfQuota(err);
+      if (quotaLatched) break;
       const retryable = isFailedPrecondition(err) && attempt < 3;
       if (retryable) {
         console.warn(`publishVideo: attempt ${attempt}/3 hit a failedPrecondition (known flaky response), retrying...`);
@@ -522,6 +552,7 @@ export async function checkVideoTrainability(videoId) {
 }
 
 export async function uploadCaptionTrack({ videoId, language, srtPath, name }) {
+  if (quotaLatched) throw new Error("YouTube quota already exhausted this run; skipping caption.");
   const youtube = client();
   // Retry: calling captions.insert immediately after videos.insert can fail with a
   // "video not found" style error because YouTube hasn't finished registering the upload yet.
@@ -539,8 +570,9 @@ export async function uploadCaptionTrack({ videoId, language, srtPath, name }) {
       return;
     } catch (err) {
       lastErr = err;
+      latchIfQuota(err);
       const isAuthDead = String(err?.response?.data?.error || err?.message || "").includes("invalid_grant");
-      const isLast = attempt === 4 || isAuthDead; // no point retrying a dead token 4x per language
+      const isLast = attempt === 4 || isAuthDead || quotaLatched; // no point retrying a dead token 4x per language
       console.warn(
         `captions.insert (${language}): attempt ${attempt}/4 failed${isLast ? "" : ", retrying"}: ${err.message}`
       );

@@ -9,7 +9,7 @@ import { fetchBackgroundMusic, attributionLine } from "./music.js";
 import { loadUsedMusicTitles, saveUsedMusicTitles } from "./music-history.js";
 import { buildScene, buildNewsScene, renderNewsCard, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic, normalizeLoudness, pickTodaysCaptionStyle, captionStyleForScene, tagVideoMetadata, tagThumbnailMetadata } from "./render.js";
 import { exiftool } from "exiftool-vendored";
-import { uploadVideo, uploadCaptionTrack, uploadThumbnail, addVideoToPlaylist, publishVideo, checkVideoTrainability } from "./youtube.js";
+import { uploadVideo, uploadCaptionTrack, uploadThumbnail, addVideoToPlaylist, publishVideo, checkVideoTrainability, isQuotaLatched } from "./youtube.js";
 import { appendVideoEntry, loadRecentTitles } from "./manifest.js";
 import { buildDailyCommunityPost } from "./community-post.js";
 import { pickTodaysTrend, fetchTopHeadline, fetchTopHeadlines, buildNewsSceneLine } from "./daily-trend.js";
@@ -975,7 +975,9 @@ async function main() {
   // public. This keeps YouTube from ever indexing a bare, caption-less, auto-thumbnail
   // version of the video. See publishVideo() in youtube.js for why auto-dubbing specifically
   // can't be part of this gate.
+  const scheduledPublishAt = computeScheduledPublishAt();
   const uploaded = await uploadVideo({
+    publishAt: scheduledPublishAt,
     videoPath: uploadPath,
     title: enTitle,
     description: enDescription,
@@ -1175,6 +1177,7 @@ async function main() {
       let uploadedShort;
       try {
         uploadedShort = await uploadVideo({
+          publishAt: scheduledPublishAt,
           videoPath: shortUploadPath,
           title: shortTitle,
           description: shortDescription,
@@ -1185,6 +1188,7 @@ async function main() {
           location: VIDEO_LOCATION_DESCRIPTION ? { description: VIDEO_LOCATION_DESCRIPTION } : undefined,
         });
       } catch (e) {
+        if (isQuotaLatched()) throw e; // do not burn another 1600 units retrying
         console.warn(
           "Short upload with localizations failed, retrying English-only:",
           e.message
@@ -1197,6 +1201,7 @@ async function main() {
           localizations: {},
           categoryId: book.categoryId || FALLBACK_CATEGORY_ID,
           privacyStatus: "private",
+          publishAt: scheduledPublishAt,
           location: VIDEO_LOCATION_DESCRIPTION ? { description: VIDEO_LOCATION_DESCRIPTION } : undefined,
         });
         console.log("Short uploaded English-only after localizations retry.");
