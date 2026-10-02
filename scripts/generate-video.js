@@ -1284,7 +1284,10 @@ async function main() {
   // shortScenes is always the leading shortSceneCount entries of `built` (see the Short block
   // above), so its lines/translations are just a slice of what step 7 already computed — zero
   // extra translateMeta calls needed. Re-timed from 0 since the Short is its own, shorter file.
-  const SHORT_CAPTIONS_BEFORE_PUBLISH = 7;
+  // Per parent (main) instruction Oct 2: Shorts get English + these 3 translated tracks only (main video keeps all 15).
+  // Cuts ~11 caption calls (4,400 units) per Short.
+  const SHORT_CAPTION_LANGS = ["es", "pt", "hi"];
+  const SHORT_CAPTIONS_BEFORE_PUBLISH = SHORT_CAPTION_LANGS.length;
   let shortBuiltScenes = [];
   if (shortVideoId && shortSceneCount > 0) {
     shortBuiltScenes = built.slice(0, shortSceneCount);
@@ -1298,7 +1301,7 @@ async function main() {
       console.warn("Short English caption upload failed:", e.message);
     }
 
-    for (const lang of VIDEO_LANGS.slice(0, SHORT_CAPTIONS_BEFORE_PUBLISH)) {
+    for (const lang of VIDEO_LANGS.filter((l) => SHORT_CAPTION_LANGS.includes(l))) {
       const ytLang = YT_LOCALE_MAP[lang] ?? lang;
       const lines = translatedCaptionLines[lang];
       if (!lines) continue;
@@ -1343,7 +1346,7 @@ async function main() {
   // tight-quota day), it just means a few Short caption languages are missing, not a stuck-private
   // video — everything is already live regardless of how this loop goes.
   if (shortVideoId && shortSceneCount > 0) {
-    for (const lang of VIDEO_LANGS.slice(SHORT_CAPTIONS_BEFORE_PUBLISH)) {
+    for (const lang of []) { // remaining Short languages intentionally dropped (see SHORT_CAPTION_LANGS)
       const ytLang = YT_LOCALE_MAP[lang] ?? lang;
       const lines = translatedCaptionLines[lang];
       if (!lines) continue;
