@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "Rnzbuvv4sW0",
+      "short_video_id": "Q9Y_pNqoETA",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "Channel Growth Depends On Algorithm Signals",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/Rnzbuvv4sW0/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": true,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "stat-hook",
+      "caption_style": "lower-third",
+      "duration_seconds": 184,
+      "published_at": "2026-10-02T07:21:22.756Z"
+    },
+    {
       "video_id": "Elo-C-uLmvE",
       "short_video_id": "c_o2FpMwR-U",
       "book_slug": "science-of-feeling-great",
@@ -219,5 +237,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-09-30T07:18:24.633Z"
+  "updated_at": "2026-10-02T07:21:22.758Z"
 }
