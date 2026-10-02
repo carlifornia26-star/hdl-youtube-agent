@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "b00f9_m5nZE",
+      "short_video_id": "-wJokjwxJ2I",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "Happiness Often Increases After Bad Jobs Report",
+      "description": "Curious about the science of happiness? Art of Joy breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/b00f9_m5nZE/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Jobs Report",
+      "trend_in_title": true,
+      "news_headline": "Labor market slowed in September, final monthly jobs report before midterms shows",
+      "script_format": "cold-open",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 308,
+      "published_at": "2026-10-02T14:19:16.210Z"
+    },
+    {
       "video_id": "osOzi9_2oTc",
       "short_video_id": "lBoDYR7SjOY",
       "book_slug": "science-of-feeling-great",
@@ -389,5 +407,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-01T15:07:18.877Z"
+  "updated_at": "2026-10-02T14:19:16.211Z"
 }
