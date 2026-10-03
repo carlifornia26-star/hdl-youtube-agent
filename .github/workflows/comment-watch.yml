@@ -34,4 +34,4 @@ jobs:
         run: |
           git config user.name "hdl-comment-watch"; git config user.email "actions@users.noreply.github.com"
           git add comment-watch || true
-          git diff --cached --quiet || { git commit -qm "comment-watch: channel ${{ matrix.ch }}"; for i in 1 2 3; do git pull -q --rebase && git push -q && break; sleep 5; done; }
+          git diff --cached --quiet || { git commit -qm "comment-watch: channel ${{ matrix.ch }}"; for i in 1 2 3; do git pull -q --rebase --autostash && git push -q && break; sleep 5; done; }
