@@ -27,6 +27,15 @@ async function main() {
   const state = {};
   try { Object.assign(state, JSON.parse(await fs.readFile("niche-playlists.json", "utf8"))); } catch {}
   let adds = 0;
+  // Remove empty duplicates of a niche title that are not the tracked playlist.
+  for (const p of mine) {
+    const tracked = state[p.snippet.title];
+    if (!tracked || p.id === tracked || !NICHES.some((n) => n.title === p.snippet.title)) continue;
+    try {
+      const r = await yt.playlistItems.list({ part: ["id"], playlistId: p.id, maxResults: 1 });
+      if ((r.data.items || []).length === 0) { await yt.playlists.delete({ id: p.id }); console.log("Deleted empty duplicate", p.id, p.snippet.title); }
+    } catch (e) { console.log("Dedupe skipped:", e.message); }
+  }
   for (const n of NICHES) {
     let id = mine.find((p) => p.snippet.title === n.title)?.id || state[n.title];
     try {
