@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "40_CyH8rOBc",
+      "short_video_id": "acs_uxXuBXE",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "How Daylight Savings Affects Vitality Levels",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/40_CyH8rOBc/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Daylight Savings",
+      "trend_in_title": true,
+      "news_headline": "When do clocks fall back? 2026 daylight saving time start and end",
+      "script_format": "myth-bust",
+      "caption_style": "classic-pop",
+      "duration_seconds": 574,
+      "published_at": "2026-10-03T09:43:45.398Z"
+    },
+    {
       "video_id": "4o0vfTYP6C8",
       "short_video_id": "buaCd6vaZYY",
       "book_slug": "age-one-premium",
@@ -424,5 +442,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-01T10:45:59.335Z"
+  "updated_at": "2026-10-03T09:43:45.399Z"
 }
