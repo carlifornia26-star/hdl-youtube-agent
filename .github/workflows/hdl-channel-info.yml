@@ -1,0 +1,71 @@
+name: HDL Channel Info
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Which channel to set up playlists for"
+        required: true
+        default: "1"
+        type: choice
+        options: ["1", "2", "3", "4"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hdl-channel-info
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    name: Create per-book playlists with localizations
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve secret names for selected channel
+        id: resolve
+        run: |
+          # Channel 1 kept its original YT_ names; channels 2/3 were saved as
+          # YOUTUBE_..._2 / _3 — map explicitly rather than assuming one prefix.
+          case "${{ github.event.inputs.channel }}" in
+            1)
+              echo "id_key=YT_CLIENT_ID" >> "$GITHUB_OUTPUT"
+              echo "secret_key=YT_CLIENT_SECRET" >> "$GITHUB_OUTPUT"
+              echo "token_key=YT_REFRESH_TOKEN" >> "$GITHUB_OUTPUT" ;;
+            2)
+              echo "id_key=YOUTUBE_CLIENT_ID_2" >> "$GITHUB_OUTPUT"
+              echo "secret_key=YOUTUBE_CLIENT_SECRET_2" >> "$GITHUB_OUTPUT"
+              echo "token_key=YOUTUBE_REFRESH_TOKEN_2" >> "$GITHUB_OUTPUT" ;;
+            3)
+              echo "id_key=YOUTUBE_CLIENT_ID_3" >> "$GITHUB_OUTPUT"
+              echo "secret_key=YOUTUBE_CLIENT_SECRET_3" >> "$GITHUB_OUTPUT"
+              echo "token_key=YOUTUBE_REFRESH_TOKEN_3" >> "$GITHUB_OUTPUT" ;;
+            4)
+              echo "id_key=YOUTUBE_CLIENT_ID_4" >> "$GITHUB_OUTPUT"
+              echo "secret_key=YOUTUBE_CLIENT_SECRET_4" >> "$GITHUB_OUTPUT"
+              echo "token_key=YOUTUBE_REFRESH_TOKEN_4" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Run setup-playlists (Channel ${{ github.event.inputs.channel }})
+        env:
+          CHANNEL_ID: ${{ github.event.inputs.channel }}
+          YT_CLIENT_ID: ${{ secrets[steps.resolve.outputs.id_key] }}
+          YT_CLIENT_SECRET: ${{ secrets[steps.resolve.outputs.secret_key] }}
+          YT_REFRESH_TOKEN: ${{ secrets[steps.resolve.outputs.token_key] }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: node scripts/channel-info.js
+
