@@ -1,0 +1,37 @@
+name: Comment watch (read-only)
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch: {}
+permissions:
+  contents: write
+concurrency: comment-watch
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - { ch: "1", id: YT_CLIENT_ID, secret: YT_CLIENT_SECRET, token: YT_REFRESH_TOKEN }
+          - { ch: "2", id: YOUTUBE_CLIENT_ID_2, secret: YOUTUBE_CLIENT_SECRET_2, token: YOUTUBE_REFRESH_TOKEN_2 }
+          - { ch: "3", id: YOUTUBE_CLIENT_ID_3, secret: YOUTUBE_CLIENT_SECRET_3, token: YOUTUBE_REFRESH_TOKEN_3 }
+          - { ch: "4", id: YOUTUBE_CLIENT_ID_4, secret: YOUTUBE_CLIENT_SECRET_4, token: YOUTUBE_REFRESH_TOKEN_4 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install
+      - run: node scripts/comment-watch.js
+        env:
+          WATCH_CHANNEL: ${{ matrix.ch }}
+          YT_CLIENT_ID: ${{ secrets[matrix.id] }}
+          YT_CLIENT_SECRET: ${{ secrets[matrix.secret] }}
+          YT_REFRESH_TOKEN: ${{ secrets[matrix.token] }}
+      - name: Commit state
+        run: |
+          git config user.name "hdl-comment-watch"; git config user.email "actions@users.noreply.github.com"
+          git add comment-watch || true
+          git diff --cached --quiet || { git commit -qm "comment-watch: channel ${{ matrix.ch }}"; for i in 1 2 3; do git pull -q --rebase && git push -q && break; sleep 5; done; }
