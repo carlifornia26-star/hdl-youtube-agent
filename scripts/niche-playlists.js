@@ -34,10 +34,12 @@ async function main() {
       state[n.title] = id;
       const present = new Set();
       let t;
-      do {
-        const r = await yt.playlistItems.list({ part: ["contentDetails"], playlistId: id, maxResults: 50, pageToken: t });
-        r.data.items.forEach((i) => present.add(i.contentDetails.videoId)); t = r.data.nextPageToken;
-      } while (t);
+      try {
+        do {
+          const r = await yt.playlistItems.list({ part: ["contentDetails"], playlistId: id, maxResults: 50, pageToken: t });
+          r.data.items.forEach((i) => present.add(i.contentDetails.videoId)); t = r.data.nextPageToken;
+        } while (t);
+      } catch (e) { console.log("List not ready yet (new playlist), treating as empty:", e.message); }
       for (const v of manifest.filter((m) => n.slugs.includes(m.book_slug))) {
         if (present.has(v.video_id)) continue;
         await addVideoToPlaylist({ playlistId: id, videoId: v.video_id });
