@@ -44,7 +44,7 @@ const CHANNEL_ID = process.env.CHANNEL_ID || "1";
 const FILE_SUFFIX = CHANNEL_ID === "1" ? "" : `-${CHANNEL_ID}`;
 
 export async function buildDailyCommunityPost(book, buildDir) {
-  const enLine = `${book.title} — ${book.angle}. Available now, exclusively on Google Play Books. #HDLGroup`;
+  const enLine = `${book.title} — ${book.angle}. Available now, on Google Play Books. #HDLGroup`;
 
   const sections = [`${LANG_NAMES.en}\n${enLine}`];
   for (const lang of VIDEO_LANGS) {

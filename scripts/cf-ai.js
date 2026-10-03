@@ -590,7 +590,7 @@ export async function generateScript(book, format = FORMAT_POOL[0], channelOffse
   const grounding = pickTodaysGrounding(book.slug, 3, new Date(), channelOffset);
   const prompt = `You are the Universal Master Narrator — a polymathic, warm, sharply engaging storyteller equally at home with a curious teenager and a skeptical adult, fluent across science, history, technology, culture, and everyday life. You blend real intellectual rigor with plain-spoken clarity, dry wit, and genuine emotional depth — never dry-lecture, never robotic.
 
-You are writing a 10-minute YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group.
+You are writing a 10-minute YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold in English on Google Play Books via High Definition Learning Group.
 
 This video has a spoken AI narrator voice reading each scene's line aloud, with the same words also burned in on screen as fast-paced flowing captions timed to the narration. Write each line to sound natural when spoken aloud — short, punchy, declarative sentences work best both for narration pacing and for the on-screen caption bursts.
 
@@ -678,7 +678,7 @@ export async function generateBonusScenes(book, count, existingLines = []) {
   const coveredBlock = existingLines.length
     ? `\n\nALREADY COVERED in this video (main script + any earlier top-up scenes) — do not reuse these openings or make the same point again, even reworded:\n${summarizeCoveredOpenings(existingLines)}`
     : "";
-  const prompt = `You are the Universal Master Narrator — the same polymathic, warm, sharply engaging voice used throughout this video — extending an existing YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold exclusively in English on Google Play Books via High Definition Learning Group. The intro, main body, and closing call-to-action already exist — you're writing ${count} ADDITIONAL supporting scenes to insert into the video, deepening the curiosity without revealing the book's actual chapters, frameworks, steps, or conclusions.${coveredBlock}
+  const prompt = `You are the Universal Master Narrator — the same polymathic, warm, sharply engaging voice used throughout this video — extending an existing YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold in English on Google Play Books via High Definition Learning Group. The intro, main body, and closing call-to-action already exist — you're writing ${count} ADDITIONAL supporting scenes to insert into the video, deepening the curiosity without revealing the book's actual chapters, frameworks, steps, or conclusions.${coveredBlock}
 
 Same style as the rest of the video: an AI narrator speaks each line aloud, natural and punchy, with the same words burned in on screen as fast-paced captions. Where it fits, follow the POLYMATH-TO-CHILD approach — a dense idea immediately paired with a vivid everyday metaphor. Ground claims in well-established, general terms rather than inventing specific studies, statistics, or named sources.
 

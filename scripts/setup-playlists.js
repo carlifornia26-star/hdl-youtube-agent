@@ -47,7 +47,7 @@ async function main() {
     }
 
     const title = `${book.title} — Teaser Videos | HDL Group`;
-    const description = `Daily short teasers exploring ${book.angle}, based on the book "${book.title}" from HDL Group. Available exclusively on Google Play Books.`;
+    const description = `Daily short teasers exploring ${book.angle}, based on the book "${book.title}" from HDL Group. Available on Google Play Books.`;
 
     const localizations = {};
     for (const lang of VIDEO_LANGS) {
