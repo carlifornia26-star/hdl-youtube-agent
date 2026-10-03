@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "-Kd1vTia9X4",
+      "short_video_id": "wHvfH_c69oc",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "When Morning Routines Include Gratitude",
+      "description": "Curious about the science of happiness? Art of Joy breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/-Kd1vTia9X4/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "cold-open",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 379,
+      "published_at": "2026-10-03T10:41:32.636Z"
+    },
+    {
       "video_id": "IVY17C4s-kQ",
       "short_video_id": "9BTOTH8LLz4",
       "book_slug": "science-of-feeling-great",
@@ -311,5 +329,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-02T11:24:05.037Z"
+  "updated_at": "2026-10-03T10:41:32.636Z"
 }
