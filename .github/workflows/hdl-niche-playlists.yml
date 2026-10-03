@@ -1,0 +1,46 @@
+name: HDL Niche Playlists
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hdl-niche-playlists
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    name: Create per-book playlists with localizations
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run niche playlists (channel 1)
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+        run: node scripts/niche-playlists.js
+
+      - name: Commit state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add niche-playlists.json
+          git diff --staged --quiet || git commit -m "niche-playlists state [skip ci]"
+          git pull --rebase origin "${{ github.ref_name }}"
+          git push
+
