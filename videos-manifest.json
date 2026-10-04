@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "pURAo0AJ7r8",
+      "short_video_id": "0AKXlfTPvQM",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "Chasing Weather Tomorrow Conditions May Undermine Happiness",
+      "description": "Curious about the science of happiness? Art of Joy breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/pURAo0AJ7r8/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": true,
+      "trend_term": "Weather Tomorrow",
+      "trend_in_title": true,
+      "news_headline": "Kauai Weather Forecast for October 04, 2026",
+      "script_format": "cold-open",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 461,
+      "published_at": "2026-10-04T10:20:02.670Z"
+    },
+    {
       "video_id": "40_CyH8rOBc",
       "short_video_id": "acs_uxXuBXE",
       "book_slug": "science-of-feeling-great",
@@ -442,5 +460,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-03T09:43:45.399Z"
+  "updated_at": "2026-10-04T10:20:02.670Z"
 }
