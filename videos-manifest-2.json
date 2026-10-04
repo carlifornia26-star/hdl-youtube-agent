@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "ab_W6RwMBuI",
+      "short_video_id": "peGkHGNBSKI",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "New Creators Often Misjudge Nba Social Media Strategies",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/ab_W6RwMBuI/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Nba",
+      "trend_in_title": true,
+      "news_headline": "Anthony Davis sends a warning ahead of the new NBA season: \"People forgot and I take that personal\"",
+      "script_format": "stat-hook",
+      "caption_style": "lower-third",
+      "duration_seconds": 418,
+      "published_at": "2026-10-04T11:24:51.366Z"
+    },
+    {
       "video_id": "-Kd1vTia9X4",
       "short_video_id": "wHvfH_c69oc",
       "book_slug": "art-of-joy",
@@ -329,5 +347,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-03T10:41:32.636Z"
+  "updated_at": "2026-10-04T11:24:51.367Z"
 }
