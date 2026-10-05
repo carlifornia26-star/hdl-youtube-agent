@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "f_RrnF8usDI",
+      "short_video_id": "uEu0LyKFCIo",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "After Teachers Day Modern Pet Care Methods Show Noticeable Improvement",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/f_RrnF8usDI/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Teachers Day",
+      "trend_in_title": true,
+      "news_headline": "4 Ohio educators worth treasuring on World Teachers' Day",
+      "script_format": "direct-address",
+      "caption_style": "wide-orange",
+      "duration_seconds": 574,
+      "published_at": "2026-10-05T12:42:33.618Z"
+    },
+    {
       "video_id": "ab_W6RwMBuI",
       "short_video_id": "peGkHGNBSKI",
       "book_slug": "youtube-algorithms",
@@ -347,5 +365,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-04T11:24:51.367Z"
+  "updated_at": "2026-10-05T12:42:33.618Z"
 }
