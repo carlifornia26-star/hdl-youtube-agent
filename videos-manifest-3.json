@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "7Me1VW-gwwE",
+      "short_video_id": "4t-FH21ONro",
+      "book_slug": "age-one",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-complete-ai-business-mastery",
+      "title": "Ai Systems Influence Chatgpt Login Trends",
+      "description": "Curious about AI & the information economy? AGE ONE breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/7Me1VW-gwwE/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Chatgpt Login",
+      "trend_in_title": true,
+      "news_headline": "OpenAI moves to make ChatGPT ads more measurable — and more visual",
+      "script_format": "direct-hook",
+      "caption_style": "classic-pop",
+      "duration_seconds": 536,
+      "published_at": "2026-10-05T16:29:48.673Z"
+    },
+    {
       "video_id": "Q2LZaCEEBts",
       "short_video_id": "x1M8NU1hrNs",
       "book_slug": "pet-friendly",
@@ -443,5 +461,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-04T13:40:15.885Z"
+  "updated_at": "2026-10-05T16:29:48.673Z"
 }
