@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "RT6UM3mkirw",
+      "short_video_id": "yPDRL10bHXQ",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "Organic Growth Outpaces Paid Advertising",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/RT6UM3mkirw/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "stat-hook",
+      "caption_style": "lower-third",
+      "duration_seconds": 386,
+      "published_at": "2026-10-05T10:53:09.378Z"
+    },
+    {
       "video_id": "pURAo0AJ7r8",
       "short_video_id": "0AKXlfTPvQM",
       "book_slug": "art-of-joy",
@@ -460,5 +478,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-04T10:20:02.670Z"
+  "updated_at": "2026-10-05T10:53:09.378Z"
 }
