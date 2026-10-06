@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-06",
+      "channel": "2",
+      "term": "Asylum Seeker",
+      "headline": null
+    },
+    {
+      "date": "2026-10-06",
       "channel": "1",
       "term": "Safety",
       "headline": null
@@ -229,5 +235,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-06T10:32:35.631Z"
+  "updated_at": "2026-10-06T12:04:47.074Z"
 }
