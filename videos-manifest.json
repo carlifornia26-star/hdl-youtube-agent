@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "akv5IAzLurs",
+      "short_video_id": "IlzOUCZ2RbY",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "Neglecting Daily Checks Compromises Pet Safety",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/akv5IAzLurs/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Safety",
+      "trend_in_title": true,
+      "news_headline": "Safety Tips: Lithium-ion battery fire prevention",
+      "script_format": "direct-address",
+      "caption_style": "wide-orange",
+      "duration_seconds": 596,
+      "published_at": "2026-10-06T10:59:00.823Z"
+    },
+    {
       "video_id": "RT6UM3mkirw",
       "short_video_id": "yPDRL10bHXQ",
       "book_slug": "youtube-algorithms",
@@ -478,5 +496,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-05T10:53:09.378Z"
+  "updated_at": "2026-10-06T10:59:00.824Z"
 }
