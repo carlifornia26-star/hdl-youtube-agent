@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "Fdm5kKZ3fMY",
+      "short_video_id": "oSZrldDMotQ",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "How Citi Views Bitcoin",
+      "description": "Curious about Bitcoin & digital finance? Bitcoin Standard breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/Fdm5kKZ3fMY/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Citi",
+      "trend_in_title": true,
+      "news_headline": "Now Citi will promote even its moderately good analysts to associate after two years",
+      "script_format": "cold-open",
+      "caption_style": "lower-third",
+      "duration_seconds": 441,
+      "published_at": "2026-10-06T08:02:54.435Z"
+    },
+    {
       "video_id": "LiEe54nm5xA",
       "short_video_id": "wTEn8ogTB5c",
       "book_slug": "age-one-premium",
@@ -291,5 +309,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-10-05T07:37:40.398Z"
+  "updated_at": "2026-10-06T08:02:54.436Z"
 }
