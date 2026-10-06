@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-06",
+      "channel": "3",
+      "term": "World Space Week 2026",
+      "headline": null
+    },
+    {
+      "date": "2026-10-06",
       "channel": "2",
       "term": "Asylum Seeker",
       "headline": null
@@ -235,5 +241,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-06T12:04:47.074Z"
+  "updated_at": "2026-10-06T14:18:07.436Z"
 }

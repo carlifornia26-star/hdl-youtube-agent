@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "gDfcXfu2MQU",
+      "short_video_id": "pLfRymBWWic",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "Traditional Business Models Give Way To Advanced Ai Strategy During World Space Week 2026",
+      "description": "Curious about advanced AI business strategy? AGE ONE: Premium Edition breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/gDfcXfu2MQU/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": true,
+      "trend_term": "World Space Week 2026",
+      "trend_in_title": true,
+      "news_headline": "Celebrate humanity's 'Rocket Revolution' with World Space Week 2026",
+      "script_format": "myth-bust",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 521,
+      "published_at": "2026-10-06T14:42:37.938Z"
+    },
+    {
       "video_id": "7Me1VW-gwwE",
       "short_video_id": "4t-FH21ONro",
       "book_slug": "age-one",
@@ -461,5 +479,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-05T16:29:48.673Z"
+  "updated_at": "2026-10-06T14:42:37.939Z"
 }
