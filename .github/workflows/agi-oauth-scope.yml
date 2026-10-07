@@ -1,0 +1,32 @@
+name: AGI OAuth scope check
+on:
+  workflow_dispatch:
+permissions: {}
+concurrency: agi-oauth-scope-check
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Print granted scopes only
+        env:
+          CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID_4 }}
+          CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET_4 }}
+          REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN_4 }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.parse, urllib.request
+          try:
+              data = urllib.parse.urlencode({'client_id': os.environ['CLIENT_ID'], 'client_secret': os.environ['CLIENT_SECRET'], 'refresh_token': os.environ['REFRESH_TOKEN'], 'grant_type': 'refresh_token'}).encode()
+              req = urllib.request.Request('https://oauth2.googleapis.com/token', data=data, method='POST')
+              with urllib.request.urlopen(req, timeout=20) as response:
+                  token = json.load(response)['access_token']
+              url = 'https://oauth2.googleapis.com/tokeninfo?' + urllib.parse.urlencode({'access_token': token})
+              with urllib.request.urlopen(url, timeout=20) as response:
+                  scopes = json.load(response).get('scope', '').split()
+              if not scopes:
+                  raise ValueError()
+              print('\n'.join(sorted(set(scopes))))
+          except Exception:
+              raise SystemExit(1)
+          PY
