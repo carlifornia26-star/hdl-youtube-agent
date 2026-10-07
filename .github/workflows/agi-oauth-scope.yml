@@ -1,6 +1,11 @@
 name: AGI OAuth scope check
 on:
   workflow_dispatch:
+    inputs:
+      reply:
+        description: Reply once to the verified AGI hearts comment
+        type: boolean
+        default: false
 permissions: {}
 concurrency: agi-oauth-scope-check
 jobs:
@@ -10,6 +15,7 @@ jobs:
     steps:
       - name: Print granted scopes only
         env:
+          REPLY: ${{ inputs.reply }}
           CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID_4 }}
           CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET_4 }}
           REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN_4 }}
@@ -27,6 +33,54 @@ jobs:
               if not scopes:
                   raise ValueError()
               print('\n'.join(sorted(set(scopes))))
+              if os.environ.get('REPLY') == 'true':
+                  if 'https://www.googleapis.com/auth/youtube.force-ssl' not in scopes:
+                      raise ValueError()
+                  def api(resource, params, body=None):
+                      url = 'https://www.googleapis.com/youtube/v3/' + resource + '?' + urllib.parse.urlencode(params)
+                      headers = {'Authorization': 'Bearer ' + token}
+                      payload = None
+                      if body is not None:
+                          headers['Content-Type'] = 'application/json'
+                          payload = json.dumps(body).encode()
+                      request = urllib.request.Request(url, data=payload, headers=headers, method='POST' if body is not None else 'GET')
+                      with urllib.request.urlopen(request, timeout=20) as response:
+                          return json.load(response)
+                  owner = 'UCZv9QcBMtyi4n2PkuxTCiPg'
+                  me = api('channels', {'part': 'snippet', 'mine': 'true'}).get('items', [])
+                  if len(me) != 1 or me[0]['id'] != owner or me[0]['snippet'].get('customUrl', '').lower() != '@agihighdefinitionlearningg-h7y':
+                      raise ValueError()
+                  thread_id = 'UgxXKuFSHIEerPIc_wR4AaABAg'
+                  threads = api('commentThreads', {'part': 'snippet', 'id': thread_id}).get('items', [])
+                  if len(threads) != 1:
+                      raise ValueError()
+                  thread = threads[0]['snippet']
+                  original = thread['topLevelComment']
+                  snippet = original['snippet']
+                  if thread.get('videoId') != 'wTEn8ogTB5c' or thread.get('channelId') != owner or snippet.get('textOriginal', '').replace('\ufe0f', '') != '\u2764\u2764\u2764' or snippet.get('authorDisplayName') != '@JovyrubenSelda':
+                      raise ValueError()
+                  parent = original['id']
+                  page = ''
+                  while True:
+                      params = {'part': 'snippet', 'parentId': parent, 'maxResults': '100'}
+                      if page:
+                          params['pageToken'] = page
+                      replies = api('comments', params)
+                      for reply in replies.get('items', []):
+                          if reply['snippet'].get('authorChannelId', {}).get('value') == owner:
+                              print('EXISTING_CHANNEL_REPLY ' + reply['id'])
+                              raise SystemExit(0)
+                      page = replies.get('nextPageToken', '')
+                      if not page:
+                          break
+                  text = 'Thanks for watching! \U0001f64f'
+                  posted = api('comments', {'part': 'snippet'}, {'snippet': {'parentId': parent, 'textOriginal': text}})
+                  reply_id = posted['id']
+                  print('INSERT_ACCEPTED ' + reply_id)
+                  check = api('comments', {'part': 'snippet', 'id': reply_id}).get('items', [])
+                  if len(check) != 1 or check[0]['snippet'].get('parentId') != parent or check[0]['snippet'].get('textOriginal') != text or check[0]['snippet'].get('authorChannelId', {}).get('value') != owner:
+                      raise ValueError()
+                  print('VERIFIED_REPLY ' + reply_id)
           except Exception:
               raise SystemExit(1)
           PY
