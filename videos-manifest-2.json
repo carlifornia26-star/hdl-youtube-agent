@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "FPSMEP--Fd8",
+      "short_video_id": "gyMmjV6hXu4",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "Business Leaders Navigate Advanced Ai Amid Singapore Haze",
+      "description": "Curious about advanced AI business strategy? AGE ONE: Premium Edition breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/FPSMEP--Fd8/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Singapore Haze",
+      "trend_in_title": true,
+      "news_headline": "Southeast Asia's haze crisis tests whether the region has learned from the 2015 catastrophe",
+      "script_format": "myth-bust",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 521,
+      "published_at": "2026-10-07T12:08:04.650Z"
+    },
+    {
       "video_id": "f_RrnF8usDI",
       "short_video_id": "uEu0LyKFCIo",
       "book_slug": "pet-friendly",
@@ -365,5 +383,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-05T12:42:33.618Z"
+  "updated_at": "2026-10-07T12:08:04.651Z"
 }

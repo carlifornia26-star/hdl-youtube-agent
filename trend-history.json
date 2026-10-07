@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-07",
+      "channel": "2",
+      "term": "Singapore Haze",
+      "headline": null
+    },
+    {
+      "date": "2026-10-07",
       "channel": "1",
       "term": "Supermarket",
       "headline": null
@@ -247,5 +253,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-07T10:24:50.989Z"
+  "updated_at": "2026-10-07T11:50:14.340Z"
 }
