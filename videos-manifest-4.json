@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "tL7ylFWGLuk",
+      "short_video_id": "Elt0IfsBq-o",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Overemphasizing Physical Health Undermines Wellness",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/tL7ylFWGLuk/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "stat-hook",
+      "caption_style": "wide-orange",
+      "duration_seconds": 330,
+      "published_at": "2026-10-07T07:37:22.311Z"
+    },
+    {
       "video_id": "Fdm5kKZ3fMY",
       "short_video_id": "oSZrldDMotQ",
       "book_slug": "bitcoin-standard",
@@ -309,5 +327,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-10-06T08:02:54.436Z"
+  "updated_at": "2026-10-07T07:37:22.312Z"
 }
