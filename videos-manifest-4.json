@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "w8SNrYrjD4E",
+      "short_video_id": "afjvmFaSLSU",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "Nurse Led Research On Happiness",
+      "description": "Curious about the science of happiness? Art of Joy breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/w8SNrYrjD4E/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": true,
+      "trend_term": "Nurse",
+      "trend_in_title": true,
+      "news_headline": "Hospitals can be unsafe for pregnant nurses. U of A researchers are fixing that.",
+      "script_format": "direct-address",
+      "caption_style": "classic-pop",
+      "duration_seconds": 600,
+      "published_at": "2026-10-08T07:56:21.273Z"
+    },
+    {
       "video_id": "tL7ylFWGLuk",
       "short_video_id": "Elt0IfsBq-o",
       "book_slug": "science-of-feeling-great",
@@ -327,5 +345,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-10-07T07:37:22.312Z"
+  "updated_at": "2026-10-08T07:56:21.274Z"
 }
