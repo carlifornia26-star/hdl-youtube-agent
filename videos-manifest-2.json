@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "REzSs_JaMfM",
+      "short_video_id": "TObewT3eOis",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "Bitcoin Investors Track Google Maps Live Fuel Prices",
+      "description": "Curious about Bitcoin & digital finance? Bitcoin Standard breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/REzSs_JaMfM/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Google Maps Live Fuel Prices",
+      "trend_in_title": true,
+      "news_headline": "This winter, use Google Maps and Waze to find the best fuel prices in the UK.",
+      "script_format": "cold-open",
+      "caption_style": "lower-third",
+      "duration_seconds": 386,
+      "published_at": "2026-10-08T12:17:06.370Z"
+    },
+    {
       "video_id": "FPSMEP--Fd8",
       "short_video_id": "gyMmjV6hXu4",
       "book_slug": "age-one-premium",
@@ -383,5 +401,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-07T12:08:04.651Z"
+  "updated_at": "2026-10-08T12:17:06.371Z"
 }
