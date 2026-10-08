@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "0LG7bZtZqBI",
+      "short_video_id": "2l5y1T9JMO4",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Coca-Cola Affects Vitality",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/0LG7bZtZqBI/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Coca-cola",
+      "trend_in_title": true,
+      "news_headline": "The 2026 eNASCAR Coca-Cola iRacing Series Championship 4: By The Numbers",
+      "script_format": "stat-hook",
+      "caption_style": "wide-orange",
+      "duration_seconds": 470,
+      "published_at": "2026-10-08T15:07:51.977Z"
+    },
+    {
       "video_id": "_nMmK1jsRqs",
       "short_video_id": "KsRWwjDBjGo",
       "book_slug": "bitcoin-standard",
@@ -497,5 +515,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-07T14:57:18.767Z"
+  "updated_at": "2026-10-08T15:07:51.978Z"
 }
