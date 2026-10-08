@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "CjveJavSO2c",
+      "short_video_id": "xm5t-Z1lYk4",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "Advanced Business Strategy Evolves With Gpt6",
+      "description": "Curious about advanced AI business strategy? AGE ONE: Premium Edition breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/CjveJavSO2c/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Gpt6",
+      "trend_in_title": true,
+      "news_headline": "GPT6 Is Here: What Can You Do With OpenAI’s New Intelligent UI?",
+      "script_format": "myth-bust",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 569,
+      "published_at": "2026-10-08T11:09:10.138Z"
+    },
+    {
       "video_id": "azgGrl66Wgo",
       "short_video_id": "8e2P4gFhCkY",
       "book_slug": "age-one",
@@ -514,5 +532,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-07T10:50:35.758Z"
+  "updated_at": "2026-10-08T11:09:10.142Z"
 }
