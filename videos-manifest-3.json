@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "cjYZoFo-IRM",
+      "short_video_id": "jjIYlTvvJnA",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "What Drives Human Happiness",
+      "description": "Curious about the science of happiness? Art of Joy breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/cjYZoFo-IRM/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": true,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "direct-address",
+      "caption_style": "classic-pop",
+      "duration_seconds": 470,
+      "published_at": "2026-10-09T14:48:34.239Z"
+    },
+    {
       "video_id": "0LG7bZtZqBI",
       "short_video_id": "2l5y1T9JMO4",
       "book_slug": "science-of-feeling-great",
@@ -515,5 +533,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-08T15:07:51.978Z"
+  "updated_at": "2026-10-09T14:48:34.240Z"
 }
