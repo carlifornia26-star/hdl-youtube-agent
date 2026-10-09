@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "PhGgDy31Eqo",
+      "short_video_id": "8oNAdbd5xSU",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "Growing Channel Success Is Part Of The Game",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/PhGgDy31Eqo/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Game",
+      "trend_in_title": true,
+      "news_headline": "Not done yet! Guardians storm back to force Game 5 in Cleveland",
+      "script_format": "direct-hook",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 498,
+      "published_at": "2026-10-09T07:47:30.837Z"
+    },
+    {
       "video_id": "w8SNrYrjD4E",
       "short_video_id": "afjvmFaSLSU",
       "book_slug": "art-of-joy",
@@ -345,5 +363,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-10-08T07:56:21.274Z"
+  "updated_at": "2026-10-09T07:47:30.838Z"
 }
