@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-09",
+      "channel": "1",
+      "term": "Bet9ja",
+      "headline": null
+    },
+    {
+      "date": "2026-10-09",
       "channel": "4",
       "term": "Game",
       "headline": null
@@ -289,5 +295,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-09T07:31:23.791Z"
+  "updated_at": "2026-10-09T10:44:13.315Z"
 }

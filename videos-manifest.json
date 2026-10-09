@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "dEO0Bsp8Zhk",
+      "short_video_id": "1FbmTuJxLlg",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "Five Digital Finance Signs Bet9ja Users Should Know",
+      "description": "Curious about Bitcoin & digital finance? Bitcoin Standard breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/dEO0Bsp8Zhk/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Bet9ja",
+      "trend_in_title": true,
+      "news_headline": "Bet9ja’s Best Booking Codes For The Weekend’s EPL Return",
+      "script_format": "cold-open",
+      "caption_style": "lower-third",
+      "duration_seconds": 398,
+      "published_at": "2026-10-09T11:07:55.486Z"
+    },
+    {
       "video_id": "CjveJavSO2c",
       "short_video_id": "xm5t-Z1lYk4",
       "book_slug": "age-one-premium",
@@ -532,5 +550,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-08T11:09:10.142Z"
+  "updated_at": "2026-10-09T11:07:55.487Z"
 }
