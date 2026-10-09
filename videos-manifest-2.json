@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "eRzaePfG8aQ",
+      "short_video_id": "-pLkGmIccyQ",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Common Wellness Mistakes Amid Singapore Pollution Index High 2026",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/eRzaePfG8aQ/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Singapore Pollution Index High 2026",
+      "trend_in_title": true,
+      "news_headline": "Singapore haze worsens as central region’s air quality nears 2026 high, smoke from Indonesia continues to drift in",
+      "script_format": "stat-hook",
+      "caption_style": "wide-orange",
+      "duration_seconds": 386,
+      "published_at": "2026-10-09T12:05:31.610Z"
+    },
+    {
       "video_id": "REzSs_JaMfM",
       "short_video_id": "TObewT3eOis",
       "book_slug": "bitcoin-standard",
@@ -401,5 +419,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-08T12:17:06.371Z"
+  "updated_at": "2026-10-09T12:05:31.611Z"
 }
