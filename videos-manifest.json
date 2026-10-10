@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "c6Hkx-N4peE",
+      "short_video_id": "CPD971LhN6Q",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Busy Professionals Seek Better Wellness And Vitality",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/c6Hkx-N4peE/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": true,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "stat-hook",
+      "caption_style": "wide-orange",
+      "duration_seconds": 409,
+      "published_at": "2026-10-10T10:18:52.671Z"
+    },
+    {
       "video_id": "dEO0Bsp8Zhk",
       "short_video_id": "1FbmTuJxLlg",
       "book_slug": "bitcoin-standard",
@@ -550,5 +568,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-09T11:07:55.487Z"
+  "updated_at": "2026-10-10T10:18:52.671Z"
 }
