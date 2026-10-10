@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-10",
+      "channel": "3",
+      "term": "Epl Table",
+      "headline": null
+    },
+    {
+      "date": "2026-10-10",
       "channel": "4",
       "term": "Aurora Borealis",
       "headline": null
@@ -307,5 +313,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-10T07:18:54.201Z"
+  "updated_at": "2026-10-10T13:52:44.115Z"
 }

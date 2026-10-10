@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "5oOV-qNgyZc",
+      "short_video_id": "TO5jlvApWPk",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "Misreading Algorithm Signals Like Epl Table Rankings",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/5oOV-qNgyZc/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Epl Table",
+      "trend_in_title": true,
+      "news_headline": "Premier League table for 2026-27 season: Latest standings",
+      "script_format": "direct-hook",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 451,
+      "published_at": "2026-10-10T14:15:24.665Z"
+    },
+    {
       "video_id": "cjYZoFo-IRM",
       "short_video_id": "jjIYlTvvJnA",
       "book_slug": "art-of-joy",
@@ -533,5 +551,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-09T14:48:34.240Z"
+  "updated_at": "2026-10-10T14:15:24.666Z"
 }
