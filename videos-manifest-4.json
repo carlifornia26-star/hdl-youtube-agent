@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "tmQs45FCWCk",
+      "short_video_id": "qVygUfsW-Rg",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "How Aurora Borealis Affects Modern Pet Care",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/tmQs45FCWCk/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Aurora Borealis",
+      "trend_in_title": true,
+      "news_headline": "Can PA see the northern lights tonight? Time to watch, aurora forecast",
+      "script_format": "myth-bust",
+      "caption_style": "lower-third",
+      "duration_seconds": 454,
+      "published_at": "2026-10-10T07:40:28.562Z"
+    },
+    {
       "video_id": "PhGgDy31Eqo",
       "short_video_id": "8oNAdbd5xSU",
       "book_slug": "youtube-algorithms",
@@ -363,5 +381,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-10-09T07:47:30.838Z"
+  "updated_at": "2026-10-10T07:40:28.563Z"
 }
