@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "PMH91Rj2rU0",
+      "short_video_id": "ts5QOFtQWNY",
+      "book_slug": "age-one",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-complete-ai-business-mastery",
+      "title": "Less Information Control Expected With Wordle Hint",
+      "description": "Curious about AI & the information economy? AGE ONE breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/PMH91Rj2rU0/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": true,
+      "trend_term": "Wordle Hint",
+      "trend_in_title": true,
+      "news_headline": "Wordle today: The answer and hints for October 10, 2026",
+      "script_format": "cold-open",
+      "caption_style": "wide-orange",
+      "duration_seconds": 420,
+      "published_at": "2026-10-11T07:37:21.413Z"
+    },
+    {
       "video_id": "tmQs45FCWCk",
       "short_video_id": "qVygUfsW-Rg",
       "book_slug": "pet-friendly",
@@ -381,5 +399,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-10-10T07:40:28.563Z"
+  "updated_at": "2026-10-11T07:37:21.414Z"
 }
