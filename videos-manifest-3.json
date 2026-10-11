@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "61GDHWwVIs4",
+      "short_video_id": "lJsnsU_8yZE",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "Outdated Pet Care Methods Give Way To Modern Approaches",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/61GDHWwVIs4/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "myth-bust",
+      "caption_style": "lower-third",
+      "duration_seconds": 256,
+      "published_at": "2026-10-11T14:25:13.073Z"
+    },
+    {
       "video_id": "5oOV-qNgyZc",
       "short_video_id": "TO5jlvApWPk",
       "book_slug": "youtube-algorithms",
@@ -551,5 +569,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-10T14:15:24.666Z"
+  "updated_at": "2026-10-11T14:25:13.074Z"
 }
