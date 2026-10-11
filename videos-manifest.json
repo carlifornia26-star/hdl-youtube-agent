@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "ckNIO7s1wwQ",
+      "short_video_id": "bvKASjveerw",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "Eliud Kipchoge Demonstrates Science Of Happiness",
+      "description": "Curious about the science of happiness? Art of Joy breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/ckNIO7s1wwQ/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Eliud Kipchoge",
+      "trend_in_title": true,
+      "news_headline": "‘My body is still peaking’: Eliud Kipchoge wins first marathon in three years",
+      "script_format": "direct-address",
+      "caption_style": "classic-pop",
+      "duration_seconds": 536,
+      "published_at": "2026-10-11T10:35:54.946Z"
+    },
+    {
       "video_id": "c6Hkx-N4peE",
       "short_video_id": "CPD971LhN6Q",
       "book_slug": "science-of-feeling-great",
@@ -568,5 +586,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-10T10:18:52.671Z"
+  "updated_at": "2026-10-11T10:35:54.947Z"
 }

@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-11",
+      "channel": "1",
+      "term": "Eliud Kipchoge",
+      "headline": null
+    },
+    {
+      "date": "2026-10-11",
       "channel": "4",
       "term": "Wordle Hint",
       "headline": null
@@ -319,5 +325,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-11T07:21:24.289Z"
+  "updated_at": "2026-10-11T10:09:38.067Z"
 }
