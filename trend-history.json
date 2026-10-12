@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-10-12",
+      "channel": "4",
+      "term": "Kospi Index",
+      "headline": null
+    },
+    {
       "date": "2026-10-11",
       "channel": "1",
       "term": "Eliud Kipchoge",
@@ -325,5 +331,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-11T10:09:38.067Z"
+  "updated_at": "2026-10-12T07:30:24.054Z"
 }
