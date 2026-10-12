@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-12",
+      "channel": "2",
+      "term": "Fuel",
+      "headline": null
+    },
+    {
+      "date": "2026-10-12",
       "channel": "1",
       "term": "Assistance Dog",
       "headline": null
@@ -337,5 +343,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-12T11:05:25.514Z"
+  "updated_at": "2026-10-12T13:14:30.518Z"
 }

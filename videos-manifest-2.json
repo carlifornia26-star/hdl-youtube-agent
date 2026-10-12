@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "s8jupM2TnwA",
+      "short_video_id": "RIW6vfR881g",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "What Modern Pet Care Methods Provide Fuel",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/s8jupM2TnwA/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Fuel",
+      "trend_in_title": true,
+      "news_headline": "WestJet Captain Calls Out Seattle Airport After 737 Burns 800 Lbs Of Fuel Just To Reach The Runway",
+      "script_format": "myth-bust",
+      "caption_style": "lower-third",
+      "duration_seconds": 489,
+      "published_at": "2026-10-12T13:30:45.048Z"
+    },
+    {
       "video_id": "IQn21TkUsjI",
       "short_video_id": "SVXPnEJGqpE",
       "book_slug": "youtube-algorithms",
@@ -455,5 +473,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-11T11:35:55.981Z"
+  "updated_at": "2026-10-12T13:30:45.049Z"
 }
