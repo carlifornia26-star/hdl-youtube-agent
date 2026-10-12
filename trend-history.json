@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-12",
+      "channel": "1",
+      "term": "Assistance Dog",
+      "headline": null
+    },
+    {
+      "date": "2026-10-12",
       "channel": "4",
       "term": "Kospi Index",
       "headline": null
@@ -331,5 +337,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-12T07:30:24.054Z"
+  "updated_at": "2026-10-12T11:05:25.514Z"
 }
