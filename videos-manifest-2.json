@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "s1geTkOJ0_E",
+      "short_video_id": "-vZTI8DzQGo",
+      "book_slug": "age-one",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-complete-ai-business-mastery",
+      "title": "Overlooking Data Control Amid Singapore Haze Air Purifier Sales",
+      "description": "Curious about AI & the information economy? AGE ONE breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/s1geTkOJ0_E/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Singapore Haze Air Purifier Sales",
+      "trend_in_title": true,
+      "news_headline": "Air purifier, air conditioner sales in S’pore spike amid haze; N95 mask stocks sufficient",
+      "script_format": "cold-open",
+      "caption_style": "wide-orange",
+      "duration_seconds": 465,
+      "published_at": "2026-10-13T12:56:07.559Z"
+    },
+    {
       "video_id": "s8jupM2TnwA",
       "short_video_id": "RIW6vfR881g",
       "book_slug": "pet-friendly",
@@ -473,5 +491,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-12T13:30:45.049Z"
+  "updated_at": "2026-10-13T12:56:07.560Z"
 }
