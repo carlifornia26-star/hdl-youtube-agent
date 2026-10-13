@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "lJsf1yr8aUA",
+      "short_video_id": "rnh9xECGy9c",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "Digital Finance Beginners Explore Bitcoin And Tether",
+      "description": "Curious about Bitcoin & digital finance? Bitcoin Standard breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/lJsf1yr8aUA/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Tether",
+      "trend_in_title": true,
+      "news_headline": "Tether is pushing the 13-billion parameter BitNet b1.58 LLM to the edge.",
+      "script_format": "direct-address",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 511,
+      "published_at": "2026-10-13T08:15:04.824Z"
+    },
+    {
       "video_id": "TT4HmC1Y4b0",
       "short_video_id": "hTOzy1Z412U",
       "book_slug": "age-one-premium",
@@ -417,5 +435,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-10-12T07:48:43.251Z"
+  "updated_at": "2026-10-13T08:15:04.825Z"
 }
