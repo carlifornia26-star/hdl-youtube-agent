@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "R59oVvZAHuE",
+      "short_video_id": "wp6T3qxo56s",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "How Imf World Economic Outlook South Africa Influences Advanced Ai Business Strategy",
+      "description": "Curious about advanced AI business strategy? AGE ONE: Premium Edition breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/R59oVvZAHuE/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Imf World Economic Outlook South Africa",
+      "trend_in_title": true,
+      "news_headline": "The world economy is running hotter than expected",
+      "script_format": "stat-hook",
+      "caption_style": "classic-pop",
+      "duration_seconds": 518,
+      "published_at": "2026-10-13T15:36:12.354Z"
+    },
+    {
       "video_id": "NRon8Rqb1k4",
       "short_video_id": "2vax8iBp4ks",
       "book_slug": "age-one",
@@ -587,5 +605,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-12T17:18:33.558Z"
+  "updated_at": "2026-10-13T15:36:12.354Z"
 }
