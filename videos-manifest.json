@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "jvmMeg5vSaE",
+      "short_video_id": "yIWF1lyhK24",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "Responsible, modern pet care | HDL Group",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/jvmMeg5vSaE/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": true,
+      "trend_term": "Weather",
+      "trend_in_title": false,
+      "news_headline": "Summerlike Warmth Today Before Weather Whiplash This Weekend",
+      "script_format": "myth-bust",
+      "caption_style": "lower-third",
+      "duration_seconds": 392,
+      "published_at": "2026-10-13T10:59:41.025Z"
+    },
+    {
       "video_id": "XYWuP5EoN5E",
       "short_video_id": "CPODRjy7iW4",
       "book_slug": "youtube-algorithms",
@@ -604,5 +622,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-12T11:26:15.360Z"
+  "updated_at": "2026-10-13T10:59:41.026Z"
 }
