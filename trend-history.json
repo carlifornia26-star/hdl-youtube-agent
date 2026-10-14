@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-14",
+      "channel": "1",
+      "term": "Game Stores",
+      "headline": null
+    },
+    {
+      "date": "2026-10-14",
       "channel": "4",
       "term": "Aquarius Horoscope Today",
       "headline": null
@@ -379,5 +385,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-14T06:16:29.763Z"
+  "updated_at": "2026-10-14T08:52:01.573Z"
 }

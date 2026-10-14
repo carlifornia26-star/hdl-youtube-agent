@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "u74bLritWzQ",
+      "short_video_id": "_NtKC0fEj5k",
+      "book_slug": "age-one",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-complete-ai-business-mastery",
+      "title": "Game Stores Influence Information",
+      "description": "Curious about AI & the information economy? AGE ONE breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/u74bLritWzQ/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Game Stores",
+      "trend_in_title": true,
+      "news_headline": "#TeamSam Online Store for Seventh Annual CUREFA Game",
+      "script_format": "cold-open",
+      "caption_style": "wide-orange",
+      "duration_seconds": 331,
+      "published_at": "2026-10-14T09:10:17.886Z"
+    },
+    {
       "video_id": "jvmMeg5vSaE",
       "short_video_id": "yIWF1lyhK24",
       "book_slug": "pet-friendly",
@@ -622,5 +640,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-13T10:59:41.026Z"
+  "updated_at": "2026-10-14T09:10:17.887Z"
 }
