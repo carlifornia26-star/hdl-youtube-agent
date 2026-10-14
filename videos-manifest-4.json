@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "6571f9dStOo",
+      "short_video_id": "OVogdFK92QA",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Vitality And Wellness Align With Aquarius Horoscope Today",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/6571f9dStOo/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": true,
+      "trend_term": "Aquarius Horoscope Today",
+      "trend_in_title": true,
+      "news_headline": "Aquarius Horoscope Today: October 14, 2026",
+      "script_format": "direct-hook",
+      "caption_style": "lower-third",
+      "duration_seconds": 579,
+      "published_at": "2026-10-14T06:44:33.896Z"
+    },
+    {
       "video_id": "lJsf1yr8aUA",
       "short_video_id": "rnh9xECGy9c",
       "book_slug": "bitcoin-standard",
@@ -435,5 +453,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-10-13T08:15:04.825Z"
+  "updated_at": "2026-10-14T06:44:33.897Z"
 }
