@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "FipxfjwgP0k",
+      "short_video_id": "ltzkJgs19yI",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "How Advanced Ai Business Strategy Incorporates Corporate Fitness",
+      "description": "Curious about advanced AI business strategy? AGE ONE: Premium Edition breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/FipxfjwgP0k/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Fitness",
+      "trend_in_title": true,
+      "news_headline": "Weekly Fitness Classes | Yoga Core",
+      "script_format": "stat-hook",
+      "caption_style": "classic-pop",
+      "duration_seconds": 521,
+      "published_at": "2026-10-15T08:46:42.774Z"
+    },
+    {
       "video_id": "u74bLritWzQ",
       "short_video_id": "_NtKC0fEj5k",
       "book_slug": "age-one",
@@ -640,5 +658,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-14T09:10:17.887Z"
+  "updated_at": "2026-10-15T08:46:42.774Z"
 }
