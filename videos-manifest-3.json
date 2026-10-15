@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "mGF6t-Z-FQI",
+      "short_video_id": "2CdbdyypQbQ",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Wellness Through Peacebuilding",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/mGF6t-Z-FQI/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": true,
+      "trend_term": "Peacebuilding",
+      "trend_in_title": true,
+      "news_headline": "International Program Call for Proposals: Peacebuilding and Mediation - fundsforNGOs - Grants and Resources for Sustainability",
+      "script_format": "direct-hook",
+      "caption_style": "lower-third",
+      "duration_seconds": 571,
+      "published_at": "2026-10-15T13:11:07.500Z"
+    },
+    {
       "video_id": "FjvtwqxHLh4",
       "short_video_id": "zoesbZJKH2c",
       "book_slug": "bitcoin-standard",
@@ -623,5 +641,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-14T13:14:59.649Z"
+  "updated_at": "2026-10-15T13:11:07.500Z"
 }
