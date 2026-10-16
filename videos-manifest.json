@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "n-V2gQBp1Gc",
+      "short_video_id": "Hm1nduPHupo",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "Digital Finance Investors Mistake Lottery Odds For Bitcoin Volatility",
+      "description": "Curious about Bitcoin & digital finance? Bitcoin Standard breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/n-V2gQBp1Gc/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": true,
+      "trend_term": "Lottery",
+      "trend_in_title": true,
+      "news_headline": "Florida Lottery Fantasy 5, Cash Pop results for Oct. 15, 2026",
+      "script_format": "direct-address",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 411,
+      "published_at": "2026-10-16T08:40:13.135Z"
+    },
+    {
       "video_id": "FipxfjwgP0k",
       "short_video_id": "ltzkJgs19yI",
       "book_slug": "age-one-premium",
@@ -658,5 +676,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-15T08:46:42.774Z"
+  "updated_at": "2026-10-16T08:40:13.136Z"
 }

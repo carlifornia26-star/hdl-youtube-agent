@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-10-16",
+      "channel": "1",
+      "term": "Lottery",
+      "headline": null
+    },
+    {
       "date": "2026-10-15",
       "channel": "3",
       "term": "Peacebuilding",
@@ -409,5 +415,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-15T12:43:57.704Z"
+  "updated_at": "2026-10-16T08:19:49.612Z"
 }
