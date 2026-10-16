@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-16",
+      "channel": "2",
+      "term": "Ultra Processed Foods",
+      "headline": null
+    },
+    {
+      "date": "2026-10-16",
       "channel": "1",
       "term": "Lottery",
       "headline": null
@@ -415,5 +421,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-16T08:19:49.612Z"
+  "updated_at": "2026-10-16T09:54:18.635Z"
 }

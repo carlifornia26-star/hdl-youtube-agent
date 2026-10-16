@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "P08-tEW9DAA",
+      "short_video_id": "S8nSpvdCzNc",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "How Ultra Processed Foods Affect Vitality",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/P08-tEW9DAA/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Ultra Processed Foods",
+      "trend_in_title": true,
+      "news_headline": "5 Processed Foods Dietitians Actually Want You to Eat More Often",
+      "script_format": "direct-hook",
+      "caption_style": "lower-third",
+      "duration_seconds": 389,
+      "published_at": "2026-10-16T10:08:42.821Z"
+    },
+    {
       "video_id": "pCpgefMoIwQ",
       "short_video_id": "fZPoRqgOegU",
       "book_slug": "bitcoin-standard",
@@ -509,5 +527,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-15T10:15:03.015Z"
+  "updated_at": "2026-10-16T10:08:42.822Z"
 }
