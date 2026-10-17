@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "XJizjI9Bq44",
+      "short_video_id": "REH97cxYXMY",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Singapore Changi Airport Wellness Programs Contrast Traditional Vitality Methods",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/XJizjI9Bq44/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Singapore Changi Airport",
+      "trend_in_title": true,
+      "news_headline": "Unruly Passenger Forces Transpacific Turnaround On Singapore Airlines Airbus A350",
+      "script_format": "direct-hook",
+      "caption_style": "lower-third",
+      "duration_seconds": 458,
+      "published_at": "2026-10-17T08:11:46.253Z"
+    },
+    {
       "video_id": "n-V2gQBp1Gc",
       "short_video_id": "Hm1nduPHupo",
       "book_slug": "bitcoin-standard",
@@ -676,5 +694,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-16T08:40:13.136Z"
+  "updated_at": "2026-10-17T08:11:46.254Z"
 }

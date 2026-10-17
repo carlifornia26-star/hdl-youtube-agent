@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-10-17",
+      "channel": "1",
+      "term": "Singapore Changi Airport",
+      "headline": null
+    },
+    {
       "date": "2026-10-16",
       "channel": "2",
       "term": "Ultra Processed Foods",
@@ -421,5 +427,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-16T09:54:18.635Z"
+  "updated_at": "2026-10-17T07:55:42.047Z"
 }
