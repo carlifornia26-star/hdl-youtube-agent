@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "VTcVxuFpJc4",
+      "short_video_id": "8J9zy-LYTZ8",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "Channel Growth Depends On Algorithm Understanding",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/VTcVxuFpJc4/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "cold-open",
+      "caption_style": "classic-pop",
+      "duration_seconds": 332,
+      "published_at": "2026-10-17T11:53:44.069Z"
+    },
+    {
       "video_id": "1UzXEVYRUyw",
       "short_video_id": "liiyMhITMnU",
       "book_slug": "art-of-joy",
@@ -659,5 +677,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-16T12:45:30.599Z"
+  "updated_at": "2026-10-17T11:53:44.070Z"
 }
