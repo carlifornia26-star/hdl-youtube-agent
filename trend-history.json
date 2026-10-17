@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-17",
+      "channel": "2",
+      "term": "Parenting",
+      "headline": null
+    },
+    {
+      "date": "2026-10-17",
       "channel": "1",
       "term": "Singapore Changi Airport",
       "headline": null
@@ -427,5 +433,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-17T07:55:42.047Z"
+  "updated_at": "2026-10-17T09:27:15.138Z"
 }

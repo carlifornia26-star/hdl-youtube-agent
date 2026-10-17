@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "5Pnam6OIEUs",
+      "short_video_id": "pEo4G4pVa_Q",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "Happiness Often Decreases With Parenting Efforts",
+      "description": "Curious about the science of happiness? Art of Joy breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/5Pnam6OIEUs/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Parenting",
+      "trend_in_title": true,
+      "news_headline": "Support groups, career flexibility help attorneys manage work and parenting",
+      "script_format": "myth-bust",
+      "caption_style": "wide-orange",
+      "duration_seconds": 527,
+      "published_at": "2026-10-17T09:46:25.085Z"
+    },
+    {
       "video_id": "P08-tEW9DAA",
       "short_video_id": "S8nSpvdCzNc",
       "book_slug": "science-of-feeling-great",
@@ -527,5 +545,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-16T10:08:42.822Z"
+  "updated_at": "2026-10-17T09:46:25.086Z"
 }
