@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "2utYJiHrFE8",
+      "short_video_id": "cPGZIe6mvYU",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "Modern Pet Owners Often Misjudge Basic Care Needs",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/2utYJiHrFE8/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": true,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "stat-hook",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 284,
+      "published_at": "2026-10-18T12:23:20.336Z"
+    },
+    {
       "video_id": "VTcVxuFpJc4",
       "short_video_id": "8J9zy-LYTZ8",
       "book_slug": "youtube-algorithms",
@@ -677,5 +695,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-17T11:53:44.070Z"
+  "updated_at": "2026-10-18T12:23:20.337Z"
 }
