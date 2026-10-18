@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-10-18",
+      "channel": "4",
+      "term": "Canada Holding Us Government Debt",
+      "headline": null
+    },
+    {
       "date": "2026-10-17",
       "channel": "2",
       "term": "Parenting",
@@ -433,5 +439,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-17T09:27:15.138Z"
+  "updated_at": "2026-10-18T06:06:08.605Z"
 }
