@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "WWQLZNZFS7w",
+      "short_video_id": "BumZ8bfOECw",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "Taking Sertraline Reveals Complex Science Of Happiness",
+      "description": "Curious about the science of happiness? Art of Joy breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/WWQLZNZFS7w/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Sertraline",
+      "trend_in_title": true,
+      "news_headline": "Health expert's warning to anyone in Ireland taking fluoxetine, sertraline or citalopram",
+      "script_format": "myth-bust",
+      "caption_style": "wide-orange",
+      "duration_seconds": 548,
+      "published_at": "2026-10-18T08:34:41.719Z"
+    },
+    {
       "video_id": "XJizjI9Bq44",
       "short_video_id": "REH97cxYXMY",
       "book_slug": "science-of-feeling-great",
@@ -694,5 +712,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-17T08:11:46.254Z"
+  "updated_at": "2026-10-18T08:34:41.720Z"
 }

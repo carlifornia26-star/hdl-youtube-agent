@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-18",
+      "channel": "1",
+      "term": "Sertraline",
+      "headline": null
+    },
+    {
+      "date": "2026-10-18",
       "channel": "4",
       "term": "Canada Holding Us Government Debt",
       "headline": null
@@ -439,5 +445,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-18T06:06:08.605Z"
+  "updated_at": "2026-10-18T08:10:22.875Z"
 }
