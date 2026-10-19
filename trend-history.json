@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-19",
+      "channel": "1",
+      "term": "Videos",
+      "headline": null
+    },
+    {
+      "date": "2026-10-19",
       "channel": "4",
       "term": "Turbulence",
       "headline": null
@@ -451,5 +457,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-19T06:21:05.323Z"
+  "updated_at": "2026-10-19T09:05:35.007Z"
 }
