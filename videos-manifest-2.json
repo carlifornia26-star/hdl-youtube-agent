@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "gcx7tnlar7E",
+      "short_video_id": "0CiCYpjcDeo",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "New Pet Owners Need Modern Care",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/gcx7tnlar7E/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "stat-hook",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 313,
+      "published_at": "2026-10-19T11:03:12.721Z"
+    },
+    {
       "video_id": "GeeVh3qyugI",
       "short_video_id": "pv5OLp4_Uqo",
       "book_slug": "youtube-algorithms",
@@ -563,5 +581,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-18T09:52:59.303Z"
+  "updated_at": "2026-10-19T11:03:12.722Z"
 }
