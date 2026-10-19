@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "l-M9TcZE_uw",
+      "short_video_id": "m_rynUsPj1c",
+      "book_slug": "age-one",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-complete-ai-business-mastery",
+      "title": "First Year Impact Of Artificial Intelligence",
+      "description": "Curious about AI & the information economy? AGE ONE breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/l-M9TcZE_uw/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "direct-address",
+      "caption_style": "lower-third",
+      "duration_seconds": 420,
+      "published_at": "2026-10-19T15:07:46.227Z"
+    },
+    {
       "video_id": "2utYJiHrFE8",
       "short_video_id": "cPGZIe6mvYU",
       "book_slug": "pet-friendly",
@@ -695,5 +713,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-18T12:23:20.337Z"
+  "updated_at": "2026-10-19T15:07:46.228Z"
 }
