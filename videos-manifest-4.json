@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "ktTEBQV61TA",
+      "short_video_id": "vRdn5kaK4Lw",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "Advanced Ai Business Strategy Fails Amid Market Turbulence",
+      "description": "Curious about advanced AI business strategy? AGE ONE: Premium Edition breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/ktTEBQV61TA/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Turbulence",
+      "trend_in_title": true,
+      "news_headline": "Business aviation rides the turbulence in USA",
+      "script_format": "direct-hook",
+      "caption_style": "wide-orange",
+      "duration_seconds": 509,
+      "published_at": "2026-10-19T06:46:05.253Z"
+    },
+    {
       "video_id": "FkeXeOyoE4c",
       "short_video_id": "ofx3E6Nq2Ps",
       "book_slug": "pet-friendly",
@@ -507,5 +525,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-10-17T05:55:26.382Z"
+  "updated_at": "2026-10-19T06:46:05.255Z"
 }

@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-10-19",
+      "channel": "4",
+      "term": "Turbulence",
+      "headline": null
+    },
+    {
       "date": "2026-10-18",
       "channel": "1",
       "term": "Sertraline",
@@ -445,5 +451,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-18T08:10:22.875Z"
+  "updated_at": "2026-10-19T06:21:05.323Z"
 }
