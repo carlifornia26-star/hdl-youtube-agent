@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "pom73sYNC6s",
+      "short_video_id": "EpsT3eB7Tvw",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "First Month Changes In Modern Pet Care",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/pom73sYNC6s/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "stat-hook",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 175,
+      "published_at": "2026-10-20T08:51:34.140Z"
+    },
+    {
       "video_id": "mgqwuM21FTo",
       "short_video_id": "58gKltAxmfE",
       "book_slug": "youtube-algorithms",
@@ -730,5 +748,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-19T09:24:12.772Z"
+  "updated_at": "2026-10-20T08:51:34.141Z"
 }
