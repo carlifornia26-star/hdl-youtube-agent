@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "gyZL5J-_ofs",
+      "short_video_id": "6TAWUJ8xnkg",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "Revolut Style Advanced Ai",
+      "description": "Curious about advanced AI business strategy? AGE ONE: Premium Edition breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/gyZL5J-_ofs/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Revolut",
+      "trend_in_title": true,
+      "news_headline": "Google Cloud services face outage in London, Revolut services down too",
+      "script_format": "direct-hook",
+      "caption_style": "wide-orange",
+      "duration_seconds": 394,
+      "published_at": "2026-10-20T13:05:54.877Z"
+    },
+    {
       "video_id": "l-M9TcZE_uw",
       "short_video_id": "m_rynUsPj1c",
       "book_slug": "age-one",
@@ -713,5 +731,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-19T15:07:46.228Z"
+  "updated_at": "2026-10-20T13:05:54.878Z"
 }
