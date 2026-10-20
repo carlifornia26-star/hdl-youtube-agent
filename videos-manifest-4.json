@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "yJ6_77nRBTA",
+      "short_video_id": "PznnpQ3EiBQ",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "Bitcoin & digital finance | HDL Group",
+      "description": "Curious about Bitcoin & digital finance? Bitcoin Standard breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/yJ6_77nRBTA/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": true,
+      "trend_term": "Silver Price Today",
+      "trend_in_title": false,
+      "news_headline": "Current price of silver as of Monday, Oct. 19, 2026",
+      "script_format": "myth-bust",
+      "caption_style": "classic-pop",
+      "duration_seconds": 366,
+      "published_at": "2026-10-20T06:22:16.083Z"
+    },
+    {
       "video_id": "ktTEBQV61TA",
       "short_video_id": "vRdn5kaK4Lw",
       "book_slug": "age-one-premium",
@@ -525,5 +543,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-10-19T06:46:05.255Z"
+  "updated_at": "2026-10-20T06:22:16.083Z"
 }
