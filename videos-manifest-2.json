@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "zLZgY95yMXQ",
+      "short_video_id": "-hKKTkabK04",
+      "book_slug": "age-one",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-complete-ai-business-mastery",
+      "title": "Elon Musk Views Artificial Intelligence As Key Economic Driver",
+      "description": "Curious about AI & the information economy? AGE ONE breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/zLZgY95yMXQ/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Elon Musk",
+      "trend_in_title": true,
+      "news_headline": "Elon Musk Says He Will Give a SpaceX Share to ‘Every Kid in America’",
+      "script_format": "direct-address",
+      "caption_style": "lower-third",
+      "duration_seconds": 369,
+      "published_at": "2026-10-20T10:19:25.348Z"
+    },
+    {
       "video_id": "gcx7tnlar7E",
       "short_video_id": "0CiCYpjcDeo",
       "book_slug": "pet-friendly",
@@ -581,5 +599,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-19T11:03:12.722Z"
+  "updated_at": "2026-10-20T10:19:25.349Z"
 }
