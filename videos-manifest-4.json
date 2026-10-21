@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "OYOjhw3tJW0",
+      "short_video_id": "keOmDoogw_w",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Missing Morning Routines During Orionid Meteor Shower",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/OYOjhw3tJW0/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Orionid Meteor Shower",
+      "trend_in_title": true,
+      "news_headline": "The Orionid Meteor Shower peaks early Thursday morning",
+      "script_format": "cold-open",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 567,
+      "published_at": "2026-10-21T06:34:19.185Z"
+    },
+    {
       "video_id": "yJ6_77nRBTA",
       "short_video_id": "PznnpQ3EiBQ",
       "book_slug": "bitcoin-standard",
@@ -543,5 +561,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-10-20T06:22:16.083Z"
+  "updated_at": "2026-10-21T06:34:19.186Z"
 }

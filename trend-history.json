@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-10-21",
+      "channel": "4",
+      "term": "Orionid Meteor Shower",
+      "headline": null
+    },
+    {
       "date": "2026-10-20",
       "channel": "3",
       "term": "Revolut",
@@ -475,5 +481,5 @@
       "headline": null
     }
   ],
-  "updated_at": "2026-10-20T12:48:45.505Z"
+  "updated_at": "2026-10-21T06:07:56.214Z"
 }
