@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "iYdNVN8uaVg",
+      "short_video_id": "xEla72x-2Nw",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "How Amazon Australia Prime Price Increase Affects Bitcoin Digital Finance",
+      "description": "Curious about Bitcoin & digital finance? Bitcoin Standard breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/iYdNVN8uaVg/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": true,
+      "trend_term": "Amazon Australia Prime Price Increase",
+      "trend_in_title": true,
+      "news_headline": "Amazon hikes Prime membership by up to 30% in Australia ahead of Black Friday and holiday sales",
+      "script_format": "myth-bust",
+      "caption_style": "classic-pop",
+      "duration_seconds": 364,
+      "published_at": "2026-10-21T13:21:23.028Z"
+    },
+    {
       "video_id": "gyZL5J-_ofs",
       "short_video_id": "6TAWUJ8xnkg",
       "book_slug": "age-one-premium",
@@ -731,5 +749,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-20T13:05:54.878Z"
+  "updated_at": "2026-10-21T13:21:23.029Z"
 }
