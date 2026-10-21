@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-21",
+      "channel": "2",
+      "term": "Grand Theft Auto Vi Economic Impact",
+      "headline": null
+    },
+    {
+      "date": "2026-10-21",
       "channel": "1",
       "term": "Tariff",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "3",
       "term": "Google",
       "headline": null
-    },
-    {
-      "date": "2026-09-21",
-      "channel": "1",
-      "term": "Games",
-      "headline": null
     }
   ],
-  "updated_at": "2026-10-21T08:43:14.028Z"
+  "updated_at": "2026-10-21T10:15:34.500Z"
 }

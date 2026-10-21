@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "bYNIUz97BM0",
+      "short_video_id": "QuEQg4pSmng",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "Traditional Business Models Fail Next To Grand Theft Auto Vi Economic Impact",
+      "description": "Curious about advanced AI business strategy? AGE ONE: Premium Edition breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/bYNIUz97BM0/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Grand Theft Auto Vi Economic Impact",
+      "trend_in_title": true,
+      "news_headline": "Grand Theft Auto VI Launch Could Cost US Economy $1 Billion In Lost Productivity",
+      "script_format": "direct-hook",
+      "caption_style": "wide-orange",
+      "duration_seconds": 510,
+      "published_at": "2026-10-21T10:30:23.296Z"
+    },
+    {
       "video_id": "zLZgY95yMXQ",
       "short_video_id": "-hKKTkabK04",
       "book_slug": "age-one",
@@ -599,5 +617,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-20T10:19:25.349Z"
+  "updated_at": "2026-10-21T10:30:23.297Z"
 }
