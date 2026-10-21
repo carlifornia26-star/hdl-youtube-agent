@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "DIso5Q1syJU",
+      "short_video_id": "_yXhhiO9gYM",
+      "book_slug": "age-one",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-complete-ai-business-mastery",
+      "title": "Five Economic Signs Tariff Impacts AI",
+      "description": "Curious about AI & the information economy? AGE ONE breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/DIso5Q1syJU/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Tariff",
+      "trend_in_title": true,
+      "news_headline": "Rogers, El-Sayed outline differing approaches to tariffs and AI during Detroit Economic Club forum",
+      "script_format": "direct-address",
+      "caption_style": "lower-third",
+      "duration_seconds": 522,
+      "published_at": "2026-10-21T09:02:13.625Z"
+    },
+    {
       "video_id": "pom73sYNC6s",
       "short_video_id": "EpsT3eB7Tvw",
       "book_slug": "pet-friendly",
@@ -748,5 +766,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-20T08:51:34.141Z"
+  "updated_at": "2026-10-21T09:02:13.626Z"
 }

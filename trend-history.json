@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-21",
+      "channel": "1",
+      "term": "Tariff",
+      "headline": null
+    },
+    {
+      "date": "2026-10-21",
       "channel": "4",
       "term": "Orionid Meteor Shower",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "1",
       "term": "Games",
       "headline": null
-    },
-    {
-      "date": "2026-09-21",
-      "channel": "4",
-      "term": "Google Gemini",
-      "headline": null
     }
   ],
-  "updated_at": "2026-10-21T06:07:56.214Z"
+  "updated_at": "2026-10-21T08:43:14.028Z"
 }
