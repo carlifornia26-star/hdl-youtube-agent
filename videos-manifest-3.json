@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "Y26KkwYletc",
+      "short_video_id": "_H0MlO_Xwww",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Common Wellness Mistakes",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/Y26KkwYletc/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "cold-open",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 424,
+      "published_at": "2026-10-22T13:36:06.391Z"
+    },
+    {
       "video_id": "iYdNVN8uaVg",
       "short_video_id": "xEla72x-2Nw",
       "book_slug": "bitcoin-standard",
@@ -749,5 +767,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-21T13:21:23.029Z"
+  "updated_at": "2026-10-22T13:36:06.392Z"
 }
