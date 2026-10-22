@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-10-22",
+      "channel": "4",
+      "term": "Black Friday 2026",
+      "headline": null
+    },
+    {
       "date": "2026-10-21",
       "channel": "3",
       "term": "Amazon Australia Prime Price Increase",
@@ -473,13 +479,7 @@
       "channel": "4",
       "term": "Weather Cape Town",
       "headline": null
-    },
-    {
-      "date": "2026-09-22",
-      "channel": "2",
-      "term": "Chat Gpt",
-      "headline": null
     }
   ],
-  "updated_at": "2026-10-21T13:01:34.166Z"
+  "updated_at": "2026-10-22T06:11:25.333Z"
 }
