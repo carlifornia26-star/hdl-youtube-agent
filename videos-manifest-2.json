@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "6ncWRb8mAAg",
+      "short_video_id": "lWgf7XqLAwQ",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Wellness Trends In Australia",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/6ncWRb8mAAg/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Australia",
+      "trend_in_title": true,
+      "news_headline": "AI Data Center Backlash Threatens Australia’s $70 Billion Dream",
+      "script_format": "cold-open",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 533,
+      "published_at": "2026-10-23T10:28:15.478Z"
+    },
+    {
       "video_id": "vjWtlqcheOc",
       "short_video_id": "2Kr5vweJhq8",
       "book_slug": "bitcoin-standard",
@@ -635,5 +653,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-22T10:44:09.652Z"
+  "updated_at": "2026-10-23T10:28:15.478Z"
 }
