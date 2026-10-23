@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-10-23",
+      "channel": "4",
+      "term": "Weather",
+      "headline": null
+    },
+    {
       "date": "2026-10-22",
       "channel": "2",
       "term": "Airbnb",
@@ -473,13 +479,7 @@
       "channel": "4",
       "term": "Ice Cream",
       "headline": null
-    },
-    {
-      "date": "2026-09-23",
-      "channel": "2",
-      "term": "Nab Outage",
-      "headline": null
     }
   ],
-  "updated_at": "2026-10-22T10:30:36.686Z"
+  "updated_at": "2026-10-23T06:33:38.191Z"
 }

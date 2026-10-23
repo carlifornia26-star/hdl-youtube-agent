@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "RoxH86GN5gk",
+      "short_video_id": "pSS4JP8dTU4",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "Channel Growth Often Fails To Mirror Weather Patterns Of Algorithm Changes",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/RoxH86GN5gk/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": true,
+      "trend_term": "Weather",
+      "trend_in_title": true,
+      "news_headline": "New AI framework bridges a critical gap in mid-range weather forecasts",
+      "script_format": "direct-address",
+      "caption_style": "wide-orange",
+      "duration_seconds": 309,
+      "published_at": "2026-10-23T06:49:34.664Z"
+    },
+    {
       "video_id": "oIgSoUaTtwQ",
       "short_video_id": "L4E8rAA5Zxo",
       "book_slug": "art-of-joy",
@@ -579,5 +597,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-10-22T06:28:21.769Z"
+  "updated_at": "2026-10-23T06:49:34.665Z"
 }
