@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "Epv6fQ4eGEI",
+      "short_video_id": "g_kWq4NgRwo",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "Intuitive Methods Meet Scientific Happiness",
+      "description": "Curious about the science of happiness? Art of Joy breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/Epv6fQ4eGEI/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "stat-hook",
+      "caption_style": "lower-third",
+      "duration_seconds": 469,
+      "published_at": "2026-10-23T13:32:18.457Z"
+    },
+    {
       "video_id": "Y26KkwYletc",
       "short_video_id": "_H0MlO_Xwww",
       "book_slug": "science-of-feeling-great",
@@ -767,5 +785,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-22T13:36:06.392Z"
+  "updated_at": "2026-10-23T13:32:18.458Z"
 }
