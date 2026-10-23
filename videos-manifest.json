@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "-z6AVqqRQk0",
+      "short_video_id": "b1vzm1jofcU",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "Misunderstanding Bitcoin Tax Implications",
+      "description": "Curious about Bitcoin & digital finance? Bitcoin Standard breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/-z6AVqqRQk0/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Tax",
+      "trend_in_title": true,
+      "news_headline": "Wealthy Chinese move offshore money to U.S. banks as Beijing’s tax net widens",
+      "script_format": "myth-bust",
+      "caption_style": "classic-pop",
+      "duration_seconds": 345,
+      "published_at": "2026-10-23T08:58:13.879Z"
+    },
+    {
       "video_id": "xqHivW3jO08",
       "short_video_id": "i005cZ0Xxdo",
       "book_slug": "age-one-premium",
@@ -784,5 +802,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-22T09:04:12.745Z"
+  "updated_at": "2026-10-23T08:58:13.880Z"
 }
