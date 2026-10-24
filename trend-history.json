@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-10-24",
+      "channel": "4",
+      "term": "Natural Gas",
+      "headline": null
+    },
+    {
       "date": "2026-10-23",
       "channel": "2",
       "term": "Australia",
@@ -473,13 +479,7 @@
       "channel": "3",
       "term": "Chatgpt",
       "headline": null
-    },
-    {
-      "date": "2026-09-24",
-      "channel": "2",
-      "term": "Travel Ban",
-      "headline": null
     }
   ],
-  "updated_at": "2026-10-23T10:09:54.115Z"
+  "updated_at": "2026-10-24T06:02:05.638Z"
 }
