@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-24",
+      "channel": "2",
+      "term": "Dublin Marathon",
+      "headline": null
+    },
+    {
+      "date": "2026-10-24",
       "channel": "4",
       "term": "Natural Gas",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "4",
       "term": "Dstv New Channel Launch",
       "headline": null
-    },
-    {
-      "date": "2026-09-24",
-      "channel": "3",
-      "term": "Chatgpt",
-      "headline": null
     }
   ],
-  "updated_at": "2026-10-24T06:02:05.638Z"
+  "updated_at": "2026-10-24T09:36:04.518Z"
 }
