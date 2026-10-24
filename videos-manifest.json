@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "9NL1KdfXVOQ",
+      "short_video_id": "mOBgE58TGIo",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Conventional Wellness Methods Meet Holistic Approaches",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/9NL1KdfXVOQ/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "cold-open",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 305,
+      "published_at": "2026-10-24T08:31:06.053Z"
+    },
+    {
       "video_id": "-z6AVqqRQk0",
       "short_video_id": "b1vzm1jofcU",
       "book_slug": "bitcoin-standard",
@@ -802,5 +820,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-23T08:58:13.880Z"
+  "updated_at": "2026-10-24T08:31:06.054Z"
 }
