@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "PDoATEFlujw",
+      "short_video_id": "zEgoX66ezSs",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "Skipping Pbb Collab 3.0 Insights Hinders Channel Growth",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/PDoATEFlujw/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": true,
+      "trend_term": "Pbb Collab 3.0",
+      "trend_in_title": true,
+      "news_headline": "MEET THE NEW HOUSEMATES 🏠👀 The newest batch of housemates for Pinoy Big Brother: Celebrity Collab 3.0 was officially introduced on Saturday…",
+      "script_format": "direct-address",
+      "caption_style": "wide-orange",
+      "duration_seconds": 551,
+      "published_at": "2026-10-24T12:26:43.228Z"
+    },
+    {
       "video_id": "Epv6fQ4eGEI",
       "short_video_id": "g_kWq4NgRwo",
       "book_slug": "art-of-joy",
@@ -785,5 +803,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-23T13:32:18.458Z"
+  "updated_at": "2026-10-24T12:26:43.229Z"
 }

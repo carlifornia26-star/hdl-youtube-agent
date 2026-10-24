@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-24",
+      "channel": "3",
+      "term": "Pbb Collab 3.0",
+      "headline": null
+    },
+    {
+      "date": "2026-10-24",
       "channel": "2",
       "term": "Dublin Marathon",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "1",
       "term": "Smartglasses",
       "headline": null
-    },
-    {
-      "date": "2026-09-25",
-      "channel": "4",
-      "term": "Dstv New Channel Launch",
-      "headline": null
     }
   ],
-  "updated_at": "2026-10-24T09:36:04.518Z"
+  "updated_at": "2026-10-24T12:06:02.038Z"
 }
