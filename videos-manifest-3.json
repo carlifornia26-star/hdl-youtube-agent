@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "4Ixljk-Zlec",
+      "short_video_id": "M4GiGV2VKs0",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "How Modern Pet Care Affects Adoption Rate",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/4Ixljk-Zlec/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Rate",
+      "trend_in_title": true,
+      "news_headline": "Credit card interest rates rise as debt increases",
+      "script_format": "direct-hook",
+      "caption_style": "classic-pop",
+      "duration_seconds": 376,
+      "published_at": "2026-10-25T12:57:29.434Z"
+    },
+    {
       "video_id": "PDoATEFlujw",
       "short_video_id": "zEgoX66ezSs",
       "book_slug": "youtube-algorithms",
@@ -803,5 +821,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-24T12:26:43.229Z"
+  "updated_at": "2026-10-25T12:57:29.435Z"
 }

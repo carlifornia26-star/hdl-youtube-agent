@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-25",
+      "channel": "3",
+      "term": "Rate",
+      "headline": null
+    },
+    {
+      "date": "2026-10-25",
       "channel": "4",
       "term": "Lockheed Martin F-35 Lightning Ii",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "2",
       "term": "Daylight Saving Time",
       "headline": null
-    },
-    {
-      "date": "2026-09-26",
-      "channel": "4",
-      "term": "Weather",
-      "headline": null
     }
   ],
-  "updated_at": "2026-10-25T06:19:16.998Z"
+  "updated_at": "2026-10-25T12:38:53.269Z"
 }
