@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "h5kvsoBx7_4",
+      "short_video_id": "cm36GfhWlHk",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "Overemphasizing Keyword Optimization Hinders Algorithm Growth",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/h5kvsoBx7_4/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "direct-address",
+      "caption_style": "wide-orange",
+      "duration_seconds": 303,
+      "published_at": "2026-10-25T10:03:23.138Z"
+    },
+    {
       "video_id": "uvlWwWKubHY",
       "short_video_id": "6U5_bST_HsI",
       "book_slug": "art-of-joy",
@@ -671,5 +689,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-24T09:47:06.140Z"
+  "updated_at": "2026-10-25T10:03:23.139Z"
 }
