@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-10-25",
+      "channel": "4",
+      "term": "Lockheed Martin F-35 Lightning Ii",
+      "headline": null
+    },
+    {
       "date": "2026-10-24",
       "channel": "3",
       "term": "Pbb Collab 3.0",
@@ -473,13 +479,7 @@
       "channel": "4",
       "term": "Weather",
       "headline": null
-    },
-    {
-      "date": "2026-09-25",
-      "channel": "1",
-      "term": "Smartglasses",
-      "headline": null
     }
   ],
-  "updated_at": "2026-10-24T12:06:02.038Z"
+  "updated_at": "2026-10-25T06:19:16.998Z"
 }
