@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "23vTMtpDKHU",
+      "short_video_id": "CTHvOqK7yjk",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "Growing With Algorithm",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/23vTMtpDKHU/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "direct-address",
+      "caption_style": "wide-orange",
+      "duration_seconds": 238,
+      "published_at": "2026-10-26T09:22:42.488Z"
+    },
+    {
       "video_id": "bVSTqTggAYM",
       "short_video_id": "sXWINUDHaBg",
       "book_slug": "art-of-joy",
@@ -838,5 +856,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-25T08:48:13.884Z"
+  "updated_at": "2026-10-26T09:22:42.489Z"
 }
