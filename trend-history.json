@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-26",
+      "channel": "3",
+      "term": "Ai Bubble",
+      "headline": null
+    },
+    {
+      "date": "2026-10-26",
       "channel": "2",
       "term": "Health",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "3",
       "term": "Wallabies",
       "headline": null
-    },
-    {
-      "date": "2026-09-27",
-      "channel": "4",
-      "term": "Stock Market Today",
-      "headline": null
     }
   ],
-  "updated_at": "2026-10-26T11:11:41.488Z"
+  "updated_at": "2026-10-26T14:51:20.847Z"
 }

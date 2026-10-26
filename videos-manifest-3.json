@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "4oFvWNbSwkI",
+      "short_video_id": "Mn2M7QJEc20",
+      "book_slug": "age-one",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-complete-ai-business-mastery",
+      "title": "Ai Bubble Reveals Less Automation",
+      "description": "Curious about AI & the information economy? AGE ONE breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/4oFvWNbSwkI/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Ai Bubble",
+      "trend_in_title": true,
+      "news_headline": "In China, the AI bubble has already burst",
+      "script_format": "myth-bust",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 478,
+      "published_at": "2026-10-26T15:13:19.218Z"
+    },
+    {
       "video_id": "4Ixljk-Zlec",
       "short_video_id": "M4GiGV2VKs0",
       "book_slug": "pet-friendly",
@@ -821,5 +839,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-25T12:57:29.435Z"
+  "updated_at": "2026-10-26T15:13:19.219Z"
 }
