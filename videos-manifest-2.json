@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "vgGO2cR8u7o",
+      "short_video_id": "AVeVaXrOHOE",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "Old Pet Care Methods Meet Modern Health",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/vgGO2cR8u7o/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Health",
+      "trend_in_title": true,
+      "news_headline": "Leading health groups redefine heart health for girls and women",
+      "script_format": "direct-hook",
+      "caption_style": "classic-pop",
+      "duration_seconds": 465,
+      "published_at": "2026-10-26T11:27:29.047Z"
+    },
+    {
       "video_id": "h5kvsoBx7_4",
       "short_video_id": "cm36GfhWlHk",
       "book_slug": "youtube-algorithms",
@@ -689,5 +707,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-25T10:03:23.139Z"
+  "updated_at": "2026-10-26T11:27:29.047Z"
 }
