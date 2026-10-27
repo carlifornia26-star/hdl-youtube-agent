@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "RH3bl3hIiI4",
+      "short_video_id": "3mWFt_kbqGk",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "Digital Finance Basics Often Overlooked",
+      "description": "Curious about Bitcoin & digital finance? Bitcoin Standard breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/RH3bl3hIiI4/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "stat-hook",
+      "caption_style": "wide-orange",
+      "duration_seconds": 422,
+      "published_at": "2026-10-27T06:43:39.715Z"
+    },
+    {
       "video_id": "C4TAO3xZZuo",
       "short_video_id": "kSRhe7YWexc",
       "book_slug": "age-one-premium",
@@ -651,5 +669,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-10-26T06:49:54.671Z"
+  "updated_at": "2026-10-27T06:43:39.715Z"
 }
