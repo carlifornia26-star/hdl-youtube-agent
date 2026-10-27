@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-27",
+      "channel": "2",
+      "term": "Poverty",
+      "headline": null
+    },
+    {
+      "date": "2026-10-27",
       "channel": "1",
       "term": "Artificial Intelligence",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "1",
       "term": "Gold Price",
       "headline": null
-    },
-    {
-      "date": "2026-09-28",
-      "channel": "4",
-      "term": "Spacex",
-      "headline": null
     }
   ],
-  "updated_at": "2026-10-27T09:10:30.422Z"
+  "updated_at": "2026-10-27T10:39:32.796Z"
 }
