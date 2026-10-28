@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-28",
+      "channel": "2",
+      "term": "Mark Zuckerberg",
+      "headline": null
+    },
+    {
+      "date": "2026-10-28",
       "channel": "1",
       "term": "Xero",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "1",
       "term": "Rockstar Games Gta Vi",
       "headline": null
-    },
-    {
-      "date": "2026-09-30",
-      "channel": "4",
-      "term": "John Goodman Weight Loss Transformation",
-      "headline": null
     }
   ],
-  "updated_at": "2026-10-28T09:51:09.284Z"
+  "updated_at": "2026-10-28T11:24:07.388Z"
 }
