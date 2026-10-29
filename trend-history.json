@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-29",
+      "channel": "3",
+      "term": "Athlete",
+      "headline": null
+    },
+    {
+      "date": "2026-10-29",
       "channel": "2",
       "term": "Panic Buying",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "1",
       "term": "See Tickets",
       "headline": null
-    },
-    {
-      "date": "2026-10-01",
-      "channel": "2",
-      "term": "El Niño",
-      "headline": null
     }
   ],
-  "updated_at": "2026-10-29T11:34:33.386Z"
+  "updated_at": "2026-10-29T14:30:10.436Z"
 }

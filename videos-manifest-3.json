@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "BqPxs71dvKU",
+      "short_video_id": "MpuADzr7Eo4",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Wellness And Vitality Principles Guide Modern Athlete",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/BqPxs71dvKU/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Athlete",
+      "trend_in_title": true,
+      "news_headline": "Student-Athlete Spotlight: Lucy Cler, UW-Eau Claire",
+      "script_format": "direct-address",
+      "caption_style": "classic-pop",
+      "duration_seconds": 501,
+      "published_at": "2026-10-29T14:55:52.861Z"
+    },
+    {
       "video_id": "VUL197Zh1cE",
       "short_video_id": "oT6BUSgGw-o",
       "book_slug": "bitcoin-standard",
@@ -875,5 +893,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-28T14:31:34.693Z"
+  "updated_at": "2026-10-29T14:55:52.862Z"
 }
