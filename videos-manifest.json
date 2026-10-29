@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "HPG3u5VhwZM",
+      "short_video_id": "3Agc8c_3wRk",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "Traditional Business Models Meet New Macbook Pro M6 Driven Ai Strategies",
+      "description": "Curious about advanced AI business strategy? AGE ONE: Premium Edition breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/HPG3u5VhwZM/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "New Macbook Pro M6",
+      "trend_in_title": true,
+      "news_headline": "Apple unveils new MacBook Pro with OLED touchscreen and thinner, lighter design",
+      "script_format": "cold-open",
+      "caption_style": "lower-third",
+      "duration_seconds": 560,
+      "published_at": "2026-10-29T10:32:40.072Z"
+    },
+    {
       "video_id": "vR7Pgt0fUdI",
       "short_video_id": "tCU32_kOP7o",
       "book_slug": "age-one",
@@ -892,5 +910,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-28T10:08:49.430Z"
+  "updated_at": "2026-10-29T10:32:40.073Z"
 }

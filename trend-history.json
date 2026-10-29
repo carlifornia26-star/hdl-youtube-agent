@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-29",
+      "channel": "1",
+      "term": "New Macbook Pro M6",
+      "headline": null
+    },
+    {
+      "date": "2026-10-29",
       "channel": "4",
       "term": "El Niño",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "1",
       "term": "Whatsapp",
       "headline": null
-    },
-    {
-      "date": "2026-09-30",
-      "channel": "3",
-      "term": "Performance Improvement",
-      "headline": null
     }
   ],
-  "updated_at": "2026-10-29T07:16:53.100Z"
+  "updated_at": "2026-10-29T10:11:57.855Z"
 }
