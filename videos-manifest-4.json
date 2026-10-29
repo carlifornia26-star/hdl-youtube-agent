@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "5nfzIkD3mkA",
+      "short_video_id": "lyxGobwe82I",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "El Niño Happiness Patterns",
+      "description": "Curious about the science of happiness? Art of Joy breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/5nfzIkD3mkA/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": true,
+      "trend_term": "El Niño",
+      "trend_in_title": true,
+      "news_headline": "Forecasters are predicting a warmer and wetter winter. Here's how El Niño will affect your region",
+      "script_format": "direct-hook",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 348,
+      "published_at": "2026-10-29T07:33:18.913Z"
+    },
+    {
       "video_id": "4bCjbGdcQd4",
       "short_video_id": "4IZgEt_FHmA",
       "book_slug": "science-of-feeling-great",
@@ -687,5 +705,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-10-28T07:18:00.213Z"
+  "updated_at": "2026-10-29T07:33:18.914Z"
 }
