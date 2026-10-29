@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "qdIfXhIi6pI",
+      "short_video_id": "ZHutnlq2S8g",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "Digital Finance Growth Reduces Panic Buying",
+      "description": "Curious about Bitcoin & digital finance? Bitcoin Standard breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/qdIfXhIi6pI/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Panic Buying",
+      "trend_in_title": true,
+      "news_headline": "Alphabet's Post-Earnings Panic: This Market Has Lost Its Mind (NASDAQ:GOOG)",
+      "script_format": "stat-hook",
+      "caption_style": "wide-orange",
+      "duration_seconds": 552,
+      "published_at": "2026-10-29T11:46:19.066Z"
+    },
+    {
       "video_id": "_zRBApxOx3g",
       "short_video_id": "nUmofkHjsQs",
       "book_slug": "age-one-premium",
@@ -743,5 +761,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-28T11:36:37.278Z"
+  "updated_at": "2026-10-29T11:46:19.066Z"
 }

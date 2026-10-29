@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-29",
+      "channel": "2",
+      "term": "Panic Buying",
+      "headline": null
+    },
+    {
+      "date": "2026-10-29",
       "channel": "1",
       "term": "New Macbook Pro M6",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "2",
       "term": "El Niño",
       "headline": null
-    },
-    {
-      "date": "2026-10-01",
-      "channel": "1",
-      "term": "Whatsapp",
-      "headline": null
     }
   ],
-  "updated_at": "2026-10-29T10:11:57.855Z"
+  "updated_at": "2026-10-29T11:34:33.386Z"
 }
