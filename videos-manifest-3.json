@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "Rzv3i2ZN65o",
+      "short_video_id": "8dVzjYA5XOw",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "Common Happiness Mistakes",
+      "description": "Curious about the science of happiness? Art of Joy breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/Rzv3i2ZN65o/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": true,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "direct-hook",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 337,
+      "published_at": "2026-10-30T14:39:02.408Z"
+    },
+    {
       "video_id": "BqPxs71dvKU",
       "short_video_id": "MpuADzr7Eo4",
       "book_slug": "science-of-feeling-great",
@@ -893,5 +911,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-29T14:55:52.862Z"
+  "updated_at": "2026-10-30T14:39:02.408Z"
 }
