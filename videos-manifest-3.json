@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "19GdgCZa5aQ",
+      "short_video_id": "UJdXjs6Ebyc",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "Growing Channel Success After Early Voting Near Me Trends",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/19GdgCZa5aQ/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Early Voting Near Me",
+      "trend_in_title": true,
+      "news_headline": "Local voters and political analysts predict busy last day of early voting",
+      "script_format": "myth-bust",
+      "caption_style": "lower-third",
+      "duration_seconds": 538,
+      "published_at": "2026-10-31T14:10:01.166Z"
+    },
+    {
       "video_id": "Rzv3i2ZN65o",
       "short_video_id": "8dVzjYA5XOw",
       "book_slug": "art-of-joy",
@@ -911,5 +929,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-30T14:39:02.408Z"
+  "updated_at": "2026-10-31T14:10:01.167Z"
 }

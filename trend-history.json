@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-10-31",
+      "channel": "3",
+      "term": "Early Voting Near Me",
+      "headline": null
+    },
+    {
+      "date": "2026-10-31",
       "channel": "4",
       "term": "Sports",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "1",
       "term": "Daylight Savings",
       "headline": null
-    },
-    {
-      "date": "2026-10-02",
-      "channel": "3",
-      "term": "Jobs Report",
-      "headline": null
     }
   ],
-  "updated_at": "2026-10-31T07:06:58.384Z"
+  "updated_at": "2026-10-31T13:44:10.197Z"
 }
