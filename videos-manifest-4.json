@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "s3V5qOBoVSk",
+      "short_video_id": "hqx-ynfokZk",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "Modern Pet Care Mistakes Like Overexertion In Sports",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/s3V5qOBoVSk/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Sports",
+      "trend_in_title": true,
+      "news_headline": "Connections: Sports Edition today: Hints and answers for Oct. 31, 2026, puzzle No. 768",
+      "script_format": "cold-open",
+      "caption_style": "wide-orange",
+      "duration_seconds": 563,
+      "published_at": "2026-10-31T07:26:49.760Z"
+    },
+    {
       "video_id": "5wj1A0uOFO4",
       "short_video_id": "OrB2viblbC4",
       "book_slug": "youtube-algorithms",
@@ -723,5 +741,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-10-30T07:41:40.493Z"
+  "updated_at": "2026-10-31T07:26:49.760Z"
 }

@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-10-31",
+      "channel": "4",
+      "term": "Sports",
+      "headline": null
+    },
+    {
       "date": "2026-10-30",
       "channel": "1",
       "term": "Binance Hacked",
@@ -473,13 +479,7 @@
       "channel": "3",
       "term": "Jobs Report",
       "headline": null
-    },
-    {
-      "date": "2026-10-02",
-      "channel": "2",
-      "term": "Chatgpt",
-      "headline": null
     }
   ],
-  "updated_at": "2026-10-30T10:14:21.450Z"
+  "updated_at": "2026-10-31T07:06:58.384Z"
 }
