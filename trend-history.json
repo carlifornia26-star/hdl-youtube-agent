@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-11-01",
+      "channel": "2",
+      "term": "New York Marathon 2026",
+      "headline": null
+    },
+    {
+      "date": "2026-11-01",
       "channel": "1",
       "term": "Technology News",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "1",
       "term": "Weather Tomorrow",
       "headline": null
-    },
-    {
-      "date": "2026-10-04",
-      "channel": "4",
-      "term": "Google Fitbit Air Fitness Tracker",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-01T10:38:43.382Z"
+  "updated_at": "2026-11-01T11:53:01.063Z"
 }

@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "JrGIb602RIQ",
+      "short_video_id": "6XdXRWnDBfo",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "Channel Growth Patterns Emerge During New York Marathon 2026",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/JrGIb602RIQ/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "New York Marathon 2026",
+      "trend_in_title": true,
+      "news_headline": "2026 NYC Marathon Tracker: How to Track Runners Live",
+      "script_format": "myth-bust",
+      "caption_style": "lower-third",
+      "duration_seconds": 467,
+      "published_at": "2026-11-01T12:09:14.616Z"
+    },
+    {
       "video_id": "vsYd-KFmiwI",
       "short_video_id": "QviO8sfvvvs",
       "book_slug": "art-of-joy",
@@ -797,5 +815,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-10-31T11:06:36.221Z"
+  "updated_at": "2026-11-01T12:09:14.617Z"
 }
