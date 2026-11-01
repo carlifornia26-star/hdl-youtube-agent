@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "yXGZPSXK-6U",
+      "short_video_id": "D-oKopiu63E",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "How Modern Pet Care Evolves",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/yXGZPSXK-6U/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "cold-open",
+      "caption_style": "wide-orange",
+      "duration_seconds": 503,
+      "published_at": "2026-11-01T14:44:10.326Z"
+    },
+    {
       "video_id": "19GdgCZa5aQ",
       "short_video_id": "UJdXjs6Ebyc",
       "book_slug": "youtube-algorithms",
@@ -929,5 +947,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-10-31T14:10:01.167Z"
+  "updated_at": "2026-11-01T14:44:10.326Z"
 }
