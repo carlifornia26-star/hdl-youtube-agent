@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "ilch4PmmqEg",
+      "short_video_id": "iBScXrMpnFk",
+      "book_slug": "age-one",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-complete-ai-business-mastery",
+      "title": "Human Insight Or Artificial Intelligence",
+      "description": "Curious about AI & the information economy? AGE ONE breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/ilch4PmmqEg/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": true,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "stat-hook",
+      "caption_style": "classic-pop",
+      "duration_seconds": 398,
+      "published_at": "2026-11-01T08:02:49.638Z"
+    },
+    {
       "video_id": "s3V5qOBoVSk",
       "short_video_id": "hqx-ynfokZk",
       "book_slug": "pet-friendly",
@@ -741,5 +759,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-10-31T07:26:49.760Z"
+  "updated_at": "2026-11-01T08:02:49.639Z"
 }
