@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "Z4i-LRkM7VQ",
+      "short_video_id": "B6o_epbf-58",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "Happiness Often Found Without Technology News",
+      "description": "Curious about the science of happiness? Art of Joy breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/Z4i-LRkM7VQ/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Technology News",
+      "trend_in_title": true,
+      "news_headline": "Digital Currency X Technology Inc. Class A Ordinary Shares (DCX) News Headlines",
+      "script_format": "direct-hook",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 468,
+      "published_at": "2026-11-01T11:01:52.014Z"
+    },
+    {
       "video_id": "3UKW15jaCZE",
       "short_video_id": "hHI1nOSTNUA",
       "book_slug": "science-of-feeling-great",
@@ -946,5 +964,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-10-31T10:05:41.031Z"
+  "updated_at": "2026-11-01T11:01:52.015Z"
 }
