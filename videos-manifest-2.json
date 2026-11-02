@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "d49rVKqWZGQ",
+      "short_video_id": "u_0kA1b1Vy4",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "Conventional Pet Care Methods Give Way To Modern Approaches Like Handling Snake Bites",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/d49rVKqWZGQ/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Snake",
+      "trend_in_title": true,
+      "news_headline": "He’s the Top Snake Catcher, and Business Is Booming. There’s Just One Problem.",
+      "script_format": "cold-open",
+      "caption_style": "wide-orange",
+      "duration_seconds": 360,
+      "published_at": "2026-11-02T13:50:02.180Z"
+    },
+    {
       "video_id": "JrGIb602RIQ",
       "short_video_id": "6XdXRWnDBfo",
       "book_slug": "youtube-algorithms",
@@ -815,5 +833,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-11-01T12:09:14.617Z"
+  "updated_at": "2026-11-02T13:50:02.181Z"
 }
