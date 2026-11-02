@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "vsrtnUrPHq4",
+      "short_video_id": "hMHR8H7ef7c",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "Five Key Signs Of Algorithm Driven Channel Growth",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/vsrtnUrPHq4/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "myth-bust",
+      "caption_style": "lower-third",
+      "duration_seconds": 194,
+      "published_at": "2026-11-02T11:41:58.468Z"
+    },
+    {
       "video_id": "Z4i-LRkM7VQ",
       "short_video_id": "B6o_epbf-58",
       "book_slug": "art-of-joy",
@@ -964,5 +982,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-11-01T11:01:52.015Z"
+  "updated_at": "2026-11-02T11:41:58.469Z"
 }
