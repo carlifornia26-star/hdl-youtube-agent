@@ -205,7 +205,7 @@ export async function buildScene({ clipPath, duration, text, outPath, voicePath,
       const fadeEnd = Math.min(start + POP_IN_SECONDS, end).toFixed(3);
       return (
         `drawtext=fontfile=${CAPTION_FONT}:text='${safe}':fontcolor=${color}:fontsize=${dim.fontsize}:` +
-        `box=1:boxcolor=black@0.6:boxborderw=18:x=(w-text_w)/2:y=${captionY}-text_h/2:` +
+        `box=1:boxcolor=black@0.6:boxborderw=18:x=(w-text_w)/2:y=${captionY}-text_h/2:expansion=none:` +
         `alpha='if(lt(t,${s}),0,if(lt(t,${fadeEnd}),(t-${s})/${POP_IN_SECONDS},1))':` +
         `enable='between(t,${s},${end.toFixed(3)})'`
       );
@@ -359,7 +359,7 @@ export async function buildNewsScene({ clipPath, cardPath, duration, text, outPa
       const fadeEnd = Math.min(start + POP_IN_SECONDS, end).toFixed(3);
       return (
         `drawtext=fontfile=${CAPTION_FONT}:text='${safe}':fontcolor=${color}:fontsize=${dim.fontsize}:` +
-        `box=1:boxcolor=black@0.6:boxborderw=18:x=(w-text_w)/2:y=h*${captionStyle.yFrac}-text_h/2:` +
+        `box=1:boxcolor=black@0.6:boxborderw=18:x=(w-text_w)/2:y=h*${captionStyle.yFrac}-text_h/2:expansion=none:` +
         `alpha='if(lt(t,${s}),0,if(lt(t,${fadeEnd}),(t-${s})/${POP_IN_SECONDS},1))':` +
         `enable='between(t,${s},${end.toFixed(3)})'`
       );
@@ -616,3 +616,107 @@ export function buildSrt(scenesWithDurations, translatedLines) {
     return `${h}:${m}:${s},${ms}`;
   }
                                  }
+
+// --- Evidence card + QC stills (stage-1 evidence upgrades, 2026-11-03) -----------------------
+
+// Word-wrap with NO truncation: every input word lands on a line. Used by renderEvidenceCard,
+// which must show the verified fact in full or fail loudly - a silently shortened "fact" is a
+// misquote. (wrapForCard above truncates with an ellipsis, which is fine for a headline but
+// never for a cited fact.)
+function wrapToWidth(text, maxCharsPerLine) {
+  const words = String(text || "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  const lines = [];
+  let cur = "";
+  for (const w of words) {
+    const candidate = cur ? `${cur} ${w}` : w;
+    if (candidate.length > maxCharsPerLine && cur) {
+      lines.push(cur);
+      cur = w;
+    } else {
+      cur = candidate;
+    }
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+const EVIDENCE_CARD_ACCENT = "0x1A5276"; // dark blue — visually distinct from the red news card
+
+// Same drawn-card approach as renderNewsCard (white card, accent bar, source + date row, drop
+// shadow), generalized for the video's verified grounding fact. FIT-OR-FAIL: shrinks the body
+// font until every wrapped line fits the card; throws instead of truncating, so the caller's
+// fallback (a normal scene) keeps the fact intact rather than shipping a cut quote.
+// `label` is the card header: "VERIFIED FACT", "THE OTHER SIDE" (counterevidence), "ESTIMATE".
+export async function renderEvidenceCard({ label = "VERIFIED FACT", text, source, dateText = "", outPath, accent = EVIDENCE_CARD_ACCENT }) {
+  const dir = path.dirname(outPath);
+  const BODY_TOP = 120;
+  const BODY_BOTTOM = NEWS_CARD_H - 150;
+  let chosen = null;
+  for (const fontSize of [54, 50, 46, 42, 38, 34, 30]) {
+    // ~0.58em average glyph width for DejaVu Sans Bold — conservative so lines never overflow.
+    const maxChars = Math.max(24, Math.floor((NEWS_CARD_W - 128) / (fontSize * 0.58)));
+    const lines = wrapToWidth(text, maxChars);
+    const lineH = fontSize + 16;
+    if (BODY_TOP + lines.length * lineH <= BODY_BOTTOM) {
+      chosen = { fontSize, lines };
+      break;
+    }
+  }
+  if (!chosen) {
+    throw new Error(
+      `Evidence card text too long to fit without truncation (${String(text || "").length} chars) — refusing to truncate a cited fact`
+    );
+  }
+  const labelFile = path.join(dir, "evidence_label.txt");
+  const textFile = path.join(dir, "evidence_text.txt");
+  const sourceFile = path.join(dir, "evidence_source.txt");
+  const dateFile = path.join(dir, "evidence_date.txt");
+  await fs.writeFile(labelFile, String(label).slice(0, 30));
+  await fs.writeFile(textFile, chosen.lines.join("\n"));
+  // Source credit must not run into the right-aligned date (verified overlap at 52+ chars on
+  // 2026-11-03): cap at 56 chars (~870px at fontsize 30, clears the date zone), cut on a word boundary.
+  const sourceText = String(source || "");
+  const credit = sourceText.length <= 56 ? sourceText : sourceText.slice(0, 56).replace(/\s+\S*$/, "");
+  await fs.writeFile(sourceFile, credit);
+  await fs.writeFile(dateFile, String(dateText || ""));
+
+  const F = escapeFilterPath;
+  const card =
+    `color=c=white:s=${NEWS_CARD_W}x${NEWS_CARD_H}:d=1,format=rgba,` +
+    `drawbox=x=0:y=0:w=iw:h=16:color=${accent}:t=fill,` +
+    `drawtext=fontfile=${CAPTION_FONT}:textfile='${F(labelFile)}':fontcolor=${accent}:fontsize=32:x=64:y=54:expansion=none,` +
+    `drawtext=fontfile=${CAPTION_FONT}:textfile='${F(textFile)}':fontcolor=0x141414:fontsize=${chosen.fontSize}:line_spacing=16:x=64:y=${BODY_TOP}:expansion=none,` +
+    `drawbox=x=64:y=h-118:w=iw-128:h=3:color=0xD9D9D9:t=fill,` +
+    `drawtext=fontfile=${CAPTION_FONT}:textfile='${F(sourceFile)}':fontcolor=0x4A4A4A:fontsize=30:x=64:y=h-86:expansion=none,` +
+    `drawtext=fontfile=${NEWS_CARD_FONT_REGULAR}:textfile='${F(dateFile)}':fontcolor=0x7A7A7A:fontsize=30:x=w-text_w-64:y=h-86:expansion=none`;
+
+  const fullW = NEWS_CARD_W + NEWS_CARD_PAD * 2;
+  const fullH = NEWS_CARD_H + NEWS_CARD_PAD * 2;
+  const filterComplex =
+    `${card}[card];` +
+    `[card]split[c][s];` +
+    `[s]colorchannelmixer=rr=0:gg=0:bb=0:aa=0.55,pad=w=${fullW}:h=${fullH}:x=${NEWS_CARD_PAD}:y=${NEWS_CARD_PAD + 14}:color=black@0,gblur=sigma=22[sh];` +
+    `[c]pad=w=${fullW}:h=${fullH}:x=${NEWS_CARD_PAD}:y=${NEWS_CARD_PAD}:color=black@0[cp];` +
+    `[sh][cp]overlay=format=auto[out]`;
+  await run("ffmpeg", ["-y", "-filter_complex", filterComplex, "-map", "[out]", "-frames:v", "1", outPath]);
+  return { outPath, width: fullW, height: fullH, fontSize: chosen.fontSize, lines: chosen.lines.length };
+}
+
+// A handful of evenly spaced frames from the finished cut, saved as small JPEGs so a run's
+// caption placement / card rendering / footage variety can be reviewed from the workflow
+// artifact without downloading the 1-1.7GB build. Pure diagnostics — changes nothing about the
+// video itself. Uploaded by daily-video.yml's existing artifact step (path build/qc/).
+// NOTE: this repo is public, so artifact frames are visible to any signed-in GitHub user
+// between upload and the 16:00 UTC publish — same-day content, flagged to the owner.
+export async function extractQcStills({ videoPath, outDir, count = 5 }) {
+  await fs.mkdir(outDir, { recursive: true });
+  const total = await probeDuration(videoPath);
+  const paths = [];
+  for (let k = 1; k <= count; k++) {
+    const t = (total * k) / (count + 1);
+    const outPath = path.join(outDir, `qc_${String(k).padStart(2, "0")}.jpg`);
+    await run("ffmpeg", ["-y", "-ss", t.toFixed(2), "-i", videoPath, "-frames:v", "1", "-q:v", "5", outPath]);
+    paths.push(outPath);
+  }
+  return paths;
+}
