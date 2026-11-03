@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pickTodaysBook, pickTodaysBookForChannel } from "./catalog.js";
-import { generateScript, generateBonusScenes, generateTrendExplainer, translateMeta, VIDEO_LANGS, pickTodaysFormat, sanitizeScenePauses, generateCuriosityTitle, generateNumberTitle, pickTitleStyleIndex, pickTodaysStoryMode, shiftStoryMode, getTodaysGroundingItems, getTodaysEvidenceItem, lintUnsupportedClaims } from "./cf-ai.js";
+import { generateScript, generateBonusScenes, topupScenesForRound, generateTrendExplainer, translateMeta, VIDEO_LANGS, pickTodaysFormat, sanitizeScenePauses, generateCuriosityTitle, generateNumberTitle, pickTitleStyleIndex, pickTodaysStoryMode, shiftStoryMode, getTodaysGroundingItems, getTodaysEvidenceItem, lintUnsupportedClaims } from "./cf-ai.js";
 import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./assets.js";
 import { loadUsedClipIds, saveUsedClipIds } from "./scene-history.js";
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
@@ -194,7 +194,7 @@ const TARGET_MIN_SECONDS = 8.5 * 60; // 510s — a bit above the 8:00 floor so s
 const LOW_AI_CHANNEL = CHANNEL_ID === "2";
 const MAX_TOPUP_ROUNDS = LOW_AI_CHANNEL ? 1 : 2; // was 4 — cut to stay inside the free Workers AI daily allowance; the 2+ min news segment now covers most of the runtime gap
 const TOPUP_SCENES_PER_ROUND = 10; // floor per round; each round is right-sized from the measured shortfall up to TOPUP_MAX_SCENES_PER_ROUND (owner review 2026-11-03)
-const TOPUP_MAX_SCENES_PER_ROUND = 24; // same call-count cap as before; a larger request uses more output tokens in that one call (max_tokens scales in cf-ai.js) - not zero-quota, just no extra calls
+const TOPUP_MAX_SCENES_PER_ROUND = 30; // same call-count cap as before; a larger request uses more output tokens in that one call (max_tokens scales in cf-ai.js) - not zero-quota, just no extra calls. 24 -> 30 after production logs (2026-11-02) showed ch2 needs avg >= 6.62s/scene to clear 510s with 24, but measured 6.3-7.0s
 
 // YouTube's auto-rendered chapter bar requires: first chapter at 0:00, at least 3 chapters
 // total, and each at least this many seconds apart from the previous one, in ascending order.
@@ -707,15 +707,15 @@ async function main() {
   let topupRound = 0;
   while (totalSeconds < TARGET_MIN_SECONDS && topupRound < MAX_TOPUP_ROUNDS) {
     topupRound++;
-    // Right-size the round (owner review 2026-11-03 - top-up repeatedly undershot because a
-    // fixed 10 scenes/round couldn't cover a 200-300s shortfall): measure the actual average
-    // seconds/scene of what we already built, ask for enough scenes to cover the gap with a
-    // 25% safety margin. Same one AI call per round - no extra quota.
-    const avgSceneSeconds = built.length ? built.reduce((a, b) => a + b.duration, 0) / built.length : 15;
-    const shortfall = TARGET_MIN_SECONDS - totalSeconds;
-    const scenesThisRound = Math.min(
-      TOPUP_MAX_SCENES_PER_ROUND,
-      Math.max(TOPUP_SCENES_PER_ROUND, Math.ceil((shortfall / Math.max(8, avgSceneSeconds)) * 1.25))
+    // Right-size the round: measure the actual average seconds/scene of what we already built,
+    // ask for enough scenes to cover the gap with a 25% safety margin (production logs show real
+    // narration averages 6.3-7.0s/scene, not the 15-22s the prompt asks for). Same one AI call
+    // per round - no extra quota. Sizing lives in cf-ai.js's topupScenesForRound so the offline
+    // fixture test exercises the real production function.
+    const { avgSceneSeconds, shortfall, request: scenesThisRound } = topupScenesForRound(
+      built.map((b) => b.duration),
+      totalSeconds,
+      { targetSeconds: TARGET_MIN_SECONDS, roundFloor: TOPUP_SCENES_PER_ROUND, roundCap: TOPUP_MAX_SCENES_PER_ROUND }
     );
     console.log(
       `Runtime ~${Math.round(totalSeconds / 60)} min is under the target by ~${Math.round(shortfall)}s ` +
