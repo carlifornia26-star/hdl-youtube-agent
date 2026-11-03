@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-11-03",
+      "channel": "1",
+      "term": "Marathon",
+      "headline": null
+    },
+    {
+      "date": "2026-11-03",
       "channel": "4",
       "term": "Nokia Flip Phones",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "4",
       "term": "Citi",
       "headline": null
-    },
-    {
-      "date": "2026-10-05",
-      "channel": "3",
-      "term": "Chatgpt Login",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-03T08:02:12.759Z"
+  "updated_at": "2026-11-03T11:02:41.410Z"
 }
