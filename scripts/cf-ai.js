@@ -419,6 +419,56 @@ export function pickTodaysFormat(date = new Date(), channelOffset = 0) {
   return FORMAT_POOL[(dayOfYear + channelOffset) % FORMAT_POOL.length];
 }
 
+// STORY MODE POOL (owner requirement 2026-11-03: "videos should feel different every day from
+// the same channel, not like scripted"). FORMAT_POOL varies the opening TECHNIQUE; this varies
+// the day's whole storytelling shape - one day a case study, the next a comparison, then a
+// viewer-style question, a process walkthrough, a concept deep-dive. Stepped by a different
+// multiplier (dayOfYear * 3) than pickTodaysFormat and pickTodaysGrounding so mode, format and
+// facts drift independently; consecutive days always land on a different mode (3 mod 5 cycle).
+const STORY_MODE_POOL = [
+  {
+    id: "case-study",
+    label: "Case Study",
+    block: "build the middle third of the script around ONE example from the VERIFIED GROUNDING LIBRARY below, followed concretely from situation to turning point to result - name the real people, places or events from that entry and let the story itself carry the point instead of stating it generally",
+  },
+  {
+    id: "comparison",
+    label: "Comparison",
+    block: "structure the middle of the script as a deliberate comparison - an old way versus a new way, or two rival explanations of the same thing - alternating between the two sides at least three times before landing on what the viewer should take from the contrast",
+  },
+  {
+    id: "question-led",
+    label: "Viewer Question",
+    block: "frame the whole video as answering one specific question people genuinely ask about this topic - state that question plainly in scene 1, let every scene bring the answer closer, and never drift into a generic overview. HONESTY RULE: unless a real viewer comment is quoted in the STORY MODE RULE below, never claim a specific viewer, subscriber or commenter asked this question - phrase it as a question people keep asking / would type into a search bar. Claiming a viewer asked when none did is fabrication",
+  },
+  {
+    id: "process-walkthrough",
+    label: "Process Walkthrough",
+    block: "narrate one real process from this topic step by step, as if the viewer is watching it happen - what moves first, what happens next, what can go wrong at each step - using only grounded, checkable steps, never invented mechanics",
+  },
+  {
+    id: "concept-deep-dive",
+    label: "Concept Deep-Dive",
+    block: "take ONE concept from this topic and go deeper than a normal teaser would - where it came from, why it works, where it breaks down - anchoring each layer to one concrete grounded detail rather than stacking abstract claims",
+  },
+];
+
+// Same day-of-year + channelOffset pattern as pickTodaysFormat, different multiplier so the
+// two never sync up.
+export function pickTodaysStoryMode(date = new Date(), channelOffset = 0) {
+  const start = new Date(date.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((date - start) / 86400000);
+  return STORY_MODE_POOL[(dayOfYear * 3 + channelOffset * 2) % STORY_MODE_POOL.length];
+}
+
+// Move N steps along the pool - used by generate-video.js when the channel's previous upload
+// already used today's picked mode (e.g. after a skipped day), so consecutive uploads from one
+// channel never repeat a mode even when the calendar formula collides.
+export function shiftStoryMode(mode, steps = 1) {
+  const i = STORY_MODE_POOL.findIndex((m) => m.id === mode.id);
+  return STORY_MODE_POOL[(i + steps) % STORY_MODE_POOL.length];
+}
+
 // Rotating phrasing for the two compliance disclaimers, keyed by book.complianceTopic (see
 // catalog.js). Given ONE fixed instruction, every finance-book video would phrase this near-
 // identically forever — same day-of-year rotation pattern as FORMAT_POOL/VOICE_POOL so the
@@ -546,6 +596,102 @@ GROUNDING_LIBRARY["age-one-premium"] = [
   { type: "book", fact: "it also covers the Lightning Network as a business tool for instant Bitcoin payments, and closes with five real, fully worked business-blueprint case studies", source: "AGE ONE: Premium Edition, Ch. 12 & Ch. 20" },
 ];
 
+// Counterevidence entries (type "counter") — each verified against its cited source on
+// 2026-11-03 before being added (same hand-verified rule as every entry above). These power
+// the ARGUMENT STRUCTURE RULE's honest-counterevidence beat, and render as "THE OTHER SIDE"
+// cards when picked as the day's evidence item (see getTodaysEvidenceItem below).
+const AGE_ONE_COUNTER = { type: "counter", fact: "even celebrated experts have badly overestimated AI timelines - back in 1960 the economist Herbert Simon wrote that machines would be capable, within twenty years, of doing any work a man can do, a deadline that came and went unmet", source: "Herbert A. Simon, 'The New Science of Management Decision', 1960", url: "https://quoteinvestigator.com/2020/11/11/ai-can-do/" };
+GROUNDING_LIBRARY["age-one"].push(AGE_ONE_COUNTER);
+// age-one-premium was spread from age-one BEFORE this push, so it needs its own copy.
+GROUNDING_LIBRARY["age-one-premium"].push(AGE_ONE_COUNTER);
+GROUNDING_LIBRARY["bitcoin-standard"].push(
+  { type: "counter", fact: "for all the scarcity design, the price has still collapsed from its peaks more than once - maximum drawdowns of 84 to 85% in the 2014 and 2018 bear markets, and down more than 70% from the November 2021 peak during 2022", source: "K33 Research bitcoin drawdown analysis, September 2022", url: "https://k33.com/research/archive/articles/the-2022-bear-market-is-on-track-with-the-2018-bear-market" }
+);
+GROUNDING_LIBRARY["science-of-feeling-great"].push(
+  { type: "counter", fact: "the famous Blue Zones longevity claims have been seriously challenged - UCL demographer Saul Justin Newman showed extreme-age records cluster where birth registration was weak and pension fraud is common, work that won the first Ig Nobel Prize in demography in 2024 - though other demographers still defend the Blue Zones data", source: "S. J. Newman, UCL (contested - see The Gerontologist response)", url: "https://www.ucl.ac.uk/ioe/news/2024/sep/ucl-demographers-work-debunking-blue-zone-regions-exceptional-lifespans-wins-ig-nobel-prize", alsoUrl: "https://academic.oup.com/gerontologist/article/65/12/gnaf246/8381533" }
+);
+GROUNDING_LIBRARY["art-of-joy"].push(
+  { type: "counter", fact: "the famous finding that day-to-day happiness stops rising above about 75,000 dollars a year has been overturned by much larger modern research - 1,725,994 real-time reports from 33,391 employed US adults found day-to-day wellbeing keeps rising with income, with no plateau at that line", source: "Matthew Killingsworth, PNAS 118(4), January 2021", url: "https://www.pnas.org/doi/full/10.1073/pnas.2016976118" }
+);
+GROUNDING_LIBRARY["youtube-algorithms"].push(
+  { type: "counter", fact: "optimizing purely for watch time had documented side effects - YouTube itself made more than 30 changes to its recommendation system starting in January 2019 to demote borderline content, cutting watch time on that material from non-subscribers by 70%", source: "The Verge on YouTube's borderline-content changes, December 2019", url: "https://www.theverge.com/2019/12/3/20992018/youtube-borderline-content-recommendation-algorithm-news-authoritative-sources" }
+);
+GROUNDING_LIBRARY["pet-friendly"].push(
+  { type: "counter", fact: "some popular breeds carry documented welfare costs - after Norway's Oslo District Court banned breeding English bulldogs and Cavalier King Charles spaniels in 2022, the Supreme Court's 2023 final ruling kept the Cavalier ban but allowed bulldog breeding under a specific health-screened programme, both because of the burden of disease in those breeds", source: "Norwegian Supreme Court, HR-2023-1901-A, 2023", url: "https://www.domstol.no/en/supremecourt/rulings/2023/supreme-court-civil-cases/HR-2023-1901-A" }
+);
+
+// Exported so generate-video.js can lint the finished script against EXACTLY the items the
+// model was allowed to cite today (see lintUnsupportedClaims below).
+export function getTodaysGroundingItems(slug, count = 3, date = new Date(), channelOffset = 0) {
+  return pickTodaysGrounding(slug, count, date, channelOffset);
+}
+
+// The day's on-screen EVIDENCE item: the 4th pick from the same rotation, i.e. one item the
+// script itself was NOT shown, so the evidence-card beat adds something the narration didn't
+// already spend. Returns null when the book's library has fewer than 4 entries (callers skip
+// the evidence scene entirely in that case - no card is better than a repeated one).
+export function getTodaysEvidenceItem(slug, date = new Date(), channelOffset = 0) {
+  const items = pickTodaysGrounding(slug, 4, date, channelOffset);
+  return items.length >= 4 ? items[3] : null;
+}
+
+// Heuristic safety net for the GROUNDING RULE: flags script sentences that carry a
+// study/source-flavoured claim or a specific number (2+ digits) that cannot be traced to any
+// of today's allowed grounding items. Pure detector - it NEVER edits the script itself.
+// Callers decide what to do with flags (log, one revision pass, manifest record). Being a
+// heuristic, it has both false positives and blind spots; the overlap score is logged with
+// every flag so thresholds can be tuned from real runs instead of guessed.
+export function lintUnsupportedClaims(scenes, allowedFacts = []) {
+  const norm = (t) => String(t).toLowerCase().replace(/[^a-z0-9%\s]/g, " ").replace(/\s+/g, " ").trim();
+  const allowed = allowedFacts.map((f) => norm(`${f.fact} ${f.source}`));
+  const allowedDigits = new Set();
+  for (const a of allowed) {
+    for (const m of a.matchAll(/\d[\d\s,.]*\d|\d/g)) allowedDigits.add(m[0].replace(/[\s,.]/g, ""));
+  }
+  const SOURCE_CLAIM = /\b(study|studies|survey|poll|researchers?|scientists?|professor|university|institute|journal|according to|report found|data shows|historians?)\b/i;
+  // Fabricated social proof (owner review 2026-11-03): claiming a viewer/commenter asked or said
+  // something is only honest when a genuine comment was supplied in the prompt. Without one,
+  // these phrasings are fabrications even though no number or study is cited.
+  const FABRICATED_ATTRIBUTION = /\b(a|one of (my|you)|a few of you|several of you|many of you) (viewer|viewers|subscriber|subscribers|commenter|commenters|of you)?\s*(asked|ask|wrote|commented|told me|said in the comments)\b|\byou asked (me )?in the comments\b|\bas (one of )?you (asked|said|pointed out) (in|below)\b/i;
+  const flags = [];
+  scenes.forEach((s, sceneIndex) => {
+    const sentences = String(s.line || "").split(/(?<=[.!?])\s+/).filter(Boolean);
+    for (const sentence of sentences) {
+      if (FABRICATED_ATTRIBUTION.test(sentence) && !allowedFacts.some((f) => f.type === "viewer-comment")) {
+        flags.push({ sceneIndex, sentence: sentence.slice(0, 140), fabricatedAttribution: true, hasSourceClaim: false, unsupportedNumbers: [], overlap: 0 });
+        continue;
+      }
+      const hasSourceClaim = SOURCE_CLAIM.test(sentence);
+      const nums = [];
+      for (const m of sentence.matchAll(/\d[\d,.]*\d%?|\d/g)) {
+        const digits = m[0].replace(/[,.%]/g, "");
+        if (digits.length >= 2) nums.push(digits);
+      }
+      const badNums = nums.filter((d) => !allowedDigits.has(d));
+      if (!hasSourceClaim && badNums.length === 0) continue;
+      const st = new Set(norm(sentence).split(" ").filter((w) => w.length > 3));
+      let best = 0;
+      for (const a of allowed) {
+        const at = new Set(a.split(" ").filter((w) => w.length > 3));
+        let ov = 0;
+        for (const t of st) if (at.has(t)) ov++;
+        const score = ov / Math.max(1, Math.min(st.size, at.size));
+        if (score > best) best = score;
+      }
+      if (best < 0.35) {
+        flags.push({
+          sceneIndex,
+          sentence: sentence.slice(0, 140),
+          hasSourceClaim,
+          unsupportedNumbers: badNums,
+          overlap: Number(best.toFixed(2)),
+        });
+      }
+    }
+  });
+  return flags;
+}
+
 // Rotates in a small, varying subset of a book's verified facts — same day-of-year +
 // channelOffset pattern as pickTodaysFormat/pickTodaysDisclaimer, but stepped by a different
 // multiplier (dayOfYear * 5) so it doesn't happen to sync with which FORMAT_POOL/VOICE_POOL
@@ -578,7 +724,7 @@ ${list}
 - PHRASING VARIETY RULE — never introduce two of these with the same lead-in, and don't default to "As [name] once said" every single time. Rotate across different natural framings depending on what fits the sentence — for example: naming the year first ("Back in [year]..."), naming the number first ("Here's a number that still surprises people..."), naming the source first ("A [institution] survey found..."), framing it as a belief held before it was proven right ("Long before anyone agreed with them, [name] was convinced that..."), or framing it as an established custom ("This isn't new — [place] has treated it as ordinary for [time period]..."). Pick whichever reads most naturally for that specific fact; never force the same lead-in twice in one script.`;
 }
 
-export async function generateScript(book, format = FORMAT_POOL[0], channelOffset = 0, trend = null) {
+export async function generateScript(book, format = FORMAT_POOL[0], channelOffset = 0, trend = null, storyMode = null) {
   const disclaimer = pickTodaysDisclaimer(book.complianceTopic, new Date(), channelOffset);
   // Today's trending Google search term (see daily-trend.js), or null. When present the script must
   // work that exact term in twice — as an honest hook, never as a claim about the term itself,
@@ -588,6 +734,10 @@ export async function generateScript(book, format = FORMAT_POOL[0], channelOffse
     ? `\n- TRENDING TIE-IN RULE — the search term ${trend.term} is trending on Google right now. Say that exact term (spelled exactly like that) in EXACTLY two lines of the script: once in scene 1 or scene 2, as a quick hook that connects it to ${book.angle} (a suggested connection: ${trend.tieIn || `what people search for right now says something about ${book.angle}`} — improve on it if you can), and once more in the middle stretch (roughly the 45%-55% mark) as a brief callback or analogy. Each time, keep it to ONE sentence. Say only that people are searching for it or that it is in the conversation right now — do NOT state any facts, events, scores, results, quotes, or claims about ${trend.term} itself (you cannot verify current events), and never suggest the book is about ${trend.term}. The tie-in must feel honest, not forced, and everything else in the script stays about the book. A separate news-headline beat is inserted automatically right after scene 2, so do NOT mention or describe any headline yourself.`
     : "";
   const grounding = pickTodaysGrounding(book.slug, 3, new Date(), channelOffset);
+  const genuineQuestion = storyMode?.viewerQuestion ? `\n  A real viewer genuinely commented on this channel: "${storyMode.viewerQuestion}" - today's video answers THAT actual question; you may say a viewer asked it because one verifiably did.` : "";
+  const modeBlock = storyMode
+    ? `\n- STORY MODE RULE - today's storytelling mode is ${storyMode.label}: ${storyMode.block}.${genuineQuestion} This mode shapes the whole script's structure today; the per-scene rules below still apply inside that shape.`
+    : "";
   const prompt = `You are the Universal Master Narrator — a polymathic, warm, sharply engaging storyteller equally at home with a curious teenager and a skeptical adult, fluent across science, history, technology, culture, and everyday life. You blend real intellectual rigor with plain-spoken clarity, dry wit, and genuine emotional depth — never dry-lecture, never robotic.
 
 You are writing a 10-minute YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold in English on Google Play Books via High Definition Learning Group.
@@ -616,6 +766,10 @@ Strict rules:
 - RHYTHM RULE — vary sentence length within and across scenes: mix short, blunt sentences with a longer one that lets a thought build, then land on another short one. A scene where every sentence is roughly the same length reads as monotone even through narration — avoid that.
 - DIRECT-ADDRESS RULE — use second-person "you" language addressing the viewer's specific situation regularly across the WHOLE script, not only in scenes using today's Direct Address opening technique. Talking about "creators" or "readers" in the abstract is weaker than speaking to the one person watching.
 - PAYOFF RULE — the curiosity built throughout must feel rewarded by the end, even though the book's actual chapters/frameworks/conclusions stay withheld. The closing scenes should land as a genuine synthesis or a satisfying "here's the real shape of the problem" moment, not just one more promise stacked on the pile — a script that only ever teases and never pays off trains the viewer to stop trusting the next hook.
+- ARGUMENT STRUCTURE RULE — build the script as an argument, not a list: at least once, run a clear point -> evidence -> explanation sequence (a claim, then the grounded detail that backs it, then what it means for the viewer). And if the VERIFIED GROUNDING LIBRARY below includes an item marked [counter], use it exactly once: acknowledge that criticism or downside honestly in the narrator's own words, then answer it - never present only the shiny side, and never invent a counterargument that is not in the list.
+- LESSON OPENING RULE — by the end of scene 2 the viewer must know what they will come away understanding today (the day's question, case, comparison or process - see the STORY MODE RULE). Deliver that as a promise of understanding, not a table of contents and not a sales line.
+- ANSWER-THE-OPENING RULE — before the final call-to-action scene, explicitly resolve whatever the opening set up: answer the question, close the case, land the comparison. Give the viewer one concrete, usable takeaway they could act on or repeat to a friend today. The CTA scene itself stays exactly as constrained elsewhere.
+- UNCERTAINTY RULE — distinguish plainly between established fact, estimate, and the channel's own interpretation. If a number or claim is approximate, say so in natural spoken words ("roughly," "the best estimate we have," "our read of this is") rather than stating everything with the same flat certainty.
 - AUTHORITY RULE — don't stay in constant "expert mode." Alternate a sharp, precise, authoritative line ("this is the single biggest ranking factor almost nobody optimizes for") with a plain, relatable one right after it ("and yeah, most creators get this wrong for years without knowing it"). That shift between "insider explaining something precisely" and "friend leveling with you" is what makes a narrator sound like a real expert rather than a script reciting facts. Never more than 2-3 sentences of pure declaration before a plainer beat.
 - POLYMATH-TO-CHILD RULE — whenever a line touches a dense, technical, or abstract idea, follow it immediately with a vivid, everyday metaphor or an ELI5-style analogy that makes it instantly picturable, without ever sounding condescending.
 - GROUNDING RULE — see the VERIFIED GROUNDING LIBRARY block below for the specific citations you're allowed to use, and its rules for how many to include and how to phrase them.
@@ -646,7 +800,7 @@ Strict rules:
     disclaimer
       ? `\n- COMPLIANCE RULE — somewhere between the one-third and two-thirds mark of the scenes (never in the first third, where it would undercut the opening hook right as it's landing), work in this exact idea as a natural, spoken aside (not a legal footnote): ${disclaimer}`
       : ""
-  }${trendRule}${renderGroundingBlock(grounding)}`;
+  }${trendRule}${modeBlock}${renderGroundingBlock(grounding)}`;
 
   return requestSceneScript(prompt, SCRIPT_MIN_SCENES, SCRIPT_MAX_SCENES, 6000, [], "finalOnly");
 }
@@ -697,7 +851,11 @@ Strict rules:
 - Every scene needs a concrete, sensory detail (not an abstract claim) and should escalate slightly past the previous scene's stakes rather than repeating the same weight of point. Use direct "you" language addressing the viewer. Vary sentence length within each scene rather than uniform-length sentences. At least one of these scenes should plant a specific, unresolved curiosity hook without revealing the book's actual chapters/frameworks/conclusions.
 - DELIVERY — alternate sharp/authoritative lines with plain, human ones; don't stay in constant expert mode. If space allows across these ${count} scenes: one reversal ("you'd think X, but actually Y"), one rhetorical question, one callback-style reference to an earlier idea, one named pattern, one micro-scene instead of a flat claim, a brief self-correction beat, a stakes-forward line, a false-summary-then-twist, a named contrast pair, one single-sentence one-liner scene, an identity-address line, or a scale-contrast line. Never force more than one or two of these into a single scene.`;
 
-  return requestSceneScript(prompt, count, count, 3000, existingLines, "never", CHEAP_SCRIPT_MODEL);
+  // Token budget scales with the ask (owner review 2026-11-03): a 24-scene request does NOT fit
+  // in the old flat 3000 (24 x ~95 tokens line+visual+JSON ~ 2300+ tokens, tight against the cap
+  // and silently truncating mid-JSON aborts the whole round). Same one call - more output tokens.
+  const maxTokens = Math.min(6000, 1200 + count * 110);
+  return requestSceneScript(prompt, count, count, maxTokens, existingLines, "never", CHEAP_SCRIPT_MODEL);
 }
 
 // Trending-news segment (owner request, Sep 23): instead of one "this is trending today" line,
