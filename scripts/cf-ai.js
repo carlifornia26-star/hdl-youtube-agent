@@ -227,6 +227,26 @@ function findOverusedWord(scenes) {
 // last scene), "never" (top-up scenes — it belongs nowhere), or "none" (skip the check).
 // `model` (optional): Workers AI model id. Defaults to the 70B model; top-up scenes pass the much
 // cheaper 8B model (~6x fewer neurons) to stay inside the free 10,000-neuron daily allowance.
+// Duration top-up sizing — single source of truth used by generate-video.js's top-up loop and
+// exercised directly by the offline fixture test (no mirror copies). Sizing is driven by the
+// MEASURED average seconds/scene of what's already built, because production logs (2026-11-02,
+// runs 41454175575 / 41489187269) show real narration averages 6.3-7.0s/scene, not the 15-22s
+// the prompt asks for. avgFloor 6s (was effectively 8 via the old inline clamp, which
+// under-requested scenes in exactly that production regime); 25% safety margin on top.
+export function topupScenesForRound(builtDurations, totalSeconds, { targetSeconds = 510, roundFloor = 10, roundCap = 30, avgFloor = 6 } = {}) {
+  const avgSceneSeconds = builtDurations.length ? builtDurations.reduce((a, b) => a + b, 0) / builtDurations.length : 15;
+  const shortfall = targetSeconds - totalSeconds;
+  const request = Math.min(roundCap, Math.max(roundFloor, Math.ceil((shortfall / Math.max(avgFloor, avgSceneSeconds)) * 1.25)));
+  return { avgSceneSeconds, shortfall, request };
+}
+// Output-token budget for a bonus-scene call scales with the ask: N scenes need roughly
+// N x ~97 tokens (75 line + 12 visual + ~10 JSON) plus wrapper - a flat 3000 silently truncated
+// a 24-scene request mid-JSON and aborted the whole round (production log 2026-11-02, run
+// 41454175575: "Expected property name or '}' in JSON at position 1"). Same one call, more tokens.
+export function topupMaxTokens(count) {
+  return Math.min(6000, 1200 + count * 110);
+}
+
 const SCRIPT_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const CHEAP_SCRIPT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 async function requestSceneScript(prompt, minItems, maxItems, maxTokens, priorLines = [], ctaMode = "none", model = SCRIPT_MODEL) {
@@ -851,10 +871,7 @@ Strict rules:
 - Every scene needs a concrete, sensory detail (not an abstract claim) and should escalate slightly past the previous scene's stakes rather than repeating the same weight of point. Use direct "you" language addressing the viewer. Vary sentence length within each scene rather than uniform-length sentences. At least one of these scenes should plant a specific, unresolved curiosity hook without revealing the book's actual chapters/frameworks/conclusions.
 - DELIVERY — alternate sharp/authoritative lines with plain, human ones; don't stay in constant expert mode. If space allows across these ${count} scenes: one reversal ("you'd think X, but actually Y"), one rhetorical question, one callback-style reference to an earlier idea, one named pattern, one micro-scene instead of a flat claim, a brief self-correction beat, a stakes-forward line, a false-summary-then-twist, a named contrast pair, one single-sentence one-liner scene, an identity-address line, or a scale-contrast line. Never force more than one or two of these into a single scene.`;
 
-  // Token budget scales with the ask (owner review 2026-11-03): a 24-scene request does NOT fit
-  // in the old flat 3000 (24 x ~95 tokens line+visual+JSON ~ 2300+ tokens, tight against the cap
-  // and silently truncating mid-JSON aborts the whole round). Same one call - more output tokens.
-  const maxTokens = Math.min(6000, 1200 + count * 110);
+  const maxTokens = topupMaxTokens(count);
   return requestSceneScript(prompt, count, count, maxTokens, existingLines, "never", CHEAP_SCRIPT_MODEL);
 }
 
