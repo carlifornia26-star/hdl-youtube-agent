@@ -1,16 +1,16 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { pickTodaysBook } from "./catalog.js";
-import { generateScript, generateBonusScenes, generateTrendExplainer, translateMeta, VIDEO_LANGS, pickTodaysFormat, sanitizeScenePauses, generateCuriosityTitle, generateNumberTitle, pickTitleStyleIndex } from "./cf-ai.js";
+import { pickTodaysBook, pickTodaysBookForChannel } from "./catalog.js";
+import { generateScript, generateBonusScenes, generateTrendExplainer, translateMeta, VIDEO_LANGS, pickTodaysFormat, sanitizeScenePauses, generateCuriosityTitle, generateNumberTitle, pickTitleStyleIndex, pickTodaysStoryMode, shiftStoryMode, getTodaysGroundingItems, getTodaysEvidenceItem, lintUnsupportedClaims } from "./cf-ai.js";
 import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./assets.js";
 import { loadUsedClipIds, saveUsedClipIds } from "./scene-history.js";
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
 import { fetchBackgroundMusic, attributionLine } from "./music.js";
 import { loadUsedMusicTitles, saveUsedMusicTitles } from "./music-history.js";
-import { buildScene, buildNewsScene, renderNewsCard, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic, normalizeLoudness, pickTodaysCaptionStyle, captionStyleForScene, tagVideoMetadata, tagThumbnailMetadata } from "./render.js";
+import { buildScene, buildNewsScene, renderNewsCard, renderEvidenceCard, extractQcStills, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic, normalizeLoudness, pickTodaysCaptionStyle, captionStyleForScene, tagVideoMetadata, tagThumbnailMetadata } from "./render.js";
 import { exiftool } from "exiftool-vendored";
 import { uploadVideo, uploadCaptionTrack, uploadThumbnail, addVideoToPlaylist, publishVideo, checkVideoTrainability, isQuotaLatched } from "./youtube.js";
-import { appendVideoEntry, loadRecentTitles } from "./manifest.js";
+import { appendVideoEntry, loadRecentTitles, loadManifest } from "./manifest.js";
 import { buildDailyCommunityPost } from "./community-post.js";
 import { pickTodaysTrend, fetchTopHeadline, fetchTopHeadlines, buildNewsSceneLine } from "./daily-trend.js";
 
@@ -193,7 +193,8 @@ const TARGET_MIN_SECONDS = 8.5 * 60; // 510s — a bit above the 8:00 floor so s
 // news segment on the cheaper 8B model and only 1 top-up round.
 const LOW_AI_CHANNEL = CHANNEL_ID === "2";
 const MAX_TOPUP_ROUNDS = LOW_AI_CHANNEL ? 1 : 2; // was 4 — cut to stay inside the free Workers AI daily allowance; the 2+ min news segment now covers most of the runtime gap
-const TOPUP_SCENES_PER_ROUND = 10;
+const TOPUP_SCENES_PER_ROUND = 10; // floor per round; each round is right-sized from the measured shortfall up to TOPUP_MAX_SCENES_PER_ROUND (owner review 2026-11-03)
+const TOPUP_MAX_SCENES_PER_ROUND = 24; // same call-count cap as before; a larger request uses more output tokens in that one call (max_tokens scales in cf-ai.js) - not zero-quota, just no extra calls
 
 // YouTube's auto-rendered chapter bar requires: first chapter at 0:00, at least 3 chapters
 // total, and each at least this many seconds apart from the previous one, in ascending order.
@@ -426,10 +427,11 @@ async function main() {
     );
   }
 
-  // Each channel reads from a different offset in the daily rotation (see pickTodaysBook in
-  // catalog.js) so all 3 channels post different books/titles on the same calendar day instead
-  // of all picking the identical one.
-  const book = pickTodaysBook(new Date(), Number(CHANNEL_ID) - 1);
+  // Per-channel subject split (owner-approved 2026-11-03): each channel stays inside its own
+  // niche from CHANNEL_BOOKS in catalog.js instead of rotating the full 7-book catalog a day
+  // apart. Single-book channels (2, 4) revisit the same book daily - daily variety there comes
+  // from story mode / format / grounding rotation, not from switching books.
+  const book = pickTodaysBookForChannel(new Date(), CHANNEL_ID);
   console.log(`Today's book (Channel ${CHANNEL_ID}): ${book.displayTitle}`);
 
   // One narrator voice for the ENTIRE video (main + Short), computed once here and passed into
@@ -453,6 +455,37 @@ async function main() {
   const captionStyle = pickTodaysCaptionStyle(new Date(), Number(CHANNEL_ID) - 1);
   console.log(`Today's caption style: ${captionStyle.label}`);
 
+  // Today's storytelling mode (case study / comparison / viewer question / process / deep-dive)
+  // — owner requirement 2026-11-03: videos from the same channel must feel different every day,
+  // not templated. Own rotation (see pickTodaysStoryMode in cf-ai.js), passed into the script
+  // prompt below.
+  let storyMode = pickTodaysStoryMode(new Date(), Number(CHANNEL_ID) - 1);
+  // Grounded variety check (owner review 2026-11-03): the day-index formula guarantees different
+  // modes on consecutive DAYS, but a skipped day or a re-run can collide with the channel's last
+  // upload. Check the manifest's most recent entry and shift one step if it matches.
+  try {
+    const prev = (await loadManifest()).videos?.[0];
+    if (prev?.story_mode && prev.story_mode === storyMode.id) {
+      const shifted = shiftStoryMode(storyMode, 1);
+      console.log(`Story mode "${storyMode.id}" matches the previous upload - shifting to "${shifted.id}" so consecutive uploads never repeat a mode.`);
+      storyMode = shifted;
+    }
+  } catch (e) {
+    console.warn("Story-mode variety check skipped (manifest unreadable):", e.message);
+  }
+  // Genuine viewer question (owner review 2026-11-03): the question-led mode may only claim a
+  // viewer asked when a REAL comment exists. comment-watch/channel-<id>.json is maintained by
+  // the read-only comment watcher; take the newest question-like pending comment, if any.
+  try {
+    const watch = JSON.parse(await fs.readFile(`comment-watch/channel-${CHANNEL_ID}.json`, "utf8"));
+    const q = (watch.pending || []).filter((c) => String(c.text || "").includes("?")).pop();
+    if (q) {
+      storyMode = { ...storyMode, viewerQuestion: String(q.text).slice(0, 300) };
+      console.log(`Genuine viewer question available from ${q.author || "a commenter"} - the script may honestly say a viewer asked.`);
+    }
+  } catch {}
+  console.log(`Today's story mode: ${storyMode.label}`);
+
   // 1) Script (teaser-only, scene count set by the model within the schema's range)
   // channelOffset passed here (previously omitted) so the disclaimer rotation and the
   // grounding-fact rotation (both keyed by day-of-year + channelOffset — see cf-ai.js)
@@ -467,12 +500,44 @@ async function main() {
   } catch (e) {
     console.warn("Trend selection failed, continuing without a trend tie-in:", e.message);
   }
-  const rawScenes = await generateScript(book, format, Number(CHANNEL_ID) - 1, trend);
+  const rawScenes = await generateScript(book, format, Number(CHANNEL_ID) - 1, trend, storyMode);
   // Deterministic text-level fix for the "skip this don't" run-on-pause issue — see
   // sanitizeNarrationPauses in cf-ai.js. Applied here (not inside generateScript) so it also
   // catches anything a future prompt change might introduce, without relying on the model.
-  const scenes = sanitizeScenePauses(rawScenes);
+  let scenes = sanitizeScenePauses(rawScenes);
   console.log(`Generated ${scenes.length} scenes`);
+
+  // Claims lint: heuristic check that every study-flavoured claim or specific number in the
+  // script traces to today's verified grounding items (see lintUnsupportedClaims in cf-ai.js).
+  // Policy (2026-11-03): at most ONE revision pass, only when flags fire (an extra 70B call is
+  // justified only then); if flags persist after it, the run FAILS rather than publishing
+  // unsupported claims (owner review). The lint NEVER silently edits or strips a scene itself.
+  // Quota note: this adds at most one extra Workers AI call per run, only on flagged runs -
+  // actual quota headroom on the shared Cloud Palat account is unknown, so no fit is claimed.
+  const todaysGrounding = getTodaysGroundingItems(book.slug, 3, new Date(), Number(CHANNEL_ID) - 1);
+  let claimFlags = lintUnsupportedClaims(scenes, todaysGrounding);
+  if (claimFlags.length > 0) {
+    console.warn(`Claims lint: ${claimFlags.length} unsupported-looking claim(s):`, JSON.stringify(claimFlags.slice(0, 5)));
+    try {
+      const revised = sanitizeScenePauses(await generateScript(book, format, Number(CHANNEL_ID) - 1, trend, storyMode));
+      const revisedFlags = lintUnsupportedClaims(revised, todaysGrounding);
+      if (revisedFlags.length < claimFlags.length) {
+        console.warn(`Claims lint: revision improved (${claimFlags.length} -> ${revisedFlags.length}) — using the revised script.`);
+        scenes = revised;
+        claimFlags = revisedFlags;
+      } else {
+        console.warn(`Claims lint: revision no better (${claimFlags.length} -> ${revisedFlags.length}) — keeping the first script.`);
+      }
+    } catch (e) {
+      console.warn("Claims lint revision pass failed, keeping the original script:", e.message);
+    }
+    if (claimFlags.length > 0) {
+      // Owner review 2026-11-03: unsupported-looking claims must NEVER auto-publish. One
+      // revision pass happened above; flags that remain fail the run loudly so a human reviews
+      // the flagged sentences instead of the video quietly shipping with them.
+      throw new Error(`Claims lint: ${claimFlags.length} unsupported-looking claim(s) remain after the revision pass - failing the run instead of publishing them. Flags: ${JSON.stringify(claimFlags.slice(0, 5))}`);
+    }
+  }
 
   // News-headline beat: the top fresh headline for today's trending term, drawn as a card that
   // slides in over a blurred clip (see buildNewsScene in render.js), inserted right after scene 2 —
@@ -527,6 +592,43 @@ async function main() {
     }
   }
 
+  // Evidence beat: one verified grounding item rendered as an on-screen card in its own scene
+  // (the fact is narrated from the library entry itself, not paraphrased by the model, so what
+  // is said always matches what is shown and cited). Uses the 4th grounding pick — an item the
+  // script prompt did NOT see — so this beat adds substance rather than repeating a scene.
+  // Inserted around the 60% mark, past the mid-video peak. Skipped entirely (video unchanged)
+  // when the book has fewer than 4 library items or the card fails to render.
+  let evidenceInfo = null;
+  try {
+    const evidenceItem = getTodaysEvidenceItem(book.slug, new Date(), Number(CHANNEL_ID) - 1);
+    if (evidenceItem) {
+      const cardPath = path.join(BUILD_DIR, "evidence_card.png");
+      const label =
+        evidenceItem.type === "counter" ? "THE OTHER SIDE"
+        : evidenceItem.type === "estimate" ? "ESTIMATE"
+        : "VERIFIED FACT";
+      // The credit line carries its own date ("K33 Research ..., September 2022"); the separate
+      // right-aligned date row is left empty - it visually collided with the credit otherwise.
+      await renderEvidenceCard({ label, text: evidenceItem.fact, source: evidenceItem.source, dateText: "", outPath: cardPath });
+      const leadIns = [
+        "Here is something you can check for yourself.",
+        "This one is worth pausing on.",
+        "Look at this one closely.",
+      ];
+      const dayOfYearForLeadIn = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+      const leadIn = leadIns[dayOfYearForLeadIn % leadIns.length];
+      const factText = evidenceItem.fact.charAt(0).toUpperCase() + evidenceItem.fact.slice(1);
+      const line = `${leadIn} ${factText}${/[.!?]$/.test(factText) ? "" : "."}`;
+      const insertAt = Math.min(scenes.length - 1, Math.max(2, Math.floor(scenes.length * 0.6)));
+      scenes.splice(insertAt, 0, { line, visual: "person writing notes at desk close up", evidenceCardPath: cardPath });
+      evidenceInfo = { type: evidenceItem.type, source: evidenceItem.source, label, url: evidenceItem.url || null, alsoUrl: evidenceItem.alsoUrl || null };
+      console.log(`Inserted evidence card scene at position ${insertAt + 1} (${label}: ${String(evidenceItem.source).slice(0, 60)}).`);
+    }
+  } catch (e) {
+    console.warn("Evidence card scene failed, continuing without it:", e.message);
+    evidenceInfo = null;
+  }
+
   // Pexels video IDs used across recent runs (any channel-scoped history file), so a repeat
   // keyword doesn't deterministically re-download the exact same clip every time this book comes
   // back around in the rotation — see scene-history.js. `newlyUsedIds` also gets checked so
@@ -572,11 +674,13 @@ async function main() {
 
     const sceneCaptionStyle = captionStyleForScene(captionStyle, index);
     let built_scene;
-    if (scene.newsCardPath) {
-      // Animated news card over a blurred clip. If ffmpeg rejects it for any reason, fall back to a
-      // normal captioned scene with the same narration, so the day's video never fails over this.
+    if (scene.newsCardPath || scene.evidenceCardPath) {
+      // Animated card (news headline OR evidence fact) over a blurred clip. If ffmpeg rejects it
+      // for any reason, fall back to a normal captioned scene with the same narration, so the
+      // day's video never fails over this.
+      const cardForScene = scene.newsCardPath || scene.evidenceCardPath;
       try {
-        built_scene = await buildNewsScene({ clipPath, cardPath: scene.newsCardPath, duration, text: scene.line, outPath, voicePath: usableVoicePath, captionStyle: sceneCaptionStyle });
+        built_scene = await buildNewsScene({ clipPath, cardPath: cardForScene, duration, text: scene.line, outPath, voicePath: usableVoicePath, captionStyle: sceneCaptionStyle });
       } catch (e) {
         console.warn("News card scene failed to render, using a normal scene instead:", e.message);
         built_scene = await buildScene({ clipPath, duration, text: scene.line, outPath, voicePath: usableVoicePath, captionStyle: sceneCaptionStyle });
@@ -599,13 +703,23 @@ async function main() {
   // (TARGET_MIN_SECONDS), generate and build extra scenes and append them, re-measuring after
   // each round, until the target is hit or MAX_TOPUP_ROUNDS is reached. Bounded so a persistent
   // shortfall (or a flaky Workers AI response) can't loop the run forever — if still short after
-  // the cap, publish anyway with a warning rather than fail a day's video over runtime length.
+  // the cap, the run FAILS rather than publishing a short video (owner review 2026-11-03).
   let topupRound = 0;
   while (totalSeconds < TARGET_MIN_SECONDS && topupRound < MAX_TOPUP_ROUNDS) {
     topupRound++;
+    // Right-size the round (owner review 2026-11-03 - top-up repeatedly undershot because a
+    // fixed 10 scenes/round couldn't cover a 200-300s shortfall): measure the actual average
+    // seconds/scene of what we already built, ask for enough scenes to cover the gap with a
+    // 25% safety margin. Same one AI call per round - no extra quota.
+    const avgSceneSeconds = built.length ? built.reduce((a, b) => a + b.duration, 0) / built.length : 15;
+    const shortfall = TARGET_MIN_SECONDS - totalSeconds;
+    const scenesThisRound = Math.min(
+      TOPUP_MAX_SCENES_PER_ROUND,
+      Math.max(TOPUP_SCENES_PER_ROUND, Math.ceil((shortfall / Math.max(8, avgSceneSeconds)) * 1.25))
+    );
     console.log(
-      `Runtime ~${Math.round(totalSeconds / 60)} min is under the target, generating ` +
-        `${TOPUP_SCENES_PER_ROUND} bonus scenes (round ${topupRound}/${MAX_TOPUP_ROUNDS})...`
+      `Runtime ~${Math.round(totalSeconds / 60)} min is under the target by ~${Math.round(shortfall)}s ` +
+        `(avg ${avgSceneSeconds.toFixed(1)}s/scene), generating ${scenesThisRound} bonus scenes (round ${topupRound}/${MAX_TOPUP_ROUNDS})...`
     );
     let bonusScenes;
     try {
@@ -614,7 +728,13 @@ async function main() {
       // this, each top-up round only ever compared its own 10 scenes to each other, which is
       // why separate rounds could open with near-identical lines (see cf-ai.js countRepetition).
       const existingLines = built.map((s) => s.line);
-      bonusScenes = sanitizeScenePauses(await generateBonusScenes(book, TOPUP_SCENES_PER_ROUND, existingLines));
+      bonusScenes = sanitizeScenePauses(await generateBonusScenes(book, scenesThisRound, existingLines));
+      // Truncation check (owner review 2026-11-03): if the model returned fewer scenes than
+      // requested, say so with real numbers - silently accepting a short round is how the
+      // undershoot hid before.
+      if (bonusScenes.length < scenesThisRound) {
+        console.warn(`Top-up round ${topupRound}: requested ${scenesThisRound} scenes, model returned ${bonusScenes.length} - continuing with what was returned.`);
+      }
     } catch (e) {
       console.warn("Bonus scene generation failed, stopping top-up early:", e.message);
       break;
@@ -635,8 +755,11 @@ async function main() {
       (topupRound ? ` after ${topupRound} top-up round(s)` : "")
   );
   if (totalSeconds < TARGET_MIN_SECONDS) {
-    console.warn(
-      `Still under the ${Math.round(TARGET_MIN_SECONDS / 60)}-min target after ${MAX_TOPUP_ROUNDS} top-up rounds — publishing anyway.`
+    // Owner review (2026-11-03): the 8-minute invariant is load-bearing - a short video must
+    // NOT publish silently with just a log line. Recent manifests show it happening (multiple
+    // uploads at 194-388s). Fail the run loudly instead; nothing short reaches the channel.
+    throw new Error(
+      `Duration invariant violated: ${Math.round(totalSeconds)}s is under the ${Math.round(TARGET_MIN_SECONDS / 60)}-minute target after ${MAX_TOPUP_ROUNDS} top-up rounds - failing the run instead of publishing a short video.`
     );
   }
 
@@ -667,6 +790,16 @@ async function main() {
   const listFile = path.join(BUILD_DIR, "concat.txt");
   const finalPath = path.join(BUILD_DIR, "final.mp4");
   await concatScenes(built.map((b) => b.outPath), listFile, finalPath);
+
+  // QC stills: a few evenly spaced frames from the finished cut, uploaded as a run artifact
+  // (build/qc/ — see daily-video.yml) so caption placement, card rendering and footage variety
+  // can be reviewed without pulling the full video. Pure diagnostics; never blocks the run.
+  try {
+    await extractQcStills({ videoPath: finalPath, outDir: path.join(BUILD_DIR, "qc"), count: 5 });
+    console.log("QC stills saved for artifact upload.");
+  } catch (e) {
+    console.warn("QC still extraction failed (non-fatal):", e.message);
+  }
 
   // 3b) Loudness normalization (Ch. 25: audio quality is a bigger retention killer than video
   // quality, and YouTube auto-normalizes playback to -14 LUFS anyway — anything already quieter
@@ -926,6 +1059,9 @@ async function main() {
       if (/^https?:\/\//.test(newsInfo.url || "")) attributionSuffix += `\n${newsInfo.url}`;
     }
   }
+  // The description carries the checkable citation (owner review 2026-11-03): the card itself
+  // shows source + date; the URL lives here so every on-screen fact is one tap from its source.
+  if (evidenceInfo) attributionSuffix += `\n\nEvidence shown on screen: ${evidenceInfo.source}${evidenceInfo.url ? ` - ${evidenceInfo.url}` : ""}${evidenceInfo.alsoUrl ? ` (response: ${evidenceInfo.alsoUrl})` : ""}`;
   if (musicTrack) attributionSuffix += `\n\n${attributionLine(musicTrack)}`;
   // Credit both thumbnail photographers, not just whichever photo ended up as the actual
   // thumbnail — both photos were sourced and rendered for this video's A/B test.
@@ -1061,11 +1197,11 @@ async function main() {
     const shortScenes = [];
     let shortTotal = 0;
     for (const scene of built) {
-      // The news-card scene only makes sense with its card on screen (landscape) — the vertical
-      // Short is rebuilt from clip + captions only, so it skips that scene.
+      // Card scenes (news headline, evidence fact) only make sense with their card on screen
+      // (landscape) — the vertical Short is rebuilt from clip + captions only, so it stops here.
       // Stop (not skip) at the news segment: the Short must be the LEADING scenes of `built`,
       // because the Short-caption code below slices built/captions from index 0.
-      if (scene.newsCardPath || scene.isNewsSegment) break;
+      if (scene.newsCardPath || scene.evidenceCardPath || scene.isNewsSegment) break;
       if (shortTotal >= SHORT_MIN_SECONDS && shortTotal + scene.duration > SHORT_MAX_SECONDS) break;
       shortScenes.push(scene);
       shortTotal += scene.duration;
@@ -1397,7 +1533,11 @@ async function main() {
       news_headline: newsInfo?.headline || null,
       script_format: format.id,
       caption_style: captionStyle.id,
+      story_mode: storyMode.id,
+      evidence: evidenceInfo, // { type, source, label } of the on-screen evidence card, or null
+      claims_flagged: claimFlags.length, // claims-lint result at ship time (see lint step above)
       duration_seconds: Math.round(totalSeconds),
+      duration_target_met: totalSeconds >= TARGET_MIN_SECONDS,
       published_at: new Date().toISOString(),
     });
     console.log("videos-manifest.json updated.");
