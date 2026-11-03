@@ -496,8 +496,13 @@ jobs:
           name: video-run-${{ github.run_number }}-ch${{ steps.resolve.outputs.channel }}
           # build/ (rendered videos, 1-1.7GB) is intentionally NOT uploaded: this repo is public,
           # so artifacts are downloadable by any signed-in GitHub user. No later step uses it.
+          # Exception: build/qc/ holds 5 small JPEG stills extracted from the day's finished cut
+          # for post-run quality review (caption placement, card rendering, footage variety).
+          # They are frames from a video that goes public at 16:00 UTC the same day - flagged to
+          # the owner that they are technically visible between upload and publish.
           path: |
             community-posts/
+            build/qc/
             automation-health/
           retention-days: 3
           if-no-files-found: ignore
