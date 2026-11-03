@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "wAytTsmvUk4",
+      "short_video_id": "_ukf67aWLP4",
+      "book_slug": "age-one",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-complete-ai-business-mastery",
+      "title": "AI & the information economy | HDL Group",
+      "description": "Curious about AI & the information economy? AGE ONE breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/wAytTsmvUk4/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Sbi Bank Q2 Results",
+      "trend_in_title": false,
+      "news_headline": "SBI Q2 Results: Core income grows nearly 15%, asset quality stable; Stock cools from highs - CNBC TV18",
+      "script_format": "stat-hook",
+      "caption_style": "classic-pop",
+      "duration_seconds": 391,
+      "published_at": "2026-11-03T13:05:45.538Z"
+    },
+    {
       "video_id": "d49rVKqWZGQ",
       "short_video_id": "u_0kA1b1Vy4",
       "book_slug": "pet-friendly",
@@ -833,5 +851,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-11-02T13:50:02.181Z"
+  "updated_at": "2026-11-03T13:05:45.539Z"
 }
