@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "mpRwh7opQvw",
+      "short_video_id": "mOkLO5iBpoE",
+      "book_slug": "age-one",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-complete-ai-business-mastery",
+      "title": "Ai Systems Influence Lta New Electric Buses 2026 Adoption Rates",
+      "description": "Curious about AI & the information economy? AGE ONE breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/mpRwh7opQvw/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Lta New Electric Buses 2026",
+      "trend_in_title": true,
+      "news_headline": "New electric buses plying roads from end-2026 will feature upgrades based on commuter feedback: LTA",
+      "script_format": "stat-hook",
+      "caption_style": "classic-pop",
+      "duration_seconds": 517,
+      "published_at": "2026-11-04T11:33:44.209Z"
+    },
+    {
       "video_id": "LL5xoGLE3Og",
       "short_video_id": "7BCt--_3b3I",
       "book_slug": "pet-friendly",
@@ -1000,5 +1018,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-11-03T11:25:29.411Z"
+  "updated_at": "2026-11-04T11:33:44.210Z"
 }
