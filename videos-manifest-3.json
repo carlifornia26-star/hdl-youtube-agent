@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "yB7xhTxQ-HY",
+      "short_video_id": "XviJC1_bGw4",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "Centralized Finance Systems Give Way To Decentralized Bitcoin Networks Like Nvda Stock",
+      "description": "Curious about Bitcoin & digital finance? Bitcoin Standard breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/yB7xhTxQ-HY/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Nvda Stock",
+      "trend_in_title": true,
+      "news_headline": "Why Nvidia Stock Can Ride a Democrat AI Data-Center Crackdown",
+      "script_format": "direct-hook",
+      "caption_style": "lower-third",
+      "duration_seconds": 481,
+      "published_at": "2026-11-04T16:13:50.472Z"
+    },
+    {
       "video_id": "hazD9zLg3Zw",
       "short_video_id": "_bVC1i3zbe8",
       "book_slug": "age-one-premium",
@@ -983,5 +1001,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-11-03T15:40:50.837Z"
+  "updated_at": "2026-11-04T16:13:50.473Z"
 }
