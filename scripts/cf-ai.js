@@ -247,6 +247,260 @@ export function topupMaxTokens(count) {
   return Math.min(6000, 1200 + count * 110);
 }
 
+// --- Truncation salvage (2026-11-04, prefix-only after review) ---------------
+// Production failure being addressed: a top-up response that is not valid JSON
+// (observed 2026-11-02, run 41454175575: 24-scene top-up truncated mid-JSON at
+// the old flat 3000-token cap) aborts the whole top-up round. The token-scaled
+// budget (topupMaxTokens) widens the margin, but the margin still depends on
+// how long the 8B model actually writes, so a truncated response must degrade
+// gracefully instead of killing the round.
+//
+// Design rules from review: never regex-extract scenes; accept only an
+// UNAMBIGUOUS, COMPLETE, VALID PREFIX of the intended scenes array - never
+// cherry-pick later valid objects past a malformed entry; never accept
+// arbitrary fragments, malformed escapes, incomplete objects or schema-invalid
+// scenes; respect minItems and maxItems; stay resource-bounded. The scanner
+// stops at the first element it cannot fully validate and at the first
+// malformed separator, and reports WHY it stopped (stopReason). Salvage makes
+// NO extra AI call - it only rescues complete work the model already returned.
+// Anything that cannot be salvaged to at least minItems scenes still throws,
+// and the fail-closed 8-minute duration gate in generate-video.js is unchanged.
+
+const SALVAGE_MAX_INPUT_CHARS = 1000000; // hard input bound: refuse pathological outputs outright
+
+// Single per-scene schema for BOTH the strict and salvage paths (review
+// 2026-11-04): a scene must be a plain object with a non-empty string line and
+// a string-or-absent visual; extra keys are dropped. The legacy strict path
+// mapped invalid scenes to { line: undefined }, which could only crash or
+// garble narration downstream - dropping them is the explicit, logged
+// compatibility change.
+function validateSceneShape(obj) {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return null;
+  if (typeof obj.line !== "string" || !obj.line.trim()) return null;
+  if (obj.visual !== undefined && obj.visual !== null && typeof obj.visual !== "string") return null;
+  return { line: obj.line, visual: typeof obj.visual === "string" ? obj.visual : "" };
+}
+
+// Character-level scanner (no regex). Locates the scenes array as either a
+// bare top-level array or the value of a double-quoted "scenes" key IMMEDIATELY
+// followed by ':' and '[' (forward-peeked, so a key not followed by an array,
+// a nested decoy, or an escaped/quoted variant never matches - fail-closed).
+// Inside the array a strict element/separator state machine runs:
+//   expectElement -> '{' opens an element, ']' closes the array, anything else stops
+//   inElement     -> depth-tracked until the element's own '}' closes it
+//   expectSep     -> ',' continues, ']' closes the array, anything else stops
+// Each closed element is validated by JSON.parse alone (strict string/escape
+// handling) plus validateSceneShape. A truncated trailing element never closes
+// and is never accepted. Duplicate scenes are preserved (parity with the
+// strict path - repetition scoring judges them downstream).
+export function salvageScenesFromText(text, { maxItems = Infinity, maxInputChars = SALVAGE_MAX_INPUT_CHARS } = {}) {
+  if (typeof text !== "string" || !text.length || text.length > maxInputChars) return null;
+  const stack = [];
+  let inString = false;
+  let escaped = false;
+  let stringStart = -1;
+  let scenesArrayDepth = -1;
+  let objStart = -1;
+  let arrayDone = false; // one scenes array already closed - a second one makes the document ambiguous
+  let state = "seek"; // seek | expectElement | inElement | expectSep | done
+  let stopReason = null;
+  let capped = false;
+  const scenes = [];
+  const stop = (reason) => {
+    stopReason = reason;
+    state = "done";
+  };
+  for (let i = 0; i < text.length && state !== "done"; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') {
+        inString = false;
+        // Root-level key candidate: string closing directly inside the root object.
+        if (state === "seek" && stack.length === 1 && stack[0] === "{" && text.slice(stringStart, i) === "scenes") {
+          let j = i + 1;
+          while (j < text.length && /\s/.test(text[j])) j++;
+          if (text[j] === ":") {
+            j++;
+            while (j < text.length && /\s/.test(text[j])) j++;
+            if (text[j] === "[") {
+              if (arrayDone) {
+                // Duplicate root "scenes" keys in a broken document: which array
+                // was intended is unknowable - refuse rather than guess.
+                stop("ambiguous-duplicate-keys");
+                continue;
+              }
+              stack.push("[");
+              scenesArrayDepth = 2;
+              state = "expectElement";
+              i = j;
+            }
+          }
+        }
+      }
+      continue;
+    }
+    if (ch === '"') {
+      // A string where an element or separator is expected is malformed.
+      if (state === "expectElement" || state === "expectSep") stop("malformed-separator");
+      else {
+        inString = true;
+        escaped = false;
+        stringStart = i + 1;
+      }
+      continue;
+    }
+    if (state === "seek") {
+      if (ch === "{") stack.push("{");
+      else if (ch === "[") {
+        if (stack.length === 0) {
+          if (arrayDone) {
+            stop("ambiguous-duplicate-keys"); // second bare top-level array
+            continue;
+          }
+          stack.push("[");
+          scenesArrayDepth = 1; // bare top-level array
+          state = "expectElement";
+        } else stack.push("[");
+      } else if (ch === "}") {
+        if (stack[stack.length - 1] === "{") stack.pop();
+      } else if (ch === "]") {
+        if (stack[stack.length - 1] === "[") stack.pop();
+      }
+    } else if (state === "expectElement") {
+      if (/\s/.test(ch)) continue;
+      if (ch === "{") {
+        objStart = i;
+        stack.push("{");
+        state = "inElement";
+      } else if (ch === "]") {
+        stack.pop();
+        stopReason = "closed";
+        arrayDone = true;
+        state = "seek"; // scan the tail: a second scenes array would be ambiguous
+      } else stop("malformed-separator");
+    } else if (state === "inElement") {
+      if (ch === "{") stack.push("{");
+      else if (ch === "[") stack.push("[");
+      else if (ch === "]") {
+        if (stack[stack.length - 1] === "[") stack.pop();
+      } else if (ch === "}") {
+        if (stack.length === scenesArrayDepth + 1) {
+          const fragment = text.slice(objStart, i + 1);
+          objStart = -1;
+          stack.pop();
+          let parsedObj = null;
+          let parseFailed = false;
+          try {
+            parsedObj = JSON.parse(fragment);
+          } catch {
+            parseFailed = true;
+          }
+          if (parseFailed) {
+            stop("malformed-element");
+            continue;
+          }
+          const scene = validateSceneShape(parsedObj);
+          if (!scene) {
+            stop("invalid-element");
+            continue;
+          }
+          // Keep scanning after the cap (bounded by maxInputChars) so the
+          // close/truncation state of the array is still reported accurately;
+          // only collection stops.
+          if (scenes.length < maxItems) scenes.push(scene);
+          else capped = true;
+          state = "expectSep";
+        } else stack.pop();
+      }
+    } else if (state === "expectSep") {
+      if (/\s/.test(ch)) continue;
+      if (ch === ",") state = "expectElement";
+      else if (ch === "]") {
+        stack.pop();
+        stopReason = "closed";
+        arrayDone = true;
+        state = "seek"; // scan the tail: a second scenes array would be ambiguous
+      } else stop("malformed-separator");
+    }
+  }
+  if (state !== "done" && !arrayDone) {
+    if (scenesArrayDepth === -1) return null; // no scenes array ever found
+    stopReason = "truncated"; // EOF before the array closed
+  }
+  if (stopReason === "ambiguous-duplicate-keys") {
+    return { scenes: [], complete: false, stopReason, capped: false };
+  }
+  if (!scenes.length) return null;
+  return { scenes, complete: stopReason === "closed", stopReason, capped };
+}
+
+// Strict-first text parser used by requestSceneScript: JSON.parse exactly as
+// before; only on a parse failure does it fall back to salvageScenesFromText,
+// and it accepts the salvage only when at least minItems complete valid scenes
+// survive as an unambiguous prefix (maxItems caps how many are kept). BOTH
+// paths apply the same per-scene schema (validateSceneShape): the strict path
+// now drops schema-invalid scenes from a syntactically valid response instead
+// of mapping them to { line: undefined } - the one deliberate, logged
+// compatibility change. Count semantics are unchanged: minItems is still not
+// enforced on the strict path.
+export function parseScenesText(text, { minItems = 1, maxItems = Infinity } = {}) {
+  let raw = typeof text === "string" ? text.trim() : "";
+  if (raw.startsWith("```json")) raw = raw.slice(7);
+  else if (raw.startsWith("```")) raw = raw.slice(3);
+  if (raw.endsWith("```")) raw = raw.slice(0, -3);
+  raw = raw.trim();
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    // The input bound applies to the ORIGINAL model output, not the trimmed
+    // text - a pathological multi-megabyte body must never reach the scanner.
+    if (typeof text === "string" && text.length <= SALVAGE_MAX_INPUT_CHARS) {
+      const salvaged = salvageScenesFromText(raw, { maxItems });
+      if (salvaged && salvaged.stopReason === "ambiguous-duplicate-keys") {
+        throw new Error(
+          "Script generation: ambiguous model output - duplicate root 'scenes' keys in a broken document; refusing to guess which array was intended"
+        );
+      }
+      if (salvaged && salvaged.scenes.length >= minItems) {
+        return { scenes: salvaged.scenes, salvaged: true, dropped: 0, complete: salvaged.complete, stopReason: salvaged.stopReason, capped: salvaged.capped };
+      }
+    }
+    throw err;
+  }
+  const rawScenes = Array.isArray(parsed) ? parsed : parsed?.scenes;
+  if (!Array.isArray(rawScenes) || rawScenes.length === 0) throw new Error("Script generation returned no scenes");
+  const scenes = [];
+  let dropped = 0;
+  for (const s of rawScenes) {
+    const scene = validateSceneShape(s);
+    if (scene) scenes.push(scene);
+    else dropped++;
+  }
+  // minItems semantics, documented and consistent across both paths: when
+  // invalid scenes had to be removed (here) or the document had to be
+  // salvaged (above), the surviving batch must still reach minItems - the
+  // callsite's required floor - otherwise we fail clearly instead of silently
+  // shipping partial required content. A syntactically valid response that
+  // simply under-delivers (fewer valid scenes than asked, none invalid) keeps
+  // the legacy pass-through; callsites already handle that with their own
+  // warnings (generate-video.js: "requested N scenes, model returned M").
+  if (dropped) {
+    if (scenes.length < minItems) {
+      throw new Error(
+        `Script generation: ${dropped} schema-invalid scene(s) removed from a syntactically valid response and only ${scenes.length} of the required ${minItems} valid scene(s) remain - failing clearly instead of shipping partial required content`
+      );
+    }
+    console.warn(
+      `Script generation: dropped ${dropped} schema-invalid scene(s) from a syntactically valid model response (same per-scene schema as the salvage path - previously passed through with an unusable line); ${scenes.length} valid scenes remain (>= minItems ${minItems}).`
+    );
+  }
+  if (!scenes.length) throw new Error("Script generation returned no scenes");
+  return { scenes, salvaged: false, dropped, complete: true };
+}
+
 const SCRIPT_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const CHEAP_SCRIPT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 async function requestSceneScript(prompt, minItems, maxItems, maxTokens, priorLines = [], ctaMode = "none", model = SCRIPT_MODEL) {
@@ -296,15 +550,23 @@ async function requestSceneScript(prompt, minItems, maxItems, maxTokens, priorLi
         console.error("Unexpected Workers AI result shape:", JSON.stringify(result));
         throw new Error("Script generation: could not find scenes in Workers AI response — see logged result shape above");
       }
-      const raw = text.trim().replace(/^```json|```$/g, "").trim();
-      let parsed;
+      // Truncation salvage (2026-11-04): strict JSON.parse first; on failure,
+      // salvage only COMPLETE schema-valid scenes (see parseScenesText). If
+      // fewer than minItems survive, the original parse error still throws -
+      // no silent weakening, no extra AI call, duration gate unchanged.
+      let parsedOut;
       try {
-        parsed = JSON.parse(raw);
+        parsedOut = parseScenesText(text, { minItems, maxItems });
       } catch (err) {
-        console.error("Script generation: failed to parse model output as JSON. Raw text was:\n", raw);
+        console.error("Script generation: failed to parse model output as JSON. Raw text was:\n", text);
         throw err;
       }
-      scenes = Array.isArray(parsed) ? parsed : parsed?.scenes;
+      if (parsedOut.salvaged) {
+        console.warn(
+          `Script generation: model output was not valid JSON - salvaged an unambiguous prefix of ${parsedOut.scenes.length} complete scene(s) (prefix stopped: ${parsedOut.stopReason}; array ${parsedOut.complete ? "closed cleanly" : "never closed"}). No extra AI call made.`
+        );
+      }
+      scenes = parsedOut.scenes;
     }
 
     if (!Array.isArray(scenes) || scenes.length === 0) throw new Error("Script generation returned no scenes");
