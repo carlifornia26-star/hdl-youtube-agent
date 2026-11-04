@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "YP4wgs61Mug",
+      "short_video_id": "Fv8I09MAeq0",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Vitality Often Peaks Beyond Voyager 1 Milestones",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/YP4wgs61Mug/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": true,
+      "trend_term": "Voyager 1",
+      "trend_in_title": true,
+      "news_headline": "NASA's Voyager 1 mysteriously lost touch with Earth",
+      "script_format": "myth-bust",
+      "caption_style": "wide-orange",
+      "duration_seconds": 563,
+      "published_at": "2026-11-04T08:01:20.802Z"
+    },
+    {
       "video_id": "lVkBdmi718U",
       "short_video_id": "sO7dHiAqWkY",
       "book_slug": "bitcoin-standard",
@@ -795,5 +813,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-11-03T08:26:20.554Z"
+  "updated_at": "2026-11-04T08:01:20.802Z"
 }
