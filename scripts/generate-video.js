@@ -699,7 +699,7 @@ async function main() {
   let totalSeconds = built.reduce((a, b) => a + b.duration, 0);
   console.log(`Runtime after main script: ~${Math.round(totalSeconds / 60)} min (${built.length} scenes)`);
 
-  // 2b) Duration top-up: if the measured runtime still lands under the 8-minute-ish floor
+  // 2b) Duration top-up: if the measured runtime still lands under the 510s (8.5-minute) floor
   // (TARGET_MIN_SECONDS), generate and build extra scenes and append them, re-measuring after
   // each round, until the target is hit or MAX_TOPUP_ROUNDS is reached. Bounded so a persistent
   // shortfall (or a flaky Workers AI response) can't loop the run forever — if still short after
@@ -759,7 +759,7 @@ async function main() {
     // NOT publish silently with just a log line. Recent manifests show it happening (multiple
     // uploads at 194-388s). Fail the run loudly instead; nothing short reaches the channel.
     throw new Error(
-      `Duration invariant violated: ${Math.round(totalSeconds)}s is under the ${Math.round(TARGET_MIN_SECONDS / 60)}-minute target after ${MAX_TOPUP_ROUNDS} top-up rounds - failing the run instead of publishing a short video.`
+      `Duration invariant violated: ${Math.round(totalSeconds)}s is under the ${TARGET_MIN_SECONDS}s (${(TARGET_MIN_SECONDS / 60).toFixed(1)}-minute) target after ${MAX_TOPUP_ROUNDS} top-up rounds - failing the run instead of publishing a short video.`
     );
   }
 

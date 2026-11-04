@@ -58,10 +58,33 @@ function getKokoro() {
 // count, which combines with the duration top-up in generate-video.js to reliably land the
 // finished video above the 8-minute floor without sounding rushed. Override via env if a
 // finished video still consistently runs too short/long for your taste.
+// Post-TTS audio sanity guard (offline-validation proposal 2026-11-04): a Kokoro synthesis can
+// succeed yet return numerically blown-up samples (observed peak ~1.8e11 where valid speech is
+// ~+/-1.0, non-deterministically, same text/voice/speed both ways). Without a check, the garbage
+// reaches ffmpeg in buildScene and the whole run aborts late at the aac encode - after minutes
+// of compute - instead of failing just that scene. Throwing here feeds the existing ladder for
+// free: withRetry re-rolls the (stochastic) synthesis, then Fish Audio, then buildOneScene's
+// captions-only fallback. Pure sample scan, no ffmpeg, no new deps.
+const TTS_SAMPLE_HARD_LIMIT = 4; // valid speech floats live within ~[-1,1]; 4x full scale is absurd
+export function assertSaneSamples(samples, label) {
+  let nonFinite = 0;
+  let peak = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const x = samples[i];
+    if (!Number.isFinite(x)) { nonFinite++; continue; }
+    const a = Math.abs(x);
+    if (a > peak) peak = a;
+  }
+  if (nonFinite > 0 || peak > TTS_SAMPLE_HARD_LIMIT) {
+    throw new Error(`${label}: degenerate audio rejected (peak=${peak.toExponential(2)}, non-finite samples=${nonFinite}/${samples.length}) - retrying/falling back instead of rendering garbage`);
+  }
+}
+
 async function synthesizeVoiceKokoro(text, outPath, voice) {
   const tts = await getKokoro();
   const speed = Number(process.env.KOKORO_SPEED || 0.92);
   const audio = await tts.generate(text, { voice, speed });
+  assertSaneSamples(audio.audio, "Kokoro TTS");
   // Writes real WAV bytes regardless of outPath's .mp3 extension — ffmpeg/ffprobe read the
   // actual container format from the file's contents, not its name, so this is safe as-is.
   await audio.save(outPath);
