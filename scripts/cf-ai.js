@@ -227,6 +227,280 @@ function findOverusedWord(scenes) {
 // last scene), "never" (top-up scenes — it belongs nowhere), or "none" (skip the check).
 // `model` (optional): Workers AI model id. Defaults to the 70B model; top-up scenes pass the much
 // cheaper 8B model (~6x fewer neurons) to stay inside the free 10,000-neuron daily allowance.
+// Duration top-up sizing — single source of truth used by generate-video.js's top-up loop and
+// exercised directly by the offline fixture test (no mirror copies). Sizing is driven by the
+// MEASURED average seconds/scene of what's already built, because production logs (2026-11-02,
+// runs 41454175575 / 41489187269) show real narration averages 6.3-7.0s/scene, not the 15-22s
+// the prompt asks for. avgFloor 6s (was effectively 8 via the old inline clamp, which
+// under-requested scenes in exactly that production regime); 25% safety margin on top.
+export function topupScenesForRound(builtDurations, totalSeconds, { targetSeconds = 510, roundFloor = 10, roundCap = 30, avgFloor = 6 } = {}) {
+  const avgSceneSeconds = builtDurations.length ? builtDurations.reduce((a, b) => a + b, 0) / builtDurations.length : 15;
+  const shortfall = targetSeconds - totalSeconds;
+  const request = Math.min(roundCap, Math.max(roundFloor, Math.ceil((shortfall / Math.max(avgFloor, avgSceneSeconds)) * 1.25)));
+  return { avgSceneSeconds, shortfall, request };
+}
+// Output-token budget for a bonus-scene call scales with the ask: N scenes need roughly
+// N x ~97 tokens (75 line + 12 visual + ~10 JSON) plus wrapper - a flat 3000 silently truncated
+// a 24-scene request mid-JSON and aborted the whole round (production log 2026-11-02, run
+// 41454175575: "Expected property name or '}' in JSON at position 1"). Same one call, more tokens.
+export function topupMaxTokens(count) {
+  return Math.min(6000, 1200 + count * 110);
+}
+
+// --- Truncation salvage (2026-11-04, prefix-only after review) ---------------
+// Production failure being addressed: a top-up response that is not valid JSON
+// (observed 2026-11-02, run 41454175575: 24-scene top-up truncated mid-JSON at
+// the old flat 3000-token cap) aborts the whole top-up round. The token-scaled
+// budget (topupMaxTokens) widens the margin, but the margin still depends on
+// how long the 8B model actually writes, so a truncated response must degrade
+// gracefully instead of killing the round.
+//
+// Design rules from review: never regex-extract scenes; accept only an
+// UNAMBIGUOUS, COMPLETE, VALID PREFIX of the intended scenes array - never
+// cherry-pick later valid objects past a malformed entry; never accept
+// arbitrary fragments, malformed escapes, incomplete objects or schema-invalid
+// scenes; respect minItems and maxItems; stay resource-bounded. The scanner
+// stops at the first element it cannot fully validate and at the first
+// malformed separator, and reports WHY it stopped (stopReason). Salvage makes
+// NO extra AI call - it only rescues complete work the model already returned.
+// Anything that cannot be salvaged to at least minItems scenes still throws,
+// and the fail-closed 8-minute duration gate in generate-video.js is unchanged.
+
+const SALVAGE_MAX_INPUT_CHARS = 1000000; // hard input bound: refuse pathological outputs outright
+
+// Single per-scene schema for BOTH the strict and salvage paths (review
+// 2026-11-04): a scene must be a plain object with a non-empty string line and
+// a string-or-absent visual; extra keys are dropped. The legacy strict path
+// mapped invalid scenes to { line: undefined }, which could only crash or
+// garble narration downstream - dropping them is the explicit, logged
+// compatibility change.
+function validateSceneShape(obj) {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return null;
+  if (typeof obj.line !== "string" || !obj.line.trim()) return null;
+  if (obj.visual !== undefined && obj.visual !== null && typeof obj.visual !== "string") return null;
+  return { line: obj.line, visual: typeof obj.visual === "string" ? obj.visual : "" };
+}
+
+// Character-level scanner (no regex). Locates the scenes array as either a
+// bare top-level array or the value of a double-quoted "scenes" key IMMEDIATELY
+// followed by ':' and '[' (forward-peeked, so a key not followed by an array,
+// a nested decoy, or an escaped/quoted variant never matches - fail-closed).
+// Inside the array a strict element/separator state machine runs:
+//   expectElement -> '{' opens an element, ']' closes the array, anything else stops
+//   inElement     -> depth-tracked until the element's own '}' closes it
+//   expectSep     -> ',' continues, ']' closes the array, anything else stops
+// Each closed element is validated by JSON.parse alone (strict string/escape
+// handling) plus validateSceneShape. A truncated trailing element never closes
+// and is never accepted. Duplicate scenes are preserved (parity with the
+// strict path - repetition scoring judges them downstream).
+export function salvageScenesFromText(text, { maxItems = Infinity, maxInputChars = SALVAGE_MAX_INPUT_CHARS } = {}) {
+  if (typeof text !== "string" || !text.length || text.length > maxInputChars) return null;
+  const stack = [];
+  let inString = false;
+  let escaped = false;
+  let stringStart = -1;
+  let scenesArrayDepth = -1;
+  let objStart = -1;
+  let arrayDone = false; // one scenes array already closed - a second one makes the document ambiguous
+  let state = "seek"; // seek | expectElement | inElement | expectSep | done
+  let stopReason = null;
+  let capped = false;
+  const scenes = [];
+  const stop = (reason) => {
+    stopReason = reason;
+    state = "done";
+  };
+  for (let i = 0; i < text.length && state !== "done"; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') {
+        inString = false;
+        // Root-level key candidate: string closing directly inside the root object.
+        if (state === "seek" && stack.length === 1 && stack[0] === "{" && text.slice(stringStart, i) === "scenes") {
+          let j = i + 1;
+          while (j < text.length && /\s/.test(text[j])) j++;
+          if (text[j] === ":") {
+            j++;
+            while (j < text.length && /\s/.test(text[j])) j++;
+            if (text[j] === "[") {
+              if (arrayDone) {
+                // Duplicate root "scenes" keys in a broken document: which array
+                // was intended is unknowable - refuse rather than guess.
+                stop("ambiguous-duplicate-keys");
+                continue;
+              }
+              stack.push("[");
+              scenesArrayDepth = 2;
+              state = "expectElement";
+              i = j;
+            }
+          }
+        }
+      }
+      continue;
+    }
+    if (ch === '"') {
+      // A string where an element or separator is expected is malformed.
+      if (state === "expectElement" || state === "expectSep") stop("malformed-separator");
+      else {
+        inString = true;
+        escaped = false;
+        stringStart = i + 1;
+      }
+      continue;
+    }
+    if (state === "seek") {
+      if (ch === "{") stack.push("{");
+      else if (ch === "[") {
+        if (stack.length === 0) {
+          if (arrayDone) {
+            stop("ambiguous-duplicate-keys"); // second bare top-level array
+            continue;
+          }
+          stack.push("[");
+          scenesArrayDepth = 1; // bare top-level array
+          state = "expectElement";
+        } else stack.push("[");
+      } else if (ch === "}") {
+        if (stack[stack.length - 1] === "{") stack.pop();
+      } else if (ch === "]") {
+        if (stack[stack.length - 1] === "[") stack.pop();
+      }
+    } else if (state === "expectElement") {
+      if (/\s/.test(ch)) continue;
+      if (ch === "{") {
+        objStart = i;
+        stack.push("{");
+        state = "inElement";
+      } else if (ch === "]") {
+        stack.pop();
+        stopReason = "closed";
+        arrayDone = true;
+        state = "seek"; // scan the tail: a second scenes array would be ambiguous
+      } else stop("malformed-separator");
+    } else if (state === "inElement") {
+      if (ch === "{") stack.push("{");
+      else if (ch === "[") stack.push("[");
+      else if (ch === "]") {
+        if (stack[stack.length - 1] === "[") stack.pop();
+      } else if (ch === "}") {
+        if (stack.length === scenesArrayDepth + 1) {
+          const fragment = text.slice(objStart, i + 1);
+          objStart = -1;
+          stack.pop();
+          let parsedObj = null;
+          let parseFailed = false;
+          try {
+            parsedObj = JSON.parse(fragment);
+          } catch {
+            parseFailed = true;
+          }
+          if (parseFailed) {
+            stop("malformed-element");
+            continue;
+          }
+          const scene = validateSceneShape(parsedObj);
+          if (!scene) {
+            stop("invalid-element");
+            continue;
+          }
+          // Keep scanning after the cap (bounded by maxInputChars) so the
+          // close/truncation state of the array is still reported accurately;
+          // only collection stops.
+          if (scenes.length < maxItems) scenes.push(scene);
+          else capped = true;
+          state = "expectSep";
+        } else stack.pop();
+      }
+    } else if (state === "expectSep") {
+      if (/\s/.test(ch)) continue;
+      if (ch === ",") state = "expectElement";
+      else if (ch === "]") {
+        stack.pop();
+        stopReason = "closed";
+        arrayDone = true;
+        state = "seek"; // scan the tail: a second scenes array would be ambiguous
+      } else stop("malformed-separator");
+    }
+  }
+  if (state !== "done" && !arrayDone) {
+    if (scenesArrayDepth === -1) return null; // no scenes array ever found
+    stopReason = "truncated"; // EOF before the array closed
+  }
+  if (stopReason === "ambiguous-duplicate-keys") {
+    return { scenes: [], complete: false, stopReason, capped: false };
+  }
+  if (!scenes.length) return null;
+  return { scenes, complete: stopReason === "closed", stopReason, capped };
+}
+
+// Strict-first text parser used by requestSceneScript: JSON.parse exactly as
+// before; only on a parse failure does it fall back to salvageScenesFromText,
+// and it accepts the salvage only when at least minItems complete valid scenes
+// survive as an unambiguous prefix (maxItems caps how many are kept). BOTH
+// paths apply the same per-scene schema (validateSceneShape): the strict path
+// now drops schema-invalid scenes from a syntactically valid response instead
+// of mapping them to { line: undefined } - the one deliberate, logged
+// compatibility change. Count semantics are unchanged: minItems is still not
+// enforced on the strict path.
+export function parseScenesText(text, { minItems = 1, maxItems = Infinity } = {}) {
+  let raw = typeof text === "string" ? text.trim() : "";
+  if (raw.startsWith("```json")) raw = raw.slice(7);
+  else if (raw.startsWith("```")) raw = raw.slice(3);
+  if (raw.endsWith("```")) raw = raw.slice(0, -3);
+  raw = raw.trim();
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    // The input bound applies to the ORIGINAL model output, not the trimmed
+    // text - a pathological multi-megabyte body must never reach the scanner.
+    if (typeof text === "string" && text.length <= SALVAGE_MAX_INPUT_CHARS) {
+      const salvaged = salvageScenesFromText(raw, { maxItems });
+      if (salvaged && salvaged.stopReason === "ambiguous-duplicate-keys") {
+        throw new Error(
+          "Script generation: ambiguous model output - duplicate root 'scenes' keys in a broken document; refusing to guess which array was intended"
+        );
+      }
+      if (salvaged && salvaged.scenes.length >= minItems) {
+        return { scenes: salvaged.scenes, salvaged: true, dropped: 0, complete: salvaged.complete, stopReason: salvaged.stopReason, capped: salvaged.capped };
+      }
+    }
+    throw err;
+  }
+  const rawScenes = Array.isArray(parsed) ? parsed : parsed?.scenes;
+  if (!Array.isArray(rawScenes) || rawScenes.length === 0) throw new Error("Script generation returned no scenes");
+  const scenes = [];
+  let dropped = 0;
+  for (const s of rawScenes) {
+    const scene = validateSceneShape(s);
+    if (scene) scenes.push(scene);
+    else dropped++;
+  }
+  // minItems semantics, documented and consistent across both paths: when
+  // invalid scenes had to be removed (here) or the document had to be
+  // salvaged (above), the surviving batch must still reach minItems - the
+  // callsite's required floor - otherwise we fail clearly instead of silently
+  // shipping partial required content. A syntactically valid response that
+  // simply under-delivers (fewer valid scenes than asked, none invalid) keeps
+  // the legacy pass-through; callsites already handle that with their own
+  // warnings (generate-video.js: "requested N scenes, model returned M").
+  if (dropped) {
+    if (scenes.length < minItems) {
+      throw new Error(
+        `Script generation: ${dropped} schema-invalid scene(s) removed from a syntactically valid response and only ${scenes.length} of the required ${minItems} valid scene(s) remain - failing clearly instead of shipping partial required content`
+      );
+    }
+    console.warn(
+      `Script generation: dropped ${dropped} schema-invalid scene(s) from a syntactically valid model response (same per-scene schema as the salvage path - previously passed through with an unusable line); ${scenes.length} valid scenes remain (>= minItems ${minItems}).`
+    );
+  }
+  if (!scenes.length) throw new Error("Script generation returned no scenes");
+  return { scenes, salvaged: false, dropped, complete: true };
+}
+
 const SCRIPT_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const CHEAP_SCRIPT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 async function requestSceneScript(prompt, minItems, maxItems, maxTokens, priorLines = [], ctaMode = "none", model = SCRIPT_MODEL) {
@@ -276,15 +550,23 @@ async function requestSceneScript(prompt, minItems, maxItems, maxTokens, priorLi
         console.error("Unexpected Workers AI result shape:", JSON.stringify(result));
         throw new Error("Script generation: could not find scenes in Workers AI response — see logged result shape above");
       }
-      const raw = text.trim().replace(/^```json|```$/g, "").trim();
-      let parsed;
+      // Truncation salvage (2026-11-04): strict JSON.parse first; on failure,
+      // salvage only COMPLETE schema-valid scenes (see parseScenesText). If
+      // fewer than minItems survive, the original parse error still throws -
+      // no silent weakening, no extra AI call, duration gate unchanged.
+      let parsedOut;
       try {
-        parsed = JSON.parse(raw);
+        parsedOut = parseScenesText(text, { minItems, maxItems });
       } catch (err) {
-        console.error("Script generation: failed to parse model output as JSON. Raw text was:\n", raw);
+        console.error("Script generation: failed to parse model output as JSON. Raw text was:\n", text);
         throw err;
       }
-      scenes = Array.isArray(parsed) ? parsed : parsed?.scenes;
+      if (parsedOut.salvaged) {
+        console.warn(
+          `Script generation: model output was not valid JSON - salvaged an unambiguous prefix of ${parsedOut.scenes.length} complete scene(s) (prefix stopped: ${parsedOut.stopReason}; array ${parsedOut.complete ? "closed cleanly" : "never closed"}). No extra AI call made.`
+        );
+      }
+      scenes = parsedOut.scenes;
     }
 
     if (!Array.isArray(scenes) || scenes.length === 0) throw new Error("Script generation returned no scenes");
@@ -419,6 +701,56 @@ export function pickTodaysFormat(date = new Date(), channelOffset = 0) {
   return FORMAT_POOL[(dayOfYear + channelOffset) % FORMAT_POOL.length];
 }
 
+// STORY MODE POOL (owner requirement 2026-11-03: "videos should feel different every day from
+// the same channel, not like scripted"). FORMAT_POOL varies the opening TECHNIQUE; this varies
+// the day's whole storytelling shape - one day a case study, the next a comparison, then a
+// viewer-style question, a process walkthrough, a concept deep-dive. Stepped by a different
+// multiplier (dayOfYear * 3) than pickTodaysFormat and pickTodaysGrounding so mode, format and
+// facts drift independently; consecutive days always land on a different mode (3 mod 5 cycle).
+const STORY_MODE_POOL = [
+  {
+    id: "case-study",
+    label: "Case Study",
+    block: "build the middle third of the script around ONE example from the VERIFIED GROUNDING LIBRARY below, followed concretely from situation to turning point to result - name the real people, places or events from that entry and let the story itself carry the point instead of stating it generally",
+  },
+  {
+    id: "comparison",
+    label: "Comparison",
+    block: "structure the middle of the script as a deliberate comparison - an old way versus a new way, or two rival explanations of the same thing - alternating between the two sides at least three times before landing on what the viewer should take from the contrast",
+  },
+  {
+    id: "question-led",
+    label: "Viewer Question",
+    block: "frame the whole video as answering one specific question people genuinely ask about this topic - state that question plainly in scene 1, let every scene bring the answer closer, and never drift into a generic overview. HONESTY RULE: unless a real viewer comment is quoted in the STORY MODE RULE below, never claim a specific viewer, subscriber or commenter asked this question - phrase it as a question people keep asking / would type into a search bar. Claiming a viewer asked when none did is fabrication",
+  },
+  {
+    id: "process-walkthrough",
+    label: "Process Walkthrough",
+    block: "narrate one real process from this topic step by step, as if the viewer is watching it happen - what moves first, what happens next, what can go wrong at each step - using only grounded, checkable steps, never invented mechanics",
+  },
+  {
+    id: "concept-deep-dive",
+    label: "Concept Deep-Dive",
+    block: "take ONE concept from this topic and go deeper than a normal teaser would - where it came from, why it works, where it breaks down - anchoring each layer to one concrete grounded detail rather than stacking abstract claims",
+  },
+];
+
+// Same day-of-year + channelOffset pattern as pickTodaysFormat, different multiplier so the
+// two never sync up.
+export function pickTodaysStoryMode(date = new Date(), channelOffset = 0) {
+  const start = new Date(date.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((date - start) / 86400000);
+  return STORY_MODE_POOL[(dayOfYear * 3 + channelOffset * 2) % STORY_MODE_POOL.length];
+}
+
+// Move N steps along the pool - used by generate-video.js when the channel's previous upload
+// already used today's picked mode (e.g. after a skipped day), so consecutive uploads from one
+// channel never repeat a mode even when the calendar formula collides.
+export function shiftStoryMode(mode, steps = 1) {
+  const i = STORY_MODE_POOL.findIndex((m) => m.id === mode.id);
+  return STORY_MODE_POOL[(i + steps) % STORY_MODE_POOL.length];
+}
+
 // Rotating phrasing for the two compliance disclaimers, keyed by book.complianceTopic (see
 // catalog.js). Given ONE fixed instruction, every finance-book video would phrase this near-
 // identically forever — same day-of-year rotation pattern as FORMAT_POOL/VOICE_POOL so the
@@ -466,73 +798,72 @@ function pickTodaysDisclaimer(topic, date = new Date(), channelOffset = 0) {
 // (see pickTodaysGrounding) doesn't repeat the same 2-3 facts every week.
 const GROUNDING_LIBRARY = {
   "age-one": [
-    { type: "historical", fact: "in 1956 a small group of researchers coined the term \"artificial intelligence\" at a summer workshop at Dartmouth College, wagering the whole field could be cracked in a single summer", source: "Dartmouth Summer Research Project on Artificial Intelligence, 1956" },
-    { type: "quote", fact: "Alan Turing opened his 1950 paper on machine intelligence by posing the question that still defines the field: can a machine think", source: "Alan Turing, 'Computing Machinery and Intelligence', 1950" },
-    { type: "stat", fact: "a McKinsey global survey published in 2025 found 78% of organizations now use AI in at least one business function, up from 72% just a year earlier", source: "McKinsey, 'The state of AI: How organizations are rewiring to capture value', 2025" },
-    { type: "stat", fact: "that same 2025 McKinsey survey found 71% of organizations report regularly using generative AI specifically", source: "McKinsey, 2025 State of AI survey" },
-    { type: "historical", fact: "in 2012 a neural network called AlexNet's breakthrough win at the ImageNet competition is widely credited with kicking off the modern deep-learning boom", source: "ImageNet Large Scale Visual Recognition Challenge, 2012" },
-    { type: "historical", fact: "Nikola Tesla believed alternating current was superior to Thomas Edison's direct current, and proved it during the so-called 'War of Currents' in the late 1880s and 1890s — AC went on to become the worldwide standard for power transmission", source: "widely documented history of the War of Currents, 1880s-1890s" },
-    { type: "stat", fact: "ChatGPT reached 100 million monthly users within about two months of its late-2022 launch, according to a UBS analysis — making it, at the time, the fastest-growing consumer application in internet history, beating TikTok's nine months and Instagram's two and a half years to the same milestone", source: "UBS/Similarweb analysis reported by Reuters, February 2023" },
-    { type: "historical", fact: "in May 1997, IBM's Deep Blue became the first computer to defeat a reigning world chess champion, Garry Kasparov, in a full match under standard tournament time controls", source: "IBM Deep Blue vs. Garry Kasparov rematch, May 1997" },
-    { type: "historical", fact: "in 2024, John Hopfield and Geoffrey Hinton won the Nobel Prize in Physics for foundational neural-network discoveries that underpin today's machine learning — the first time a Nobel science prize went to AI research", source: "Royal Swedish Academy of Sciences, 2024 Nobel Prize in Physics" },
-    { type: "historical", fact: "AI has crashed before — a critical 1973 government report by mathematician James Lighthill led the UK to slash academic AI funding almost overnight, kicking off what researchers still call the first 'AI winter'", source: "The Lighthill Report, UK Science Research Council, 1973" },
-    { type: "book", fact: "the book walks through today's leading AI platforms one by one — Anthropic's Claude, OpenAI's ChatGPT and GPT-5, Google's Gemini, DeepSeek, and visual-generation tools like Runway, Sora, Kling, Veo and Seedance — mapping out what each one is actually built to do", source: "AGE ONE, Part II: Mastering AI Platforms" },
-    { type: "book", fact: "it frames mass communication as having moved through three distinct historical eras — the printing press, then broadcast television and radio, then today's AI-driven internet — with each shift quietly lowering the barrier for an ordinary person to reach an audience", source: "AGE ONE, Chapter 1" },
+    { type: "historical", fact: "In 1956, a small group of researchers coined the term \"artificial intelligence\" at a summer workshop at Dartmouth College, wagering that the whole field could be cracked in a single summer.", source: "Dartmouth AI workshop, 1956" },
+    { type: "quote", fact: "Alan Turing opened his 1950 paper Computing Machinery and Intelligence by posing the question that still defines the field: can machines think?", source: "Alan Turing, Computing Machinery and Intelligence, 1950" },
+    { type: "stat", fact: "A McKinsey global survey published in 2025 found that 78% of organizations use AI in at least one business function, up from 72% a year earlier.", source: "McKinsey, The State of AI, 2025" },
+    { type: "stat", fact: "The same 2025 McKinsey survey found that 71% of organizations regularly use generative AI.", source: "McKinsey, 2025 State of AI survey" },
+    { type: "historical", fact: "In 2012, a neural network called AlexNet won the ImageNet competition by a record margin, a breakthrough widely credited with kicking off the modern deep-learning boom.", source: "ImageNet Large Scale Visual Recognition Challenge, 2012" },
+    { type: "historical", fact: "Nikola Tesla championed alternating current over Thomas Edison's direct current during the so-called War of Currents of the late 1880s and 1890s, and AC went on to become the worldwide standard for power transmission.", source: "War of Currents, late 1880s-1890s" },
+    { type: "stat", fact: "ChatGPT reached 100 million monthly users within about two months of its late-2022 launch, according to a UBS analysis, making it at the time the fastest-growing consumer application in internet history, ahead of TikTok's nine months and Instagram's two and a half years to the same milestone.", source: "UBS analysis via Reuters, February 2023" },
+    { type: "historical", fact: "In May 1997, IBM's Deep Blue became the first computer to defeat a reigning world chess champion, Garry Kasparov, in a full match under standard tournament time controls.", source: "IBM Deep Blue vs. Garry Kasparov rematch, May 1997" },
+    { type: "historical", fact: "In 2024, John Hopfield and Geoffrey Hinton won the Nobel Prize in Physics for foundational neural-network discoveries that underpin today's machine learning.", source: "2024 Nobel Prize in Physics" },
+    { type: "historical", fact: "AI has crashed before: a critical 1973 report for the UK government by mathematician James Lighthill led Britain to slash academic AI funding, kicking off what researchers still call the first AI winter.", source: "The Lighthill Report, UK Science Research Council, 1973" },
+    { type: "book", fact: "AGE ONE walks through today's leading AI platforms one by one, including Anthropic's Claude, OpenAI's ChatGPT and GPT-5, Google's Gemini, DeepSeek, and visual-generation tools like Runway, Sora, Kling, Veo and Seedance, mapping out what each one is actually built to do.", source: "AGE ONE, Part II: Mastering AI Platforms" },
+    { type: "book", fact: "AGE ONE frames mass communication as having moved through three distinct historical eras: the printing press, then broadcast television and radio, then today's AI-driven internet, with each shift lowering the barrier for an ordinary person to reach an audience.", source: "AGE ONE, Chapter 1" },
   ],
   "bitcoin-standard": [
-    { type: "historical", fact: "on October 31, 2008, someone using the pseudonym Satoshi Nakamoto published the Bitcoin white paper, and their real identity has never been confirmed", source: "Bitcoin: A Peer-to-Peer Electronic Cash System, 2008" },
-    { type: "custom", fact: "the first known real-world Bitcoin purchase was in 2010, when someone paid 10,000 bitcoin for two pizzas — an event now marked every May 22nd as 'Bitcoin Pizza Day'", source: "widely documented Bitcoin history, 2010" },
-    { type: "stat", fact: "Bitcoin's total supply is hard-capped at 21 million coins, a limit written into its original code and unchangeable by any single party", source: "Bitcoin protocol design" },
-    { type: "custom", fact: "in 2021, El Salvador became the first country in the world to adopt Bitcoin as legal tender", source: "El Salvador Bitcoin Law, 2021" },
-    { type: "quote", fact: "back in 1999 — nearly a decade before Bitcoin existed — the economist Milton Friedman predicted that a reliable, anonymous form of electronic cash would soon develop on the internet", source: "Milton Friedman, National Taxpayers Union/Foundation interview, 1999" },
-    { type: "historical", fact: "the Mt. Gox exchange once handled over 70% of all bitcoin trades worldwide before it collapsed in 2014, after roughly 850,000 bitcoin went missing in a years-long, undetected theft", source: "Mt. Gox collapse, February 2014" },
-    { type: "stat", fact: "Bitcoin's mining reward is programmed to cut in half roughly every four years — from 50 coins per block in 2009 down to 3.125 today after the most recent halving in April 2024 — a built-in scarcity mechanism that runs until around the year 2140", source: "Bitcoin protocol halving schedule; most recent halving, April 2024" },
-    { type: "book", fact: "the book breaks Bitcoin's security down to the cryptographic primitives underneath it — SHA-256 hashing, ECDSA and Schnorr signatures, and the elliptic curve math that actually guarantees a coin can't be forged", source: "The Bitcoin Standard, Ch. 3: Cryptographic Primitives and Monetary Sovereignty" },
-    { type: "book", fact: "it includes a full institutional-grade self-custody audit protocol and a catalog of over 100 documented wallet and hardware failure modes, each paired with its own recovery path", source: "The Bitcoin Standard, Ch. 7 & Ch. 11" },
-    { type: "book", fact: "one entire chapter is built around reading a live mempool for fee-timing and trading signals, rather than just treating fees as a fixed cost", source: "The Bitcoin Standard, Ch. 9: Node Operations and Mempool Intelligence" },
+    { type: "historical", fact: "On October 31, 2008, a person or group using the pseudonym Satoshi Nakamoto published the Bitcoin white paper, and their real identity has never been confirmed.", source: "Bitcoin: A Peer-to-Peer Electronic Cash System, 2008" },
+    { type: "custom", fact: "The first known real-world Bitcoin purchase happened in 2010, when programmer Laszlo Hanyecz paid 10,000 bitcoin for two pizzas, an event now marked every May 22 as Bitcoin Pizza Day.", source: "widely documented Bitcoin history, 2010" },
+    { type: "stat", fact: "Bitcoin's total supply is hard-capped at 21 million coins, a limit written into its code that no single party can change.", source: "Bitcoin protocol design" },
+    { type: "custom", fact: "In September 2021, El Salvador became the first country in the world to adopt Bitcoin as legal tender.", source: "El Salvador Bitcoin Law, 2021" },
+    { type: "quote", fact: "Back in 1999, nearly a decade before Bitcoin existed, the economist Milton Friedman predicted that a reliable, anonymous form of electronic cash would soon develop on the internet.", source: "Milton Friedman, NTU Foundation interview, 1999" },
+    { type: "historical", fact: "The Mt. Gox exchange once handled over 70% of all bitcoin trades worldwide before it collapsed in 2014 after a years-long undetected theft of its customers' bitcoin.", source: "Mt. Gox collapse, 2014" },
+    { type: "stat", fact: "Bitcoin's mining reward is programmed to cut in half roughly every four years, from 50 coins per block in 2009 down to 3.125 after the most recent halving in April 2024, a built-in scarcity mechanism that runs until around the year 2140.", source: "Bitcoin protocol halving schedule; April 2024 halving" },
+    { type: "book", fact: "The Bitcoin Standard breaks Bitcoin's security down to the cryptographic primitives underneath it: SHA-256 hashing, ECDSA and Schnorr signatures, and the elliptic curve math that makes a coin impossible to forge.", source: "The Bitcoin Standard, Ch. 3" },
+    { type: "book", fact: "The Bitcoin Standard includes a full institutional-grade self-custody audit protocol and a catalog of 100 documented wallet and hardware failure modes, each paired with its own recovery path.", source: "The Bitcoin Standard, Ch. 7 & Ch. 11" },
+    { type: "book", fact: "The Bitcoin Standard devotes an entire chapter to reading a live mempool for fee-timing and trading signals, rather than treating fees as a fixed cost.", source: "The Bitcoin Standard, Ch. 9" },
   ],
   "science-of-feeling-great": [
-    { type: "stat", fact: "the Harvard Study of Adult Development, running since 1938 and still active today, found that the strongest predictor of long-term health and happiness wasn't wealth or fame — it was the quality of a person's close relationships", source: "Harvard Study of Adult Development; Waldinger & Schulz, 'The Good Life', 2023" },
-    { type: "custom", fact: "researchers studying so-called 'Blue Zones' — regions like Okinawa, Japan and Sardinia, Italy — found unusually high numbers of people living past 100, tied largely to diet, daily movement, and strong social ties", source: "Dan Buettner's Blue Zones research" },
-    { type: "custom", fact: "in Japan, the practice of 'shinrin-yoku', or forest bathing, became part of official national public health guidance in the 1980s", source: "Japanese Ministry of Agriculture, Forestry and Fisheries, shinrin-yoku program, 1982" },
-    { type: "historical", fact: "the World Health Organization's founding constitution in 1948 defined health not merely as the absence of disease, but as a state of complete physical, mental, and social well-being", source: "WHO Constitution, adopted 1948" },
-    { type: "stat", fact: "the CDC recommends that adults get at least 7 hours of sleep per night, and identifies chronic short sleep as linked to higher long-term risk for conditions like obesity and heart disease", source: "US Centers for Disease Control and Prevention, sleep guidance" },
-    { type: "stat", fact: "the World Health Organization recommends adults get at least 150 to 300 minutes of moderate-intensity physical activity every week, or 75 to 150 minutes of vigorous activity, to meaningfully cut the risk of heart disease, diabetes, and some cancers", source: "WHO Guidelines on Physical Activity and Sedentary Behaviour, updated 2020" },
-    { type: "custom", fact: "in 2010, UNESCO added the Mediterranean diet to its list of Intangible Cultural Heritage, recognizing it as a shared way of eating, farming, and gathering across communities in Italy, Greece, Spain, and Morocco — not just a list of foods", source: "UNESCO Intangible Cultural Heritage inscription, November 2010" },
-    { type: "book", fact: "the book opens with sleep, walking through the glymphatic system — the brain's own overnight waste-clearance process — and how a disrupted night quietly carries over into next-day emotional regulation", source: "The Science of Feeling Great, Ch. 1: Sleep — The Master Reset" },
-    { type: "book", fact: "it devotes a full chapter to the gut-brain axis, covering how food choices interact with gene expression in what the book calls epigenetic eating", source: "The Science of Feeling Great, Ch. 2: Nutrition as Information" },
+    { type: "stat", fact: "The Harvard Study of Adult Development, running since 1938 and still active today, found that the strongest predictor of long-term health and happiness is not wealth or fame but the quality of a person's close relationships.", source: "Harvard Study of Adult Development; The Good Life, 2023" },
+    { type: "custom", fact: "Researchers studying so-called Blue Zones, regions like Okinawa in Japan and Sardinia in Italy, found unusually high numbers of people living past 100, tied largely to diet, daily movement, and strong social ties.", source: "Dan Buettner's Blue Zones research" },
+    { type: "custom", fact: "In Japan, the practice of shinrin-yoku, or forest bathing, was adopted into the national public health program in 1982.", source: "Japan's Forestry Agency, shinrin-yoku program, 1982" },
+    { type: "historical", fact: "The World Health Organization's founding constitution in 1948 defined health not merely as the absence of disease, but as a state of complete physical, mental, and social well-being.", source: "WHO Constitution, adopted 1948" },
+    { type: "stat", fact: "The CDC recommends that adults get at least 7 hours of sleep per night, and links chronic short sleep to higher long-term risk of conditions like obesity and heart disease.", source: "CDC sleep guidance" },
+    { type: "stat", fact: "The World Health Organization recommends that adults get 150 to 300 minutes of moderate-intensity physical activity every week, or 75 to 150 minutes of vigorous activity.", source: "WHO physical activity guidelines, 2020" },
+    { type: "custom", fact: "In 2010, UNESCO added the Mediterranean diet to its list of Intangible Cultural Heritage, recognizing it as a shared way of eating, farming, and gathering across communities in Italy, Greece, Spain, and Morocco.", source: "UNESCO Intangible Cultural Heritage, November 2010" },
+    { type: "book", fact: "The Science of Feeling Great opens with sleep, walking through the glymphatic system, the brain's own overnight waste-clearance process, and how a disrupted night carries over into next-day emotional regulation.", source: "The Science of Feeling Great, Ch. 1" },
+    { type: "book", fact: "The Science of Feeling Great devotes a full chapter to the gut-brain axis, covering how food choices interact with gene expression in what it calls epigenetic eating.", source: "The Science of Feeling Great, Ch. 2" },
   ],
   "art-of-joy": [
-    { type: "stat", fact: "the Harvard Study of Adult Development, running since 1938, found that close relationships mattered more for long-term happiness than money or career success", source: "Harvard Study of Adult Development; Waldinger & Schulz, 'The Good Life', 2023" },
-    { type: "custom", fact: "the United Nations has published an annual World Happiness Report since 2012, ranking countries by self-reported wellbeing", source: "World Happiness Report, UN Sustainable Development Solutions Network, since 2012" },
-    { type: "custom", fact: "in Denmark, the concept of 'hygge' — a deliberate sense of coziness and togetherness — is frequently cited as one reason Nordic countries top global happiness rankings", source: "commonly cited in World Happiness Report coverage of Nordic countries" },
-    { type: "historical", fact: "the field of positive psychology — the scientific study of what makes life good, rather than just what makes it go wrong — was formally established after psychologist Martin Seligman made it his central theme as president of the American Psychological Association in 1998", source: "Martin Seligman, APA presidency, 1998" },
-    { type: "custom", fact: "in 1972, Bhutan's king declared that Gross National Happiness mattered more than Gross National Product, and the country still tracks an official Gross National Happiness Index today alongside its economic statistics", source: "Bhutan's Gross National Happiness policy, established 1972" },
-    { type: "historical", fact: "over 2,300 years ago, Aristotle argued in his Nicomachean Ethics that eudaimonia — often translated as flourishing or living well — was the ultimate goal of human life, not pleasure or wealth for their own sake", source: "Aristotle, Nicomachean Ethics" },
-    { type: "historical", fact: "psychologists Philip Brickman and Donald Campbell coined the term 'hedonic treadmill' in 1971, and a 1978 follow-up study found lottery winners were no happier than a control group about a year after their win, while accident victims who'd been paralyzed had returned close to their prior baseline happiness too", source: "Brickman & Campbell, 1971; Brickman, Coates & Janoff-Bulman, 'Lottery Winners and Accident Victims: Is Happiness Relative?', 1978" },
-    { type: "book", fact: "the book opens with a 20-question Joy Audit designed to pinpoint exactly where a reader's own sense of joy has gone missing, before offering a single technique to fix it", source: "The Art of Joy, Introduction: The Joy Diagnosis" },
-    { type: "book", fact: "it includes a dedicated section on staying joyful during genuinely hard times, including how grief and joy can coexist in the same moment rather than canceling each other out", source: "The Art of Joy, Part Four: Joy in Hard Times" },
+    { type: "stat", fact: "The Harvard Study of Adult Development, running since 1938, found that close relationships mattered more for long-term happiness than money or career success.", source: "Harvard Study of Adult Development; The Good Life, 2023" },
+    { type: "custom", fact: "The World Happiness Report, published annually since 2012, ranks countries by self-reported wellbeing.", source: "World Happiness Report, annually since 2012" },
+    { type: "custom", fact: "In Denmark, hygge names a deliberate sense of coziness and togetherness cultivated in everyday life.", source: "Danish cultural concept of hygge" },
+    { type: "historical", fact: "The field of positive psychology, the scientific study of what makes life good rather than just what makes it go wrong, took shape after psychologist Martin Seligman made it his central theme as president of the American Psychological Association in 1998.", source: "Martin Seligman, APA presidency, 1998" },
+    { type: "custom", fact: "In 1972, Bhutan's king declared that Gross National Happiness mattered more than Gross National Product, and the country still tracks an official Gross National Happiness Index alongside its economic statistics.", source: "Bhutan's Gross National Happiness policy, 1972" },
+    { type: "historical", fact: "Over 2,300 years ago, Aristotle argued in his Nicomachean Ethics that eudaimonia, often translated as flourishing or living well, was the ultimate goal of human life, not pleasure or wealth for their own sake.", source: "Aristotle, Nicomachean Ethics" },
+    { type: "historical", fact: "Psychologists Philip Brickman and Donald Campbell coined the term hedonic treadmill in 1971, and a 1978 study found that lottery winners were no happier than a control group about a year after their win, while people paralyzed in accidents had returned close to their previous level of happiness.", source: "Brickman & Campbell 1971; Brickman et al. 1978" },
+    { type: "book", fact: "The Art of Joy opens with a 20-question Joy Audit designed to pinpoint exactly where a reader's own sense of joy has gone missing, before prescribing the way back.", source: "The Art of Joy, Introduction: The Joy Diagnosis" },
+    { type: "book", fact: "The Art of Joy includes a dedicated section on staying joyful during genuinely hard times, including how grief and joy can coexist in the same moment rather than canceling each other out.", source: "The Art of Joy, Part Four: Joy in Hard Times" },
   ],
   "youtube-algorithms": [
-    { type: "stat", fact: "YouTube's own engineering team confirmed in 2017 that viewers were collectively watching over 1 billion hours of video on the platform every single day", source: "YouTube VP of Engineering Cristos Goodrow, 2017 announcement" },
-    { type: "historical", fact: "around 2012, YouTube shifted its recommendation algorithm to prioritize total watch time over raw view counts, changing what creators had to optimize for", source: "widely reported YouTube algorithm history, 2012" },
-    { type: "stat", fact: "creators upload more than 500 hours of new video to YouTube every single minute", source: "YouTube platform statistics, widely reported" },
-    { type: "historical", fact: "YouTube was founded in 2005 by three former PayPal employees, and the very first video ever uploaded to the platform — an 18-second clip called 'Me at the zoo' — went up on April 23, 2005", source: "YouTube company history; first upload, April 23, 2005" },
-    { type: "historical", fact: "YouTube launched its short-form video feature, Shorts, in 2020, explicitly built to compete with the format popularized by TikTok", source: "YouTube Shorts launch, 2020" },
-    { type: "historical", fact: "Google bought YouTube for $1.65 billion in an all-stock deal in November 2006 — just under two years after YouTube's founding, and at the time the largest acquisition in Google's history", source: "Google-YouTube acquisition, announced October 2006, closed November 2006" },
-    { type: "book", fact: "the book traces YouTube's recommendation system back to a 2016 Google Brain research paper on deep neural networks for YouTube recommendations, and walks through the two-stage system it described — first narrowing down candidates, then ranking them", source: "YouTube Algorithms, Ch. 1: The Architecture of Influence" },
-    { type: "book", fact: "it names the specific technique, Multi-gate Mixture of Experts, that YouTube's ranking model reportedly uses to balance watch time, satisfaction, and engagement all at the same time rather than optimizing for just one signal", source: "YouTube Algorithms, Ch. 1" },
+    { type: "stat", fact: "YouTube's VP of Engineering confirmed in 2017 that viewers were collectively watching over 1 billion hours of video on the platform every single day.", source: "YouTube VP of Engineering Cristos Goodrow, 2017" },
+    { type: "historical", fact: "Around 2012, YouTube shifted its recommendation algorithm to prioritize total watch time over raw view counts, changing what creators had to optimize for.", source: "widely reported YouTube algorithm history, 2012" },
+    { type: "stat", fact: "Creators upload more than 500 hours of new video to YouTube every single minute.", source: "YouTube platform statistics, widely reported" },
+    { type: "historical", fact: "YouTube was founded in 2005 by three former PayPal employees, and the first video ever uploaded to the platform, a clip of co-founder Jawed Karim at the San Diego Zoo called Me at the zoo, went up on April 23, 2005.", source: "YouTube company history; first upload, April 23, 2005" },
+    { type: "historical", fact: "YouTube launched its short-form video feature, Shorts, in 2020, explicitly built to compete with the format popularized by TikTok.", source: "YouTube Shorts launch, 2020" },
+    { type: "historical", fact: "Google bought YouTube for $1.65 billion in an all-stock deal in November 2006, just under two years after YouTube's founding and at the time the largest acquisition in Google's history.", source: "Google-YouTube acquisition, November 2006" },
+    { type: "book", fact: "YouTube Algorithms traces YouTube's recommendation system back to a 2016 Google research paper on deep neural networks for YouTube recommendations, and walks through the two-stage system it described: first narrowing down candidates, then ranking them.", source: "YouTube Algorithms, Ch. 1: The Architecture of Influence" },
+    { type: "book", fact: "YouTube Algorithms names the specific technique, Multi-gate Mixture of Experts, that YouTube's ranking model reportedly uses to balance watch time, satisfaction, and engagement at the same time rather than optimizing for one signal.", source: "YouTube Algorithms, Ch. 1" },
   ],
   "pet-friendly": [
-    { type: "historical", fact: "dogs are believed to have been domesticated from wolves at least 15,000 years ago, making them humanity's oldest domestic animal companion", source: "widely cited archaeological and genetic dating of dog domestication" },
-    { type: "custom", fact: "in ancient Egypt, cats were revered highly enough that killing one — even by accident — could carry the death penalty, and many households mummified their pet cats", source: "well-documented ancient Egyptian history" },
-    { type: "historical", fact: "most of today's recognizable dog breeds took shape during the Victorian era in 19th-century England, when kennel clubs began formalizing breed standards", source: "The Kennel Club, founded 1873, and Victorian-era breed standardization" },
-    { type: "stat", fact: "45.5% of U.S. households now own a dog and 32.1% own a cat, according to the AVMA's 2024 survey — both figures up sharply from 1996, when dog and cat ownership sat at 31.6% and 27.3%", source: "American Veterinary Medical Association, 2024 Pet Ownership and Demographic Sourcebook" },
-    { type: "stat", fact: "cats typically sleep 12 to 16 hours a day — meaning an average house cat spends roughly 70% of its entire life asleep", source: "widely documented feline sleep behavior" },
-    { type: "historical", fact: "the world's first guide dog school opened in Germany in August 1916, founded by Dr. Gerhard Stalling to train dogs for soldiers who'd been blinded in World War I", source: "Dr. Gerhard Stalling's guide dog school, Oldenburg, Germany, 1916" },
-    { type: "stat", fact: "a dog's nose holds up to 300 million olfactory receptors, compared to roughly 6 million in a human nose — one reason dogs can be trained to detect everything from explosives to certain diseases by scent alone", source: "widely documented canine olfaction research" },
-    { type: "book", fact: "the book notes that some genetic estimates now push dog domestication back as far as 40,000 years — well beyond the widely cited 15,000-year figure — suggesting an even longer shared history between the two species", source: "Pet Friendly, Ch. 3: Dogs — Your Loyal Adventure Partner" },
-    { type: "book", fact: "it points to real neuroscience research showing a dog's caudate nucleus — a brain region tied to positive emotion — activates the same way when they see their owner as when humans feel romantic love", source: "Pet Friendly, Ch. 3" },
+    { type: "historical", fact: "Dogs were domesticated from wolves at least 15,000 years ago, making them humanity's oldest domestic animal companion.", source: "Archaeological and genetic dating of dog domestication" },
+    { type: "custom", fact: "In ancient Egypt, cats were revered so highly that many households mummified their pet cats, and whole cat cemeteries have been found at sites like Bubastis.", source: "UCL Digital Egypt, cat mummification record" },
+    { type: "historical", fact: "The Kennel Club, the world's first national kennel club, was founded in England in 1873 to set consistent rules for dog showing and field trials.", source: "The Kennel Club, founded 1873" },
+    { type: "stat", fact: "45.5% of U.S. households own a dog and 32.1% own a cat, according to the AVMA's 2024 Pet Ownership and Demographic Sourcebook, both figures up sharply from 1996, when dog and cat ownership sat at 31.6% and 27.3%.", source: "AVMA 2024 Pet Ownership and Demographic Sourcebook" },
+    { type: "stat", fact: "Cats typically sleep 12 to 16 hours a day, which means an average house cat spends roughly 70% of its life asleep.", source: "widely documented feline sleep behavior" },
+    { type: "historical", fact: "The world's first guide dog school opened in Oldenburg, Germany, in August 1916, founded by Dr. Gerhard Stalling to train dogs for soldiers blinded in World War I.", source: "Dr. Gerhard Stalling's guide dog school, Oldenburg, 1916" },
+    { type: "stat", fact: "A dog's nose holds up to 300 million olfactory receptors, compared to roughly 6 million in a human nose, one reason dogs can be trained to detect everything from explosives to certain diseases by scent alone.", source: "widely documented canine olfaction research" },
+    { type: "book", fact: "Pet Friendly notes that some genetic estimates push dog domestication back as far as 40,000 years, well beyond the widely cited 15,000-year figure, suggesting an even longer shared history between the two species.", source: "Pet Friendly, Ch. 3: Dogs - Your Loyal Adventure Partner" },
   ],
 };
 // age-one-premium starts from the same base facts as age-one (same brand, same broad AI/business
@@ -542,9 +873,105 @@ const GROUNDING_LIBRARY = {
 // silently affect the other.
 GROUNDING_LIBRARY["age-one-premium"] = [
   ...GROUNDING_LIBRARY["age-one"],
-  { type: "book", fact: "beyond the basics, the premium edition treats prompt engineering as its own professional discipline and walks through building no-code AI agents with tools like Make, Zapier, and n8n", source: "AGE ONE: Premium Edition, Part II & III" },
-  { type: "book", fact: "it also covers the Lightning Network as a business tool for instant Bitcoin payments, and closes with five real, fully worked business-blueprint case studies", source: "AGE ONE: Premium Edition, Ch. 12 & Ch. 20" },
+  { type: "book", fact: "AGE ONE: Premium Edition treats prompt engineering as its own professional discipline and walks through building no-code AI agents with tools like Make, Zapier, and n8n.", source: "AGE ONE: Premium Edition, Part II & III" },
+  { type: "book", fact: "AGE ONE: Premium Edition also covers the Lightning Network as a business tool for instant Bitcoin payments, and closes with five real, fully worked business-blueprint case studies.", source: "AGE ONE: Premium Edition, Ch. 12 & Ch. 20" },
 ];
+
+// Counterevidence entries (type "counter") — each verified against its cited source on
+// 2026-11-03 before being added (same hand-verified rule as every entry above). These power
+// the ARGUMENT STRUCTURE RULE's honest-counterevidence beat, and render as "THE OTHER SIDE"
+// cards when picked as the day's evidence item (see getTodaysEvidenceItem below).
+const AGE_ONE_COUNTER = { type: "counter", fact: "Even celebrated experts have badly overestimated AI timelines: in 1960 the economist Herbert Simon wrote that machines would be capable, within twenty years, of doing any work a man can do, a deadline that came and went unmet.", source: "H. A. Simon, New Science of Management Decision, 1960", url: "https://quoteinvestigator.com/2020/11/11/ai-can-do/" };
+GROUNDING_LIBRARY["age-one"].push(AGE_ONE_COUNTER);
+// age-one-premium was spread from age-one BEFORE this push, so it needs its own copy.
+GROUNDING_LIBRARY["age-one-premium"].push(AGE_ONE_COUNTER);
+GROUNDING_LIBRARY["bitcoin-standard"].push(
+  { type: "counter", fact: "For all its scarcity design, bitcoin's price has still collapsed from its peaks more than once: maximum drawdowns of 84 to 85% in the 2014 and 2018 bear markets, and more than 70% down from the November 2021 peak during 2022.", source: "K33 Research bitcoin drawdown analysis, September 2022", url: "https://k33.com/research/archive/articles/the-2022-bear-market-is-on-track-with-the-2018-bear-market" }
+);
+GROUNDING_LIBRARY["science-of-feeling-great"].push(
+  { type: "counter", fact: "The famous Blue Zones longevity claims have been seriously challenged: UCL demographer Saul Justin Newman showed that extreme-age records cluster where birth registration was weak and pension fraud is common, work that won the first Ig Nobel Prize in demography in 2024, though other demographers still defend the Blue Zones data.", source: "S. J. Newman, UCL (contested: see The Gerontologist)", url: "https://www.ucl.ac.uk/ioe/news/2024/sep/ucl-demographers-work-debunking-blue-zone-regions-exceptional-lifespans-wins-ig-nobel-prize", alsoUrl: "https://academic.oup.com/gerontologist/article/65/12/gnaf246/8381533" }
+);
+GROUNDING_LIBRARY["art-of-joy"].push(
+  { type: "counter", fact: "The famous finding that day-to-day happiness stops rising above about 75,000 dollars a year has been overturned by much larger modern research: 1,725,994 real-time reports from 33,391 employed US adults found that day-to-day wellbeing keeps rising with income, with no plateau at that line.", source: "Matthew Killingsworth, PNAS 118(4), January 2021", url: "https://www.pnas.org/doi/full/10.1073/pnas.2016976118" }
+);
+GROUNDING_LIBRARY["youtube-algorithms"].push(
+  { type: "counter", fact: "Optimizing purely for watch time had documented side effects: YouTube itself made more than 30 changes to its recommendation system starting in January 2019 to demote borderline content, cutting watch time on that material from non-subscribers by 70%.", source: "The Verge on YouTube borderline-content changes, 2019", url: "https://www.theverge.com/2019/12/3/20992018/youtube-borderline-content-recommendation-algorithm-news-authoritative-sources" }
+);
+GROUNDING_LIBRARY["pet-friendly"].push(
+  { type: "counter", fact: "Some popular breeds carry documented welfare costs: after Norway's Oslo District Court banned the breeding of English bulldogs and Cavalier King Charles spaniels in 2022, the Supreme Court's 2023 final ruling kept the Cavalier ban but allowed bulldog breeding under a specific health-screened program, both because of the burden of disease in those breeds.", source: "Norwegian Supreme Court, HR-2023-1901-A, 2023", url: "https://www.domstol.no/en/supremecourt/rulings/2023/supreme-court-civil-cases/HR-2023-1901-A" }
+);
+
+// Exported so generate-video.js can lint the finished script against EXACTLY the items the
+// model was allowed to cite today (see lintUnsupportedClaims below).
+export function getTodaysGroundingItems(slug, count = 3, date = new Date(), channelOffset = 0) {
+  return pickTodaysGrounding(slug, count, date, channelOffset);
+}
+
+// The day's on-screen EVIDENCE item: the 4th pick from the same rotation, i.e. one item the
+// script itself was NOT shown, so the evidence-card beat adds something the narration didn't
+// already spend. Returns null when the book's library has fewer than 4 entries (callers skip
+// the evidence scene entirely in that case - no card is better than a repeated one).
+export function getTodaysEvidenceItem(slug, date = new Date(), channelOffset = 0) {
+  const items = pickTodaysGrounding(slug, 4, date, channelOffset);
+  return items.length >= 4 ? items[3] : null;
+}
+
+// Heuristic safety net for the GROUNDING RULE: flags script sentences that carry a
+// study/source-flavoured claim or a specific number (2+ digits) that cannot be traced to any
+// of today's allowed grounding items. Pure detector - it NEVER edits the script itself.
+// Callers decide what to do with flags (log, one revision pass, manifest record). Being a
+// heuristic, it has both false positives and blind spots; the overlap score is logged with
+// every flag so thresholds can be tuned from real runs instead of guessed.
+export function lintUnsupportedClaims(scenes, allowedFacts = []) {
+  const norm = (t) => String(t).toLowerCase().replace(/[^a-z0-9%\s]/g, " ").replace(/\s+/g, " ").trim();
+  const allowed = allowedFacts.map((f) => norm(`${f.fact} ${f.source}`));
+  const allowedDigits = new Set();
+  for (const a of allowed) {
+    for (const m of a.matchAll(/\d[\d\s,.]*\d|\d/g)) allowedDigits.add(m[0].replace(/[\s,.]/g, ""));
+  }
+  const SOURCE_CLAIM = /\b(study|studies|survey|poll|researchers?|scientists?|professor|university|institute|journal|according to|report found|data shows|historians?)\b/i;
+  // Fabricated social proof (owner review 2026-11-03): claiming a viewer/commenter asked or said
+  // something is only honest when a genuine comment was supplied in the prompt. Without one,
+  // these phrasings are fabrications even though no number or study is cited.
+  const FABRICATED_ATTRIBUTION = /\b(a|one of (my|you)|a few of you|several of you|many of you) (viewer|viewers|subscriber|subscribers|commenter|commenters|of you)?\s*(asked|ask|wrote|commented|told me|said in the comments)\b|\byou asked (me )?in the comments\b|\bas (one of )?you (asked|said|pointed out) (in|below)\b/i;
+  const flags = [];
+  scenes.forEach((s, sceneIndex) => {
+    const sentences = String(s.line || "").split(/(?<=[.!?])\s+/).filter(Boolean);
+    for (const sentence of sentences) {
+      if (FABRICATED_ATTRIBUTION.test(sentence) && !allowedFacts.some((f) => f.type === "viewer-comment")) {
+        flags.push({ sceneIndex, sentence: sentence.slice(0, 140), fabricatedAttribution: true, hasSourceClaim: false, unsupportedNumbers: [], overlap: 0 });
+        continue;
+      }
+      const hasSourceClaim = SOURCE_CLAIM.test(sentence);
+      const nums = [];
+      for (const m of sentence.matchAll(/\d[\d,.]*\d%?|\d/g)) {
+        const digits = m[0].replace(/[,.%]/g, "");
+        if (digits.length >= 2) nums.push(digits);
+      }
+      const badNums = nums.filter((d) => !allowedDigits.has(d));
+      if (!hasSourceClaim && badNums.length === 0) continue;
+      const st = new Set(norm(sentence).split(" ").filter((w) => w.length > 3));
+      let best = 0;
+      for (const a of allowed) {
+        const at = new Set(a.split(" ").filter((w) => w.length > 3));
+        let ov = 0;
+        for (const t of st) if (at.has(t)) ov++;
+        const score = ov / Math.max(1, Math.min(st.size, at.size));
+        if (score > best) best = score;
+      }
+      if (best < 0.35) {
+        flags.push({
+          sceneIndex,
+          sentence: sentence.slice(0, 140),
+          hasSourceClaim,
+          unsupportedNumbers: badNums,
+          overlap: Number(best.toFixed(2)),
+        });
+      }
+    }
+  });
+  return flags;
+}
 
 // Rotates in a small, varying subset of a book's verified facts — same day-of-year +
 // channelOffset pattern as pickTodaysFormat/pickTodaysDisclaimer, but stepped by a different
@@ -578,7 +1005,7 @@ ${list}
 - PHRASING VARIETY RULE — never introduce two of these with the same lead-in, and don't default to "As [name] once said" every single time. Rotate across different natural framings depending on what fits the sentence — for example: naming the year first ("Back in [year]..."), naming the number first ("Here's a number that still surprises people..."), naming the source first ("A [institution] survey found..."), framing it as a belief held before it was proven right ("Long before anyone agreed with them, [name] was convinced that..."), or framing it as an established custom ("This isn't new — [place] has treated it as ordinary for [time period]..."). Pick whichever reads most naturally for that specific fact; never force the same lead-in twice in one script.`;
 }
 
-export async function generateScript(book, format = FORMAT_POOL[0], channelOffset = 0, trend = null) {
+export async function generateScript(book, format = FORMAT_POOL[0], channelOffset = 0, trend = null, storyMode = null) {
   const disclaimer = pickTodaysDisclaimer(book.complianceTopic, new Date(), channelOffset);
   // Today's trending Google search term (see daily-trend.js), or null. When present the script must
   // work that exact term in twice — as an honest hook, never as a claim about the term itself,
@@ -588,6 +1015,10 @@ export async function generateScript(book, format = FORMAT_POOL[0], channelOffse
     ? `\n- TRENDING TIE-IN RULE — the search term ${trend.term} is trending on Google right now. Say that exact term (spelled exactly like that) in EXACTLY two lines of the script: once in scene 1 or scene 2, as a quick hook that connects it to ${book.angle} (a suggested connection: ${trend.tieIn || `what people search for right now says something about ${book.angle}`} — improve on it if you can), and once more in the middle stretch (roughly the 45%-55% mark) as a brief callback or analogy. Each time, keep it to ONE sentence. Say only that people are searching for it or that it is in the conversation right now — do NOT state any facts, events, scores, results, quotes, or claims about ${trend.term} itself (you cannot verify current events), and never suggest the book is about ${trend.term}. The tie-in must feel honest, not forced, and everything else in the script stays about the book. A separate news-headline beat is inserted automatically right after scene 2, so do NOT mention or describe any headline yourself.`
     : "";
   const grounding = pickTodaysGrounding(book.slug, 3, new Date(), channelOffset);
+  const genuineQuestion = storyMode?.viewerQuestion ? `\n  A real viewer genuinely commented on this channel: "${storyMode.viewerQuestion}" - today's video answers THAT actual question; you may say a viewer asked it because one verifiably did.` : "";
+  const modeBlock = storyMode
+    ? `\n- STORY MODE RULE - today's storytelling mode is ${storyMode.label}: ${storyMode.block}.${genuineQuestion} This mode shapes the whole script's structure today; the per-scene rules below still apply inside that shape.`
+    : "";
   const prompt = `You are the Universal Master Narrator — a polymathic, warm, sharply engaging storyteller equally at home with a curious teenager and a skeptical adult, fluent across science, history, technology, culture, and everyday life. You blend real intellectual rigor with plain-spoken clarity, dry wit, and genuine emotional depth — never dry-lecture, never robotic.
 
 You are writing a 10-minute YouTube TEASER video script for the ebook "${book.title}" (topic: ${book.angle}), sold in English on Google Play Books via High Definition Learning Group.
@@ -616,6 +1047,10 @@ Strict rules:
 - RHYTHM RULE — vary sentence length within and across scenes: mix short, blunt sentences with a longer one that lets a thought build, then land on another short one. A scene where every sentence is roughly the same length reads as monotone even through narration — avoid that.
 - DIRECT-ADDRESS RULE — use second-person "you" language addressing the viewer's specific situation regularly across the WHOLE script, not only in scenes using today's Direct Address opening technique. Talking about "creators" or "readers" in the abstract is weaker than speaking to the one person watching.
 - PAYOFF RULE — the curiosity built throughout must feel rewarded by the end, even though the book's actual chapters/frameworks/conclusions stay withheld. The closing scenes should land as a genuine synthesis or a satisfying "here's the real shape of the problem" moment, not just one more promise stacked on the pile — a script that only ever teases and never pays off trains the viewer to stop trusting the next hook.
+- ARGUMENT STRUCTURE RULE — build the script as an argument, not a list: at least once, run a clear point -> evidence -> explanation sequence (a claim, then the grounded detail that backs it, then what it means for the viewer). And if the VERIFIED GROUNDING LIBRARY below includes an item marked [counter], use it exactly once: acknowledge that criticism or downside honestly in the narrator's own words, then answer it - never present only the shiny side, and never invent a counterargument that is not in the list.
+- LESSON OPENING RULE — by the end of scene 2 the viewer must know what they will come away understanding today (the day's question, case, comparison or process - see the STORY MODE RULE). Deliver that as a promise of understanding, not a table of contents and not a sales line.
+- ANSWER-THE-OPENING RULE — before the final call-to-action scene, explicitly resolve whatever the opening set up: answer the question, close the case, land the comparison. Give the viewer one concrete, usable takeaway they could act on or repeat to a friend today. The CTA scene itself stays exactly as constrained elsewhere.
+- UNCERTAINTY RULE — distinguish plainly between established fact, estimate, and the channel's own interpretation. If a number or claim is approximate, say so in natural spoken words ("roughly," "the best estimate we have," "our read of this is") rather than stating everything with the same flat certainty.
 - AUTHORITY RULE — don't stay in constant "expert mode." Alternate a sharp, precise, authoritative line ("this is the single biggest ranking factor almost nobody optimizes for") with a plain, relatable one right after it ("and yeah, most creators get this wrong for years without knowing it"). That shift between "insider explaining something precisely" and "friend leveling with you" is what makes a narrator sound like a real expert rather than a script reciting facts. Never more than 2-3 sentences of pure declaration before a plainer beat.
 - POLYMATH-TO-CHILD RULE — whenever a line touches a dense, technical, or abstract idea, follow it immediately with a vivid, everyday metaphor or an ELI5-style analogy that makes it instantly picturable, without ever sounding condescending.
 - GROUNDING RULE — see the VERIFIED GROUNDING LIBRARY block below for the specific citations you're allowed to use, and its rules for how many to include and how to phrase them.
@@ -646,7 +1081,7 @@ Strict rules:
     disclaimer
       ? `\n- COMPLIANCE RULE — somewhere between the one-third and two-thirds mark of the scenes (never in the first third, where it would undercut the opening hook right as it's landing), work in this exact idea as a natural, spoken aside (not a legal footnote): ${disclaimer}`
       : ""
-  }${trendRule}${renderGroundingBlock(grounding)}`;
+  }${trendRule}${modeBlock}${renderGroundingBlock(grounding)}`;
 
   return requestSceneScript(prompt, SCRIPT_MIN_SCENES, SCRIPT_MAX_SCENES, 6000, [], "finalOnly");
 }
@@ -697,7 +1132,8 @@ Strict rules:
 - Every scene needs a concrete, sensory detail (not an abstract claim) and should escalate slightly past the previous scene's stakes rather than repeating the same weight of point. Use direct "you" language addressing the viewer. Vary sentence length within each scene rather than uniform-length sentences. At least one of these scenes should plant a specific, unresolved curiosity hook without revealing the book's actual chapters/frameworks/conclusions.
 - DELIVERY — alternate sharp/authoritative lines with plain, human ones; don't stay in constant expert mode. If space allows across these ${count} scenes: one reversal ("you'd think X, but actually Y"), one rhetorical question, one callback-style reference to an earlier idea, one named pattern, one micro-scene instead of a flat claim, a brief self-correction beat, a stakes-forward line, a false-summary-then-twist, a named contrast pair, one single-sentence one-liner scene, an identity-address line, or a scale-contrast line. Never force more than one or two of these into a single scene.`;
 
-  return requestSceneScript(prompt, count, count, 3000, existingLines, "never", CHEAP_SCRIPT_MODEL);
+  const maxTokens = topupMaxTokens(count);
+  return requestSceneScript(prompt, count, count, maxTokens, existingLines, "never", CHEAP_SCRIPT_MODEL);
 }
 
 // Trending-news segment (owner request, Sep 23): instead of one "this is trending today" line,

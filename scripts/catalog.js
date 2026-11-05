@@ -107,3 +107,46 @@ export function pickTodaysBook(date = new Date(), channelOffset = 0) {
   const displayTitle = variants[lap % variants.length];
   return { ...book, displayTitle };
 }
+
+// Per-channel subject split (owner-approved 2026-11-03): each channel now stays inside its own
+// niche instead of every channel rotating through the full catalog a day apart. Matches the
+// four niches that already exist in niche-playlists.json. Single-book channels (2 and 4)
+// revisit the same book daily by design - daily freshness there comes from story mode,
+// grounding rotation and title variants, not from switching books.
+export const CHANNEL_BOOKS = {
+  "1": ["age-one", "age-one-premium", "youtube-algorithms"], // AI & Digital Business
+  "2": ["bitcoin-standard"], // Bitcoin & Finance
+  "3": ["science-of-feeling-great", "art-of-joy"], // Wellness & Positive Living
+  "4": ["pet-friendly"], // Pets
+};
+
+// Same rotation mechanics as pickTodaysBook, but scoped to the channel's own book list.
+// Falls back to the full catalog for an unknown channel id so a misconfigured run still
+// produces a video rather than crashing. titleVariants rotate by lap exactly as before.
+// Module-load validation (owner review 2026-11-03): a broken mapping must fail the run loudly,
+// never silently pick a book from another channel's niche - the per-channel niche split is the
+// approved configuration, so drifting outside it is a hard error, not a fallback.
+for (const [ch, slugs] of Object.entries(CHANNEL_BOOKS)) {
+  if (!["1", "2", "3", "4"].includes(ch)) throw new Error(`CHANNEL_BOOKS: unknown channel "${ch}"`);
+  for (const slug of slugs) {
+    if (!CATALOG.some((b) => b.slug === slug)) throw new Error(`CHANNEL_BOOKS channel ${ch}: unknown book slug "${slug}"`);
+  }
+}
+for (const ch of ["1", "2", "3", "4"]) {
+  if (!CHANNEL_BOOKS[ch]?.length) throw new Error(`CHANNEL_BOOKS: channel ${ch} has no approved books`);
+}
+
+export function pickTodaysBookForChannel(date = new Date(), channelId = "1") {
+  const slugs = CHANNEL_BOOKS[String(channelId)];
+  if (!slugs) throw new Error(`No approved book mapping for channel ${channelId} - refusing to pick a book outside this channel's approved niche.`);
+  if (slugs.some((s) => !CATALOG.some((b) => b.slug === s))) throw new Error(`CHANNEL_BOOKS channel ${channelId} contains an unknown book slug - fix the mapping instead of falling back across niches.`);
+  const books = slugs.map((s) => CATALOG.find((b) => b.slug === s));
+  const start = new Date(date.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((date - start) / 86400000);
+  const index = dayOfYear % books.length;
+  const lap = Math.floor(dayOfYear / books.length);
+  const book = books[index];
+  const variants = book.titleVariants?.length ? book.titleVariants : [book.title];
+  const displayTitle = variants[lap % variants.length];
+  return { ...book, displayTitle };
+}
