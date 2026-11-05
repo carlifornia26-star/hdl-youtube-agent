@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "XzL5E2L1Nqo",
+      "short_video_id": "ZvGf49JX5MU",
+      "book_slug": "art-of-joy",
+      "page_url": "https://highdefinitionlearning.pages.dev/art-of-joy-landing-page",
+      "title": "Happiness Through Travel Agency",
+      "description": "Curious about the science of happiness? Art of Joy breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/XzL5E2L1Nqo/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Travel Agency",
+      "trend_in_title": true,
+      "news_headline": "39-year-old travel agency shuts down in bankruptcy, cancels all trips",
+      "script_format": "cold-open",
+      "caption_style": "classic-pop",
+      "duration_seconds": 363,
+      "published_at": "2026-11-05T08:18:40.951Z"
+    },
+    {
       "video_id": "YP4wgs61Mug",
       "short_video_id": "Fv8I09MAeq0",
       "book_slug": "science-of-feeling-great",
@@ -813,5 +831,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-11-04T08:01:20.802Z"
+  "updated_at": "2026-11-05T08:18:40.951Z"
 }
