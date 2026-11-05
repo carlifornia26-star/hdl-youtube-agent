@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-11-05",
+      "channel": "1",
+      "term": "Walmart Black Friday 2026",
+      "headline": null
+    },
+    {
+      "date": "2026-11-05",
       "channel": "4",
       "term": "Travel Agency",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "4",
       "term": "Nurse",
       "headline": null
-    },
-    {
-      "date": "2026-10-07",
-      "channel": "3",
-      "term": "Why Is the Stock Market Down Today",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-05T07:58:58.928Z"
+  "updated_at": "2026-11-05T11:11:51.002Z"
 }

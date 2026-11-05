@@ -1,6 +1,24 @@
 {
   "videos": [
     {
+      "video_id": "K6l4qhkXpa4",
+      "short_video_id": "toVQ_9pFOg8",
+      "book_slug": "age-one-premium",
+      "page_url": "https://highdefinitionlearning.pages.dev/age-one-standard-edition",
+      "title": "Traditional Business Models Give Way To Advanced Ai Strategies During Walmart Black Friday 2026",
+      "description": "Curious about advanced AI business strategy? AGE ONE: Premium Edition breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/K6l4qhkXpa4/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": "Walmart Black Friday 2026",
+      "trend_in_title": true,
+      "news_headline": "Black Friday store hours 2026: Here's when Walmart, Target, Best Buy, Apple, Costco and more retailers open their doors",
+      "script_format": "direct-address",
+      "caption_style": "punchy-duo",
+      "duration_seconds": 552,
+      "published_at": "2026-11-05T11:32:28.416Z"
+    },
+    {
       "video_id": "mpRwh7opQvw",
       "short_video_id": "mOkLO5iBpoE",
       "book_slug": "age-one",
@@ -1018,5 +1036,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-11-04T11:33:44.210Z"
+  "updated_at": "2026-11-05T11:32:28.417Z"
 }
