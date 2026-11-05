@@ -207,8 +207,12 @@ test(`offline full video path, ${MODE} fixtures`, async (t) => {
     assert.match(errText, /holding the video and Short PRIVATE/, "pre-publish gate threw");
     const seq = ytCalls.map((c) => c.fn);
     assert.equal(seq.filter((f) => f === "publishVideo").length, 0, `ZERO publish calls expected, got ${JSON.stringify(seq)}`);
-    assert.ok(seq.filter((f) => f === "uploadVideo").length >= 1, "private upload still happened (ordering preserved)");
-    assert.ok(seq.some((f) => f === "uploadCaptionTrack"), "captions attached before the gate (ordering preserved)");
+    const uploads = ytCalls.filter((c) => c.fn === "uploadVideo");
+    assert.equal(uploads.length, 2, `exactly 2 uploads (main + Short), got ${uploads.length}`);
+    assert.ok(uploads.every((u) => u.privacy === "private"), `ALL uploads must be PRIVATE, got ${JSON.stringify(uploads.map((u) => u.privacy))}`);
+    const captionTracks = seq.filter((f) => f === "uploadCaptionTrack").length;
+    assert.equal(captionTracks, 20, `exactly 20 caption tracks (16 main + 4 Short) attached before the gate, got ${captionTracks}`);
+    assert.ok(seq.indexOf("uploadVideo") > -1 && seq.indexOf("publishVideo") === -1, "ordering preserved and nothing published");
     assert.ok(!manifestHasFixture(), "no manifest entry for an unpublished video");
     assert.match(logs.warn.join("\n"), /have no narration/, "voiceless count still logged");
   } else {

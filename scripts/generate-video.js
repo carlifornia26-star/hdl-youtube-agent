@@ -5,6 +5,7 @@ import { generateScript, generateBonusScenes, topupScenesForRound, generateTrend
 import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./assets.js";
 import { loadUsedClipIds, saveUsedClipIds } from "./scene-history.js";
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
+import { exceedsVoicelessThreshold } from "./voiceless-gate.js";
 import { fetchBackgroundMusic, attributionLine } from "./music.js";
 import { loadUsedMusicTitles, saveUsedMusicTitles } from "./music-history.js";
 import { buildScene, buildNewsScene, renderNewsCard, renderEvidenceCard, extractQcStills, concatScenes, buildSrt, generateThumbnail, probeDuration, mixBackgroundMusic, normalizeLoudness, pickTodaysCaptionStyle, captionStyleForScene, tagVideoMetadata, tagThumbnailMetadata } from "./render.js";
@@ -1490,7 +1491,7 @@ async function main() {
   // fails loudly and both videos stay PRIVATE (uploads, thumbnails and captions already attached
   // for inspection) instead of a mostly-silent video reaching the channel. Threshold and
   // voiceless accounting are unchanged; only the position and the publish consequence changed.
-  if (voicelessRatio > VOICE_FAILURE_THRESHOLD) {
+  if (exceedsVoicelessThreshold(voicelessCount, built.length)) {
     throw new Error(
       `Voice synthesis failed for ${voicelessCount}/${built.length} scenes (${Math.round(voicelessRatio * 100)}%), ` +
         `above the ${Math.round(VOICE_FAILURE_THRESHOLD * 100)}% threshold - holding the video and Short PRIVATE ` +
