@@ -604,9 +604,12 @@ async function main() {
     const evidenceItem = getTodaysEvidenceItem(book.slug, new Date(), Number(CHANNEL_ID) - 1);
     if (evidenceItem) {
       const cardPath = path.join(BUILD_DIR, "evidence_card.png");
+      // Book-derived items are claims about the owner's own books, verified against the
+      // English master PDFs, not external facts - label them truthfully instead of "VERIFIED FACT".
       const label =
         evidenceItem.type === "counter" ? "THE OTHER SIDE"
         : evidenceItem.type === "estimate" ? "ESTIMATE"
+        : evidenceItem.type === "book" ? "FROM THE BOOK"
         : "VERIFIED FACT";
       // The credit line carries its own date ("K33 Research ..., September 2022"); the separate
       // right-aligned date row is left empty - it visually collided with the credit otherwise.
