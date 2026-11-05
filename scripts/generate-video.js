@@ -1484,6 +1484,20 @@ async function main() {
   // instead, so the public timestamp stops drifting with render time. Falls back to immediate
   // publish automatically if those env vars are missing (e.g. a manual workflow_dispatch run,
   // or local testing) or if today's target has already passed by the time we get here.
+  // 8a) Pre-publish quality gate (private hardening, 2026-11-05): the >20% voiceless check used
+  // to run AFTER publishVideo as a red-X alert while the video went live anyway - fail-open for
+  // exactly the failure it exists to catch. It now blocks BEFORE either publish call: the run
+  // fails loudly and both videos stay PRIVATE (uploads, thumbnails and captions already attached
+  // for inspection) instead of a mostly-silent video reaching the channel. Threshold and
+  // voiceless accounting are unchanged; only the position and the publish consequence changed.
+  if (voicelessRatio > VOICE_FAILURE_THRESHOLD) {
+    throw new Error(
+      `Voice synthesis failed for ${voicelessCount}/${built.length} scenes (${Math.round(voicelessRatio * 100)}%), ` +
+        `above the ${Math.round(VOICE_FAILURE_THRESHOLD * 100)}% threshold - holding the video and Short PRIVATE ` +
+        `instead of publishing. Check FISH_API_KEY and your Fish Audio plan/promo status; narration is likely broken.`
+    );
+  }
+
   const publishAt = computeScheduledPublishAt();
   await publishVideo({ videoId: uploaded.id, publishAt });
   if (shortVideoId) {
@@ -1555,17 +1569,6 @@ async function main() {
   }
 
   console.log("Done.");
-
-  // Final check, after everything above has already published successfully: if too many
-  // scenes had no narration, fail the run NOW so GitHub Actions shows a red X and you get
-  // notified — the video/Short are already live, this is purely an alert, not a rollback.
-  if (voicelessRatio > VOICE_FAILURE_THRESHOLD) {
-    throw new Error(
-      `Voice synthesis failed for ${voicelessCount}/${built.length} scenes (${Math.round(voicelessRatio * 100)}%), ` +
-        `above the ${Math.round(VOICE_FAILURE_THRESHOLD * 100)}% threshold. The video and Short published anyway, ` +
-        `but check FISH_API_KEY and your Fish Audio plan/promo status — narration is likely broken.`
-    );
-  }
 }
 
 main()

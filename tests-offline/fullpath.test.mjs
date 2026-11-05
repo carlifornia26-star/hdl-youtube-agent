@@ -8,9 +8,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
 
-const MODE = process.env.FIXTURE_MODE === "long" ? "long" : "short";
-const REPO = "/tmp/hdl-youtube-agent";
-const ASSETS = "/tmp/fullpath/assets";
+const MODE = ["long", "voiceless"].includes(process.env.FIXTURE_MODE) ? process.env.FIXTURE_MODE : "short";
+const REPO = process.env.FIXTURE_REPO || "/tmp/hdl-youtube-agent";
+const ASSETS = process.env.FIXTURE_ASSETS || "/tmp/fullpath/assets";
 const RUN_DIR = process.cwd();
 const BUILD_DIR = path.join(RUN_DIR, "build");
 
@@ -138,6 +138,9 @@ const mockFetch = async (url, opts = {}) => {
 before(async () => {
   // Real network is allowed ONLY here: one-time Kokoro model download + synth warm-up,
   // so the fixture run itself can prove zero external calls.
+  // "voiceless" mode mocks voice.js entirely (deterministic forced failures), so no real
+  // TTS/model download is needed at all.
+  if (MODE === "voiceless") return;
   const voice = await import(path.join(REPO, "scripts", "voice.js"));
   await voice.synthesizeVoice("Warming up the local speech model for an offline fixture run.", path.join(ASSETS, "warm.mp3"));
 }, { timeout: 600000 });
@@ -145,6 +148,27 @@ before(async () => {
 test(`offline full video path, ${MODE} fixtures`, async (t) => {
   mock.module("node-fetch", { defaultExport: mockFetch });
   mock.module(path.join(REPO, "scripts", "youtube.js"), { namedExports: ytMock });
+  if (MODE === "voiceless") {
+    // Deterministic forced voice failures: 3 of every 5 scenes (60%, well above the 20%
+    // threshold) throw; healthy scenes get a pregenerated 13s wav so probeDuration and the
+    // scene mix behave exactly as with real TTS. No Kokoro/Fish involved.
+    let voiceCall = 0;
+    const healthyWav = path.join(ASSETS, "healthy_13s.wav");
+    mock.module(path.join(REPO, "scripts", "voice.js"), {
+      namedExports: {
+        pickTodaysVoice: () => "af_heart",
+        synthesizeVoice: async (_text, outPath) => {
+          voiceCall++;
+          const slot = voiceCall % 5;
+          if (slot === 1 || slot === 2 || slot === 3) {
+            throw new Error("fixture: forced voice failure for pre-publish gate test");
+          }
+          fs.copyFileSync(healthyWav, outPath);
+          return outPath;
+        },
+      },
+    });
+  }
   globalThis.fetch = mockFetch;
 
   await import(path.join(REPO, "scripts", "generate-video.js"));
@@ -156,6 +180,7 @@ test(`offline full video path, ${MODE} fixtures`, async (t) => {
     const errs = logs.error.join("\n");
     if (MODE === "short" && errs.includes("Duration invariant violated")) break;
     if (MODE === "long" && (manifestHasFixture() || /Error/.test(errs))) break;
+    if (MODE === "voiceless" && (errs.includes("holding the video and Short PRIVATE") || manifestHasFixture())) break;
     await new Promise((r) => setTimeout(r, 5000));
   }
   const scriptExitCode = process.exitCode ?? 0;
@@ -175,6 +200,17 @@ test(`offline full video path, ${MODE} fixtures`, async (t) => {
     const scenes = fs.readdirSync(BUILD_DIR).filter((f) => /^scene_\d+\.mp4$/.test(f));
     assert.ok(scenes.length >= 30, `rendered scenes exist before the gate (got ${scenes.length})`);
     assert.ok(cfCalls.some((c) => c.kind === "scenes" && c.model.includes("70b")), "main script call observed (mocked 70B)");
+  } else if (MODE === "voiceless") {
+    // The pre-publish voiceless gate must fail the run BEFORE any publishVideo call, while
+    // leaving the private uploads/captions/thumbnails in place (ordering preserved).
+    assert.equal(scriptExitCode, 1, "gate fails the run nonzero");
+    assert.match(errText, /holding the video and Short PRIVATE/, "pre-publish gate threw");
+    const seq = ytCalls.map((c) => c.fn);
+    assert.equal(seq.filter((f) => f === "publishVideo").length, 0, `ZERO publish calls expected, got ${JSON.stringify(seq)}`);
+    assert.ok(seq.filter((f) => f === "uploadVideo").length >= 1, "private upload still happened (ordering preserved)");
+    assert.ok(seq.some((f) => f === "uploadCaptionTrack"), "captions attached before the gate (ordering preserved)");
+    assert.ok(!manifestHasFixture(), "no manifest entry for an unpublished video");
+    assert.match(logs.warn.join("\n"), /have no narration/, "voiceless count still logged");
   } else {
     assert.equal(scriptExitCode, 0, `happy path exits zero; errors: ${errText.slice(0, 800)}`);
     assert.ok(manifestHasFixture(), "manifest records the fixture upload");
