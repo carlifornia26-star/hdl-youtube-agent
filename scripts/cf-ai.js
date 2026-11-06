@@ -17,6 +17,117 @@ class WorkersAIError extends Error {
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// H1 observability (private candidate, 2026-11-06): zero-behavior-change telemetry.
+// Records one entry per SUCCESSFUL Workers AI call (failures are already logged by
+// withRetry; a 429 consumes no neurons). Usage fields come from the API response when
+// the model returns them and stay null otherwise - no estimation here, estimates live
+// in the offline cost model where assumptions can be stated next to the numbers.
+const AI_CALL_LOG = [];
+const AI_CALL_LOG_MAX = 300;
+// Cumulative per-model aggregate - NEVER capped. The raw entry buffer above is capped for
+// memory, but the end-of-run accounting must stay exact even on translation-heavy runs
+// (a 4-run day can mean 6,000+ calls); the aggregate is a few numbers per model.
+const AI_CALL_AGGREGATE = { calls: 0, byModel: {} };
+
+// Exported for offline tests only; production callers stay inside this module.
+export function recordAiCall(model, result) {
+  const usage = result && typeof result === "object" ? result.usage : null;
+  const entry = {
+    at: new Date().toISOString(),
+    model,
+    promptTokens: usage?.prompt_tokens ?? null,
+    completionTokens: usage?.completion_tokens ?? null,
+    totalTokens: usage?.total_tokens ?? null,
+  };
+  if (AI_CALL_LOG.length >= AI_CALL_LOG_MAX) AI_CALL_LOG.shift();
+  AI_CALL_LOG.push(entry);
+  AI_CALL_AGGREGATE.calls++;
+  const agg = (AI_CALL_AGGREGATE.byModel[model] ||= { calls: 0, promptTokens: 0, completionTokens: 0, totalTokens: 0, unknownUsage: 0 });
+  agg.calls++;
+  if (entry.totalTokens == null) {
+    agg.unknownUsage++;
+  } else {
+    agg.promptTokens += entry.promptTokens ?? 0;
+    agg.completionTokens += entry.completionTokens ?? 0;
+    agg.totalTokens += entry.totalTokens;
+  }
+  console.log(
+    `AI usage: ${model} prompt_tokens=${entry.promptTokens ?? "?"} completion_tokens=${entry.completionTokens ?? "?"} total_tokens=${entry.totalTokens ?? "?"}`
+  );
+}
+
+// Test/diagnostic access to the in-memory per-run call log.
+export function getAiCallLog() {
+  return AI_CALL_LOG.slice();
+}
+
+// Aggregated per-model summary for end-of-run logging. Unknown token counts are
+// reported as null, never silently zeroed.
+export function summarizeAiCallLog(entries = AI_CALL_LOG) {
+  const byModel = {};
+  for (const e of entries) {
+    const a = (byModel[e.model] ||= { calls: 0, promptTokens: 0, completionTokens: 0, totalTokens: 0, unknownUsage: 0 });
+    a.calls++;
+    if (e.totalTokens == null) {
+      a.unknownUsage++;
+    } else {
+      a.promptTokens += e.promptTokens ?? 0;
+      a.completionTokens += e.completionTokens ?? 0;
+      a.totalTokens += e.totalTokens;
+    }
+  }
+  return { calls: entries.length, byModel };
+}
+
+export function logAiUsageSummary(log = console.log) {
+  const s = AI_CALL_AGGREGATE;
+  if (!s.calls) {
+    log("AI usage summary: no successful Workers AI calls recorded this run.");
+    return;
+  }
+  log(`AI usage summary: ${s.calls} successful Workers AI call(s) this run:`);
+  for (const [model, a] of Object.entries(s.byModel)) {
+    const usage = a.unknownUsage
+      ? `usage not returned for ${a.unknownUsage}/${a.calls} call(s)`
+      : `prompt=${a.promptTokens} completion=${a.completionTokens} total=${a.totalTokens} tokens`;
+    log(`  ${model}: ${a.calls} call(s), ${usage}`);
+  }
+}
+
+// Word-count helpers (H1): the 2026-11-05 failures showed scene audio averaging
+// 6.0-6.3s where the prompt asks for 40-55 words (~15-22s). Counting words in the
+// ACTUAL generated lines closes that evidence gap without any behavior change.
+export function wordCount(text) {
+  return String(text || "").trim().split(/\s+/).filter(Boolean).length;
+}
+
+export function sceneWordStats(scenes) {
+  const counts = (scenes || []).map((s) => wordCount(s?.line));
+  if (!counts.length) return { scenes: 0, totalWords: 0, mean: 0, median: 0, min: 0, max: 0 };
+  const sorted = [...counts].sort((a, b) => a - b);
+  const total = counts.reduce((a, b) => a + b, 0);
+  const mid = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  return {
+    scenes: counts.length,
+    totalWords: total,
+    mean: total / counts.length,
+    median,
+    min: sorted[0],
+    max: sorted[sorted.length - 1],
+  };
+}
+
+// Pre-synthesis duration projection: total words / measured narration rate (wps).
+// Pure function; the rate is an input so callers must label where it came from
+// (measured on prior runs vs assumed). Used today only for logging.
+export function projectNarrationSeconds(scenes, wordsPerSecond) {
+  if (!(wordsPerSecond > 0)) return null;
+  return sceneWordStats(scenes).totalWords / wordsPerSecond;
+}
+
 async function withRetry(label, fn, attempts = 3) {
   let lastErr;
   for (let i = 1; i <= attempts; i++) {
@@ -57,6 +168,7 @@ async function run(model, body) {
     }
     const json = await res.json();
     if (!json.success) throw new WorkersAIError(`Workers AI ${model} error: ${JSON.stringify(json.errors)}`, { retryable: true });
+    recordAiCall(model, json.result);
     return json.result;
   });
 }

@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pickTodaysBook, pickTodaysBookForChannel } from "./catalog.js";
-import { generateScript, generateBonusScenes, topupScenesForRound, generateTrendExplainer, translateMeta, VIDEO_LANGS, pickTodaysFormat, sanitizeScenePauses, generateCuriosityTitle, generateNumberTitle, pickTitleStyleIndex, pickTodaysStoryMode, shiftStoryMode, getTodaysGroundingItems, getTodaysEvidenceItem, lintUnsupportedClaims } from "./cf-ai.js";
+import { generateScript, generateBonusScenes, topupScenesForRound, generateTrendExplainer, translateMeta, VIDEO_LANGS, pickTodaysFormat, sanitizeScenePauses, generateCuriosityTitle, generateNumberTitle, pickTitleStyleIndex, pickTodaysStoryMode, shiftStoryMode, getTodaysGroundingItems, getTodaysEvidenceItem, lintUnsupportedClaims, sceneWordStats, wordCount, logAiUsageSummary } from "./cf-ai.js";
 import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./assets.js";
 import { loadUsedClipIds, saveUsedClipIds } from "./scene-history.js";
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
@@ -190,6 +190,16 @@ const SHORT_MAX_SECONDS = 65; // limit under either the old 60s rule or the curr
 // scenes if it still lands under this floor — so "above 8 minutes" is enforced directly against
 // measured audio, not against a script-length assumption that can go stale.
 const TARGET_MIN_SECONDS = 8.5 * 60; // 510s — a bit above the 8:00 floor so small variance still clears it
+
+// H1 observability: per-call Workers AI token usage summary prints on EVERY exit path
+// (success, duration-gate failure, claims-lint failure, quota 429) so even failed runs
+// leave a quota-accounting trail in the CI log. Registered at module scope so calls made
+// before script generation (trend tie-in selection) are covered too. Logging only.
+process.on("exit", () => {
+  try {
+    logAiUsageSummary();
+  } catch {}
+});
 // Channel 2 runs in a lighter AI mode (owner asked for less AI use on channel 2, Sep 23):
 // news segment on the cheaper 8B model and only 1 top-up round.
 const LOW_AI_CHANNEL = CHANNEL_ID === "2";
@@ -507,6 +517,14 @@ async function main() {
   // catches anything a future prompt change might introduce, without relying on the model.
   let scenes = sanitizeScenePauses(rawScenes);
   console.log(`Generated ${scenes.length} scenes`);
+  // H1 observability: record the ACTUAL word counts the model wrote vs the 40-55/scene
+  // the prompt instructs. Logging only - no behavior change.
+  {
+    const ws = sceneWordStats(scenes);
+    console.log(
+      `Script word stats (main script): scenes=${ws.scenes} totalWords=${ws.totalWords} mean=${ws.mean.toFixed(1)} median=${ws.median} min=${ws.min} max=${ws.max} words/scene (prompt instructs 40-55)`
+    );
+  }
 
   // Claims lint: heuristic check that every study-flavoured claim or specific number in the
   // script traces to today's verified grounding items (see lintUnsupportedClaims in cf-ai.js).
@@ -695,6 +713,15 @@ async function main() {
     return { ...scene, duration, outPath: built_scene.outPath, clipPath, voicePath: usableVoicePath };
   }
 
+  // H1 observability: word stats on the FINAL pre-build scene list (after news/evidence
+  // insertions), so the logged numbers match what is actually voiced. Logging only.
+  {
+    const ws = sceneWordStats(scenes);
+    console.log(
+      `Script word stats (final pre-build): scenes=${ws.scenes} totalWords=${ws.totalWords} mean=${ws.mean.toFixed(1)} median=${ws.median} min=${ws.min} max=${ws.max} words/scene`
+    );
+  }
+
   const built = [];
   for (let i = 0; i < scenes.length; i++) {
     built.push(await buildOneScene(scenes[i], i));
@@ -702,6 +729,23 @@ async function main() {
   let nextSceneIndex = built.length; // unique per-scene file index for any top-up scenes
   let totalSeconds = built.reduce((a, b) => a + b.duration, 0);
   console.log(`Runtime after main script: ~${Math.round(totalSeconds / 60)} min (${built.length} scenes)`);
+  // H1 observability: measured narration rate from THIS run's real audio (voiced scenes
+  // only; duration includes PADDING_SECONDS, subtracted back out). This is the measured
+  // words/sec that pre-synthesis projection needs - logged, not yet used for decisions.
+  {
+    let voicedWords = 0;
+    let voicedSeconds = 0;
+    for (const b of built) {
+      if (!b.voicePath) continue;
+      voicedWords += wordCount(b.line);
+      voicedSeconds += Math.max(0, b.duration - PADDING_SECONDS);
+    }
+    if (voicedSeconds > 0) {
+      console.log(
+        `Narration rate (measured): ${voicedWords} words over ~${voicedSeconds.toFixed(1)}s of voice = ${(voicedWords / voicedSeconds).toFixed(2)} words/sec across ${built.filter((b) => b.voicePath).length} voiced scenes`
+      );
+    }
+  }
 
   // 2b) Duration top-up: if the measured runtime still lands under the 510s (8.5-minute) floor
   // (TARGET_MIN_SECONDS), generate and build extra scenes and append them, re-measuring after
