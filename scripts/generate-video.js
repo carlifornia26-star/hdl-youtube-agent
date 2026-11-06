@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pickTodaysBook, pickTodaysBookForChannel } from "./catalog.js";
-import { generateScript, generateBonusScenes, topupScenesForRound, generateTrendExplainer, translateMeta, VIDEO_LANGS, pickTodaysFormat, sanitizeScenePauses, generateCuriosityTitle, generateNumberTitle, pickTitleStyleIndex, pickTodaysStoryMode, shiftStoryMode, getTodaysGroundingItems, getTodaysEvidenceItem, lintUnsupportedClaims, sceneWordStats, wordCount, logAiUsageSummary } from "./cf-ai.js";
+import { generateScript, generateBonusScenes, topupScenesForRound, generateTrendExplainer, translateMeta, translateCaptionsLocal, VIDEO_LANGS, pickTodaysFormat, sanitizeScenePauses, generateCuriosityTitle, generateNumberTitle, pickTitleStyleIndex, pickTodaysStoryMode, shiftStoryMode, getTodaysGroundingItems, getTodaysEvidenceItem, lintUnsupportedClaims, sceneWordStats, wordCount, logAiUsageSummary } from "./cf-ai.js";
 import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./assets.js";
 import { loadUsedClipIds, saveUsedClipIds } from "./scene-history.js";
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
@@ -732,6 +732,7 @@ async function main() {
   // H1 observability: measured narration rate from THIS run's real audio (voiced scenes
   // only; duration includes PADDING_SECONDS, subtracted back out). This is the measured
   // words/sec that pre-synthesis projection needs - logged, not yet used for decisions.
+  let measuredNarrationRate = null; // words/sec, from THIS run's real audio - feeds R1 top-up word budgets below
   {
     let voicedWords = 0;
     let voicedSeconds = 0;
@@ -741,8 +742,9 @@ async function main() {
       voicedSeconds += Math.max(0, b.duration - PADDING_SECONDS);
     }
     if (voicedSeconds > 0) {
+      measuredNarrationRate = voicedWords / voicedSeconds;
       console.log(
-        `Narration rate (measured): ${voicedWords} words over ~${voicedSeconds.toFixed(1)}s of voice = ${(voicedWords / voicedSeconds).toFixed(2)} words/sec across ${built.filter((b) => b.voicePath).length} voiced scenes`
+        `Narration rate (measured): ${voicedWords} words over ~${voicedSeconds.toFixed(1)}s of voice = ${measuredNarrationRate.toFixed(2)} words/sec across ${built.filter((b) => b.voicePath).length} voiced scenes`
       );
     }
   }
@@ -760,14 +762,14 @@ async function main() {
     // narration averages 6.3-7.0s/scene, not the 15-22s the prompt asks for). Same one AI call
     // per round - no extra quota. Sizing lives in cf-ai.js's topupScenesForRound so the offline
     // fixture test exercises the real production function.
-    const { avgSceneSeconds, shortfall, request: scenesThisRound } = topupScenesForRound(
+    const { avgSceneSeconds, shortfall, request: scenesThisRound, wordBudget } = topupScenesForRound(
       built.map((b) => b.duration),
       totalSeconds,
-      { targetSeconds: TARGET_MIN_SECONDS, roundFloor: TOPUP_SCENES_PER_ROUND, roundCap: TOPUP_MAX_SCENES_PER_ROUND }
+      { targetSeconds: TARGET_MIN_SECONDS, roundFloor: TOPUP_SCENES_PER_ROUND, roundCap: TOPUP_MAX_SCENES_PER_ROUND, narrationRate: measuredNarrationRate }
     );
     console.log(
       `Runtime ~${Math.round(totalSeconds / 60)} min is under the target by ~${Math.round(shortfall)}s ` +
-        `(avg ${avgSceneSeconds.toFixed(1)}s/scene), generating ${scenesThisRound} bonus scenes (round ${topupRound}/${MAX_TOPUP_ROUNDS})...`
+        `(avg ${avgSceneSeconds.toFixed(1)}s/scene), generating ${scenesThisRound} bonus scenes with word budget ${wordBudget} (round ${topupRound}/${MAX_TOPUP_ROUNDS})...`
     );
     let bonusScenes;
     try {
@@ -776,13 +778,15 @@ async function main() {
       // this, each top-up round only ever compared its own 10 scenes to each other, which is
       // why separate rounds could open with near-identical lines (see cf-ai.js countRepetition).
       const existingLines = built.map((s) => s.line);
-      bonusScenes = sanitizeScenePauses(await generateBonusScenes(book, scenesThisRound, existingLines));
+      bonusScenes = sanitizeScenePauses(await generateBonusScenes(book, scenesThisRound, existingLines, { wordBudget }));
       // Truncation check (owner review 2026-11-03): if the model returned fewer scenes than
       // requested, say so with real numbers - silently accepting a short round is how the
       // undershoot hid before.
       if (bonusScenes.length < scenesThisRound) {
         console.warn(`Top-up round ${topupRound}: requested ${scenesThisRound} scenes, model returned ${bonusScenes.length} - continuing with what was returned.`);
       }
+      const deliveredWords = bonusScenes.reduce((a, s) => a + wordCount(s.line), 0);
+      console.log(`Top-up round ${topupRound}: word budget ${wordBudget}, model delivered ${deliveredWords} words across ${bonusScenes.length} scenes.`);
     } catch (e) {
       console.warn("Bonus scene generation failed, stopping top-up early:", e.message);
       break;
@@ -1447,31 +1451,44 @@ async function main() {
   // just the first shortSceneCount of them, re-timed to start at 0) instead of re-calling
   // translateMeta for lines it already has.
   const translatedCaptionLines = {};
+  // Explicit per-language caption-track status. A failed language is a RECOVERABLE,
+  // VISIBLE failure - recorded here, written to captions-status.json (merged into the
+  // automation-health record by the workflow) and summarized in the run log. It is
+  // never silently absorbed: no English-as-translation, no partial track, and the
+  // status file says exactly which languages the video is missing so a later repair
+  // run can re-attempt just those tracks.
+  const captionStatus = {};
   const captionLangsStart = Date.now();
   let captionLangsDone = 0;
   for (const lang of VIDEO_LANGS) {
     const ytLang = YT_LOCALE_MAP[lang] ?? lang;
-    if (!localizations[ytLang]) continue;
+    if (!localizations[ytLang]) { captionStatus[lang] = "skipped:no-localization"; continue; }
     try {
-      // Translate each scene line individually for caption timing accuracy, up to 5 scenes
-      // in flight at once (order preserved) instead of one at a time — was the main reason a
-      // run could silently burn 20+ minutes here with nothing in the log.
-      const lines = await mapWithConcurrency(built, 5, async (scene) => {
-        const t = await translateMeta(scene.line, "", lang);
-        return t.title;
-      });
+      // Caption tracks translate LOCALLY via Argos (translateCaptionsLocal) - zero neurons,
+      // all 15 languages preserved. Was: one m2m100 Workers AI call per scene line (~2,300N
+      // of the shared 10kN/day free allowance per translating channel per run). Empty lines
+      // pass through untranslated, same rule as the m2m100 path. A language whose engine
+      // output stays garbled after retries FAILS THE WHOLE TRACK (throws) - the video
+      // keeps its other tracks and the failure is explicit, never a hidden English or
+      // corrupt track.
+      const lines = await translateCaptionsLocal(built.map((b) => b.line), lang);
       translatedCaptionLines[lang] = lines;
       const srt = buildSrt(built, lines);
       const srtPath = path.join(BUILD_DIR, `captions_${lang}.srt`);
       await fs.writeFile(srtPath, srt);
       await uploadCaptionTrack({ videoId: uploaded.id, language: ytLang, srtPath, name: lang });
+      captionStatus[lang] = "ok";
     } catch (e) {
-      console.warn(`Caption upload failed for ${lang}, skipping:`, e.message);
+      captionStatus[lang] = `failed:${e.message.slice(0, 200)}`;
+      console.warn(`Caption track FAILED for ${lang} (recoverable, recorded in captions-status.json):`, e.message);
     }
     captionLangsDone++;
     const elapsedMin = ((Date.now() - captionLangsStart) / 60000).toFixed(1);
     console.log(`Captions: ${captionLangsDone}/${VIDEO_LANGS.length} languages done (${elapsedMin} min elapsed).`);
   }
+  const captionFailed1 = Object.entries(captionStatus).filter(([, v]) => v.startsWith("failed"));
+  console.log(`CAPTION STATUS (pass 1): ${Object.values(captionStatus).filter((v) => v === "ok").length}/${Object.keys(captionStatus).length} translated tracks uploaded` +
+    (captionFailed1.length ? `; failed, will retry before publish: ${captionFailed1.map(([l]) => l).join(", ")}` : "; no failures"));
 
   // 7b) Short captions, part 1 — English (part of the Short's baseline setup) plus the first
   // SHORT_CAPTIONS_BEFORE_PUBLISH translated languages. Logs from real runs show quota reliably
@@ -1514,6 +1531,50 @@ async function main() {
     console.log(
       `Short captions: ${Math.min(SHORT_CAPTIONS_BEFORE_PUBLISH, VIDEO_LANGS.length)}/${VIDEO_LANGS.length} languages done before publish.`
     );
+  }
+
+  // 7d) Caption retry pass — the video is still PRIVATE here (publish is step 8), so any
+  // language whose track failed in pass 1 gets a second attempt now, minutes later and on a
+  // fresh engine process (Argos garbles are nondeterministic and correlate within a process).
+  // A track that succeeds here uploads exactly like a pass-1 track. Only languages still
+  // failing after this pass are recorded as failed in captions-status.json - explicit and
+  // recoverable (a later repair can re-upload just that track), never a silent English or
+  // partial track. Publication is NOT blocked by a missing translated track: the owner's
+  // 2026-11-06 instruction is to make uploads work, and the failure is visible in the health
+  // record - but it is also never CLAIMED as all-15 success.
+  for (const [lang, status] of Object.entries(captionStatus)) {
+    if (!status.startsWith("failed")) continue;
+    const ytLang = YT_LOCALE_MAP[lang] ?? lang;
+    try {
+      console.log(`Retrying failed caption track for ${lang} (fresh engine, video still private)...`);
+      const lines = await translateCaptionsLocal(built.map((b) => b.line), lang);
+      translatedCaptionLines[lang] = lines;
+      const srt = buildSrt(built, lines);
+      const srtPath = path.join(BUILD_DIR, `captions_${lang}.srt`);
+      await fs.writeFile(srtPath, srt);
+      await uploadCaptionTrack({ videoId: uploaded.id, language: ytLang, srtPath, name: lang });
+      captionStatus[lang] = "ok:retry-pass";
+      console.log(`Caption retry for ${lang} succeeded.`);
+    } catch (e) {
+      captionStatus[lang] = `failed:after-retry:${e.message.slice(0, 160)}`;
+      console.warn(`Caption retry for ${lang} failed (recoverable, recorded):`, e.message);
+    }
+  }
+  const captionFailedFinal = Object.entries(captionStatus).filter(([, v]) => v.startsWith("failed"));
+  const captionOkFinal = Object.values(captionStatus).filter((v) => v.startsWith("ok")).length;
+  console.log(`CAPTION STATUS (final): ${captionOkFinal}/${Object.keys(captionStatus).length} translated tracks uploaded` +
+    (captionFailedFinal.length ? `; STILL MISSING: ${captionFailedFinal.map(([l]) => l).join(", ")} - explicit, recoverable, NOT all-15` : "; all 15 present"));
+  try {
+    await fs.writeFile("captions-status.json", JSON.stringify({
+      videoId: uploaded.id,
+      engine: "argos-local",
+      generatedAt: new Date().toISOString(),
+      expectedLanguages: VIDEO_LANGS,
+      allLanguagesPresent: captionFailedFinal.length === 0,
+      status: captionStatus,
+    }, null, 2) + "\n");
+  } catch (e) {
+    console.warn("Could not write captions-status.json:", e.message);
   }
 
   // 8) Publish — flip both videos from private to public now that thumbnail, playlist, the main
