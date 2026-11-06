@@ -1,6 +1,28 @@
 {
   "videos": [
     {
+      "video_id": "LxF9CQWuC4U",
+      "short_video_id": "9PAKq7ht4GU",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "What Modern Pet Care Looks Like Around Diwali",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/LxF9CQWuC4U/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Diwali",
+      "trend_in_title": true,
+      "news_headline": "Norwich holds first Diwali recognition and celebration",
+      "script_format": "stat-hook",
+      "caption_style": "punchy-duo",
+      "story_mode": "comparison",
+      "evidence": null,
+      "claims_flagged": 0,
+      "duration_seconds": 638,
+      "duration_target_met": true,
+      "published_at": "2026-11-06T08:29:35.606Z"
+    },
+    {
       "video_id": "XzL5E2L1Nqo",
       "short_video_id": "ZvGf49JX5MU",
       "book_slug": "art-of-joy",
@@ -831,5 +853,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-11-05T08:18:40.951Z"
+  "updated_at": "2026-11-06T08:29:35.606Z"
 }
