@@ -1176,9 +1176,7 @@ async function main() {
   // public. This keeps YouTube from ever indexing a bare, caption-less, auto-thumbnail
   // version of the video. See publishVideo() in youtube.js for why auto-dubbing specifically
   // can't be part of this gate.
-  const scheduledPublishAt = computeScheduledPublishAt();
   const uploaded = await uploadVideo({
-    publishAt: scheduledPublishAt,
     videoPath: uploadPath,
     title: enTitle,
     description: enDescription,
@@ -1378,8 +1376,7 @@ async function main() {
       let uploadedShort;
       try {
         uploadedShort = await uploadVideo({
-          publishAt: scheduledPublishAt,
-          videoPath: shortUploadPath,
+                videoPath: shortUploadPath,
           title: shortTitle,
           description: shortDescription,
           tags: shortTags,
@@ -1402,8 +1399,7 @@ async function main() {
           localizations: {},
           categoryId: book.categoryId || FALLBACK_CATEGORY_ID,
           privacyStatus: "private",
-          publishAt: scheduledPublishAt,
-          location: VIDEO_LOCATION_DESCRIPTION ? { description: VIDEO_LOCATION_DESCRIPTION } : undefined,
+                location: VIDEO_LOCATION_DESCRIPTION ? { description: VIDEO_LOCATION_DESCRIPTION } : undefined,
         });
         console.log("Short uploaded English-only after localizations retry.");
       }
@@ -1437,11 +1433,13 @@ async function main() {
   // never take down the run — the video has already uploaded successfully by this point.
   await new Promise((r) => setTimeout(r, 5000));
 
+  let englishCaptionOk = false;
   const enSrt = buildSrt(built, built.map((b) => b.line));
   const enSrtPath = path.join(BUILD_DIR, "captions_en.srt");
   await fs.writeFile(enSrtPath, enSrt);
   try {
     await uploadCaptionTrack({ videoId: uploaded.id, language: "en", srtPath: enSrtPath, name: "English" });
+    englishCaptionOk = true;
   } catch (e) {
     console.warn("English caption upload failed:", e.message);
   }
@@ -1462,7 +1460,6 @@ async function main() {
   let captionLangsDone = 0;
   for (const lang of VIDEO_LANGS) {
     const ytLang = YT_LOCALE_MAP[lang] ?? lang;
-    if (!localizations[ytLang]) { captionStatus[lang] = "skipped:no-localization"; continue; }
     try {
       // Caption tracks translate LOCALLY via Argos (translateCaptionsLocal) - zero neurons,
       // all 15 languages preserved. Was: one m2m100 Workers AI call per scene line (~2,300N
@@ -1503,6 +1500,7 @@ async function main() {
   const SHORT_CAPTION_LANGS = ["es", "pt", "hi"];
   const SHORT_CAPTIONS_BEFORE_PUBLISH = SHORT_CAPTION_LANGS.length;
   let shortBuiltScenes = [];
+  const shortCaptionStatus = {};
   if (shortVideoId && shortSceneCount > 0) {
     shortBuiltScenes = built.slice(0, shortSceneCount);
 
@@ -1511,6 +1509,7 @@ async function main() {
     await fs.writeFile(shortEnSrtPath, shortEnSrt);
     try {
       await uploadCaptionTrack({ videoId: shortVideoId, language: "en", srtPath: shortEnSrtPath, name: "English" });
+      shortCaptionStatus.en = "ok";
     } catch (e) {
       console.warn("Short English caption upload failed:", e.message);
     }
@@ -1524,6 +1523,7 @@ async function main() {
         const shortSrtPath = path.join(BUILD_DIR, `captions_short_${lang}.srt`);
         await fs.writeFile(shortSrtPath, shortSrt);
         await uploadCaptionTrack({ videoId: shortVideoId, language: ytLang, srtPath: shortSrtPath, name: lang });
+        shortCaptionStatus[lang] = "ok";
       } catch (e) {
         console.warn(`Short caption upload failed for ${lang}, skipping:`, e.message);
       }
@@ -1539,11 +1539,10 @@ async function main() {
   // A track that succeeds here uploads exactly like a pass-1 track. Only languages still
   // failing after this pass are recorded as failed in captions-status.json - explicit and
   // recoverable (a later repair can re-upload just that track), never a silent English or
-  // partial track. Publication is NOT blocked by a missing translated track: the owner's
-  // 2026-11-06 instruction is to make uploads work, and the failure is visible in the health
-  // record - but it is also never CLAIMED as all-15 success.
+  // partial track. Publication is blocked until every required main and Short track is present.
+  // Uploads have no publishAt: failure leaves both videos private with no active schedule.
   for (const [lang, status] of Object.entries(captionStatus)) {
-    if (!status.startsWith("failed")) continue;
+    if (status.startsWith("ok")) continue;
     const ytLang = YT_LOCALE_MAP[lang] ?? lang;
     try {
       console.log(`Retrying failed caption track for ${lang} (fresh engine, video still private)...`);
@@ -1560,7 +1559,27 @@ async function main() {
       console.warn(`Caption retry for ${lang} failed (recoverable, recorded):`, e.message);
     }
   }
-  const captionFailedFinal = Object.entries(captionStatus).filter(([, v]) => v.startsWith("failed"));
+  // Retry required baseline tracks after main translations have had their retry pass.
+  if (!englishCaptionOk) {
+    try {
+      await uploadCaptionTrack({ videoId: uploaded.id, language: "en", srtPath: enSrtPath, name: "English" });
+      englishCaptionOk = true;
+    } catch (e) { console.warn("English caption retry failed:", e.message); }
+  }
+  if (shortVideoId) {
+    for (const lang of ["en", ...SHORT_CAPTION_LANGS]) {
+      if (shortCaptionStatus[lang] === "ok") continue;
+      try {
+        const lines = lang === "en" ? shortBuiltScenes.map((b) => b.line) : translatedCaptionLines[lang]?.slice(0, shortSceneCount);
+        if (!lines) throw new Error(`No translated lines for ${lang}`);
+        const srtPath = path.join(BUILD_DIR, `captions_short_${lang}.srt`);
+        await fs.writeFile(srtPath, buildSrt(shortBuiltScenes, lines));
+        await uploadCaptionTrack({ videoId: shortVideoId, language: YT_LOCALE_MAP[lang] ?? lang, srtPath, name: lang });
+        shortCaptionStatus[lang] = "ok";
+      } catch (e) { shortCaptionStatus[lang] = `failed:${e.message.slice(0, 160)}`; }
+    }
+  }
+  const captionFailedFinal = VIDEO_LANGS.filter((lang) => !captionStatus[lang]?.startsWith("ok")).map((lang) => [lang, captionStatus[lang] || "missing"]);
   const captionOkFinal = Object.values(captionStatus).filter((v) => v.startsWith("ok")).length;
   console.log(`CAPTION STATUS (final): ${captionOkFinal}/${Object.keys(captionStatus).length} translated tracks uploaded` +
     (captionFailedFinal.length ? `; STILL MISSING: ${captionFailedFinal.map(([l]) => l).join(", ")} - explicit, recoverable, NOT all-15` : "; all 15 present"));
@@ -1570,7 +1589,10 @@ async function main() {
       engine: "argos-local",
       generatedAt: new Date().toISOString(),
       expectedLanguages: VIDEO_LANGS,
-      allLanguagesPresent: captionFailedFinal.length === 0,
+      allLanguagesPresent: englishCaptionOk && captionFailedFinal.length === 0,
+      englishCaptionOk,
+      shortVideoId,
+      shortCaptionStatus,
       status: captionStatus,
     }, null, 2) + "\n");
   } catch (e) {
@@ -1607,6 +1629,18 @@ async function main() {
     );
   }
 
+  // CAPTION_PUBLICATION_GATE_BEGIN
+  const missingMainCaptions = [
+    ...(!englishCaptionOk ? ["en"] : []),
+    ...VIDEO_LANGS.filter((lang) => !captionStatus[lang]?.startsWith("ok")),
+  ];
+  const missingShortCaptions = shortVideoId
+    ? ["en", ...SHORT_CAPTION_LANGS].filter((lang) => shortCaptionStatus[lang] !== "ok") : [];
+  if (missingMainCaptions.length || missingShortCaptions.length) {
+    throw new Error(`Caption publication gate: main missing [${missingMainCaptions.join(", ")}]; Short missing [${missingShortCaptions.join(", ")}]. Both held PRIVATE with no publishAt. Repair missing tracks before publication.`);
+  }
+  // CAPTION_PUBLICATION_GATE_END
+
   const publishAt = computeScheduledPublishAt();
   await publishVideo({ videoId: uploaded.id, publishAt });
   if (shortVideoId) {
@@ -1627,6 +1661,7 @@ async function main() {
         const shortSrtPath = path.join(BUILD_DIR, `captions_short_${lang}.srt`);
         await fs.writeFile(shortSrtPath, shortSrt);
         await uploadCaptionTrack({ videoId: shortVideoId, language: ytLang, srtPath: shortSrtPath, name: lang });
+        shortCaptionStatus[lang] = "ok";
       } catch (e) {
         console.warn(`Short caption upload failed for ${lang}, skipping (video already public):`, e.message);
       }
