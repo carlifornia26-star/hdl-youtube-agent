@@ -30,7 +30,7 @@ on:
     # one plain UTC cron per channel is now sufficient.
     - cron: "23 1 * * *"  # Channel 4 trigger — 01:23 UTC
     - cron: "23 3 * * *"  # Channel 1 trigger — 03:23 UTC
-    # Channel 2 trigger — resumed, English-only (translations off for channel 2, see SKIP_TRANSLATIONS below).
+    # Channel 2 trigger — resumed. Translations restored 2026-11-06 (local Argos captions, zero neurons).
     - cron: "23 5 * * *"  # Channel 2 trigger — 05:23 UTC
     - cron: "23 7 * * *"  # Channel 3 trigger — 07:23 UTC
 
@@ -177,6 +177,25 @@ jobs:
           set -euo pipefail
           npm ci
 
+      # Caption tracks translate locally via Argos (scripts/translate-captions.py) instead of
+      # Workers AI m2m100 - zero neurons, so all 15 languages fit the free daily allowance on
+      # every channel including channel 2. Models are cached across runs (~1.5GB for 15 pairs).
+      - name: Cache Argos translation models
+        if: steps.resolve.outputs.proceed == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/argos-translate
+          key: argos-models-en15-v1
+
+      - name: Install Argos translation engine + 15 language pairs
+        if: steps.resolve.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          pip install --user argostranslate
+          for lang in es fr pt de hi ar id sw ja ru ko zh it tr vi; do
+            argospm install "translate-en_${lang}" || echo "argospm install failed for ${lang} (that language's captions will be skipped with a warning)"
+          done
+
       - name: Validate current weekly keyword file
         if: steps.resolve.outputs.proceed == 'true'
         run: |
@@ -293,8 +312,10 @@ jobs:
 
           DRY_RUN_PRIVATE: ${{ vars.DRY_RUN_PRIVATE }}
           CHANNEL_ID: ${{ steps.resolve.outputs.channel }}
-          # Channel 2 only: no translations (saves Cloudflare AI quota). Empty for other channels.
-          SKIP_TRANSLATIONS: ${{ steps.resolve.outputs.channel == '2' && 'true' || '' }}
+          # Translations restored on all channels 2026-11-06: caption tracks now translate
+          # locally via Argos (zero Workers AI neurons), so channel 2 no longer needs to run
+          # English-only to protect the shared free allowance.
+          SKIP_TRANSLATIONS: ""
           YT_VIDEO_LOCATION_DESCRIPTION: ${{ vars.YT_VIDEO_LOCATION_DESCRIPTION }}
           PUBLISH_HOUR_UTC: ${{ steps.resolve.outputs.publish_hour_utc }}
           PUBLISH_MINUTE_UTC: ${{ steps.resolve.outputs.publish_minute_utc }}
@@ -383,6 +404,14 @@ jobs:
             );
           }
 
+          let captionTracks = null;
+
+          try {
+            captionTracks = JSON.parse(
+              fs.readFileSync("captions-status.json", "utf8")
+            );
+          } catch {}
+
           let commitSha = "";
 
           try {
@@ -397,6 +426,7 @@ jobs:
             status: jobStatus,
             checkedAt: new Date().toISOString(),
             repositoryCommitSha: commitSha,
+            captionTracks,
             keywordFile: {
               updatedAt: keywordData?.updatedAt || null,
               week:
