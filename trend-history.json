@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-11-06",
+      "channel": "3",
+      "term": "Petrol Prices",
+      "headline": null
+    },
+    {
+      "date": "2026-11-06",
       "channel": "2",
       "term": "Cybertruck",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "3",
       "term": "Coca-cola",
       "headline": null
-    },
-    {
-      "date": "2026-10-08",
-      "channel": "2",
-      "term": "Google Maps Live Fuel Prices",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-06T13:29:58.069Z"
+  "updated_at": "2026-11-06T15:12:09.446Z"
 }
