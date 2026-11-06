@@ -345,11 +345,18 @@ function findOverusedWord(scenes) {
 // runs 41454175575 / 41489187269) show real narration averages 6.3-7.0s/scene, not the 15-22s
 // the prompt asks for. avgFloor 6s (was effectively 8 via the old inline clamp, which
 // under-requested scenes in exactly that production regime); 25% safety margin on top.
-export function topupScenesForRound(builtDurations, totalSeconds, { targetSeconds = 510, roundFloor = 10, roundCap = 30, avgFloor = 6 } = {}) {
+export function topupScenesForRound(builtDurations, totalSeconds, { targetSeconds = 510, roundFloor = 10, roundCap = 30, avgFloor = 6, narrationRate = null } = {}) {
   const avgSceneSeconds = builtDurations.length ? builtDurations.reduce((a, b) => a + b, 0) / builtDurations.length : 15;
   const shortfall = targetSeconds - totalSeconds;
   const request = Math.min(roundCap, Math.max(roundFloor, Math.ceil((shortfall / Math.max(avgFloor, avgSceneSeconds)) * 1.25)));
-  return { avgSceneSeconds, shortfall, request };
+  // R1: turn the remaining-seconds gap into an explicit WORD budget for the top-up prompt.
+  // Scenes are only as long as their narration, and production shows brief lines are the
+  // failure shape (mean 16-24 words vs 40-55 instructed), so scene count alone under-closes
+  // the gap. Uses the run's MEASURED narration rate when available; fallback 2.4 words/sec
+  // is the mid of the measured 2.26-2.61 range (2026-11-06 runs, H1 telemetry).
+  const rate = narrationRate && narrationRate > 0 ? narrationRate : 2.4;
+  const wordBudget = Math.ceil(shortfall * rate * 1.15);
+  return { avgSceneSeconds, shortfall, request, wordBudget };
 }
 // Output-token budget for a bonus-scene call scales with the ask: N scenes need roughly
 // N x ~97 tokens (75 line + 12 visual + ~10 JSON) plus wrapper - a flat 3000 silently truncated
@@ -1148,7 +1155,7 @@ Strict rules:
 - VOCABULARY VARIETY RULE — when the book's core subject is a single common noun (e.g. "pet," "AI," "Bitcoin"), do not default to that exact same word in nearly every scene — it reads as monotonous and repetitive even though it's technically on-topic. Rotate between the plain term, natural synonyms, more specific references (a named type, a concrete example), and pronouns where the meaning is already clear from context, the same way a human writer would vary their word choice across a 10-minute piece.
 - Do not use quotation marks of any kind inside a line's text — rephrase instead of quoting anything.
 - Mention the book's exact title, "${book.title}", exactly ONCE in the whole script — only in the final closing scene. Everywhere else, refer to it as "the book," "this guide," or similar. Do not say "High Definition Learning Group" anywhere except that same final scene.
-- Produce between ${SCRIPT_MIN_SCENES} and ${SCRIPT_MAX_SCENES} scenes — more, shorter scenes than a typical script, so the visuals cut more often. Each scene's line is 3-4 sentences (roughly 40-55 words) written to be spoken naturally in about 15-22 seconds — the total script across all scenes should land around 2000-2300 words so the finished narration runs close to 10 minutes.
+- Produce between ${SCRIPT_MIN_SCENES} and ${SCRIPT_MAX_SCENES} scenes — more, shorter scenes than a typical script, so the visuals cut more often. Each scene's line is 4-6 full sentences and MUST be at least 45 words: count your words, because a short 2-3 sentence scene fails this requirement. The total script across all scenes MUST reach at least 1800 words — a script under that floor produces a video too short to publish, so do not wrap up early.
 - RETENTION RULE — no two scenes may start the same way or make the same point twice. Every single scene must open with a different sentence structure than every other scene: do not let more than one scene begin with the same few words (e.g. never open two scenes with "The algorithm is...", "You'll learn how to...", "But to do so, you need...", or any other repeated template). If you notice yourself about to reuse an opening or restate a point already made earlier in the script, rewrite it as a genuinely new angle, a new example, or skip it.
 - Avoid vague marketing filler that could apply to literally any topic — phrases like "a powerful tool," "a complex system," "a comprehensive approach," "valuable insights," "the ever-changing landscape," "take control of," "unlock your potential." Every line should say something SPECIFIC to this exact book's angle — a concrete scenario, a specific kind of person, a specific consequence — not an abstract claim that could be pasted into a script about any other topic.
 - For every scene, also write a "visual" field: a short, concrete, literally-filmable phrase (3-8 words) describing exactly what should be shown on screen while that line is spoken, matching the line's actual content. Only describe things a camera could actually film — a specific kind of person doing a specific action in a specific setting (e.g. "exhausted creator staring at laptop at night", "crowded city street rush hour", "person smiling reading book on couch"). Never describe an abstract concept, a graph, an icon, or anything not physically filmable. Vary the people/settings/actions across scenes — do not describe the same visual twice.
@@ -1221,7 +1228,11 @@ function summarizeCoveredOpenings(existingLines) {
 // from repeating ideas/openings already used, and (b) gets hard-checked against them afterward
 // via requestSceneScript's priorLines param — see countRepetition in this file for why that
 // cross-round check matters (each top-up round used to be checked only against itself).
-export async function generateBonusScenes(book, count, existingLines = []) {
+// Pure prompt builder, exported so the offline fixture test exercises the exact production
+// prompt text. wordBudget (R1): when the top-up loop passes the measured word target, the
+// length rule becomes an explicit countable requirement instead of a range the model
+// consistently under-delivers (2026-11-06: mean 16-24 words/scene vs 40-55 instructed).
+export function buildBonusScenesPrompt(book, count, existingLines = [], { wordBudget = null } = {}) {
   const coveredBlock = existingLines.length
     ? `\n\nALREADY COVERED in this video (main script + any earlier top-up scenes) — do not reuse these openings or make the same point again, even reworded:\n${summarizeCoveredOpenings(existingLines)}`
     : "";
@@ -1235,7 +1246,7 @@ Strict rules:
 - Do NOT include a call to action or say where to read/buy it — that's already covered elsewhere.
 - Do NOT restate that it's available in English only — that's already covered elsewhere.
 - Do NOT use quotation marks of any kind inside a line's text.
-- Each scene's line is 3-4 sentences (roughly 40-55 words), written to be spoken naturally in about 15-22 seconds.
+${wordBudget ? `- WORD BUDGET RULE - each scene's line is 4-6 full sentences and MUST be at least 45 words: count your words, because a short 2-3 sentence scene fails this requirement. Together these ${count} scenes MUST total AT LEAST ${wordBudget} words of spoken narration.` : `- Each scene's line is 3-4 sentences (roughly 40-55 words), written to be spoken naturally in about 15-22 seconds.`}
 - Produce exactly ${count} scenes building curiosity about who this book helps, what problem it solves, and why it matters right now — varied angles, no two scenes making the same point.
 - RETENTION RULE — no two scenes may start the same way or make the same point twice, and avoid vague filler ("a powerful tool," "a complex system," "valuable insights," "the ever-changing landscape") in favor of specific scenarios and consequences.
 - VOCABULARY VARIETY RULE — if the book's core subject is a single common noun (e.g. "pet," "AI," "Bitcoin"), don't default to that exact word in nearly every one of these scenes — rotate it with natural synonyms, more specific references, and pronouns where the meaning is already clear.
@@ -1244,6 +1255,11 @@ Strict rules:
 - Every scene needs a concrete, sensory detail (not an abstract claim) and should escalate slightly past the previous scene's stakes rather than repeating the same weight of point. Use direct "you" language addressing the viewer. Vary sentence length within each scene rather than uniform-length sentences. At least one of these scenes should plant a specific, unresolved curiosity hook without revealing the book's actual chapters/frameworks/conclusions.
 - DELIVERY — alternate sharp/authoritative lines with plain, human ones; don't stay in constant expert mode. If space allows across these ${count} scenes: one reversal ("you'd think X, but actually Y"), one rhetorical question, one callback-style reference to an earlier idea, one named pattern, one micro-scene instead of a flat claim, a brief self-correction beat, a stakes-forward line, a false-summary-then-twist, a named contrast pair, one single-sentence one-liner scene, an identity-address line, or a scale-contrast line. Never force more than one or two of these into a single scene.`;
 
+  return prompt;
+}
+
+export async function generateBonusScenes(book, count, existingLines = [], { wordBudget = null } = {}) {
+  const prompt = buildBonusScenesPrompt(book, count, existingLines, { wordBudget });
   const maxTokens = topupMaxTokens(count);
   return requestSceneScript(prompt, count, count, maxTokens, existingLines, "never", CHEAP_SCRIPT_MODEL);
 }
@@ -1300,6 +1316,44 @@ const YT_DESCRIPTION_MAX = 5000;
 // real translation.
 function looksLikeRunawayTranslation(source, translated) {
   return translated.length > Math.max(200, source.length * 3);
+}
+
+// R3 (2026-11-06, caption-cost remedy): caption TRACKS translate locally via Argos Translate
+// (scripts/translate-captions.py, open-source, runner CPU) instead of per-line m2m100 Workers AI
+// calls. Measured on production telemetry: m2m100 captions were ~2,300N of the shared 10,000N/day
+// free allowance per translating channel per run - the dominant cost. Argos preserves all 15
+// languages with real translations at zero neurons. One batched process call per language; empty
+// lines pass through untranslated, same rule as the m2m100 path. Throws on engine failure - the
+// caller's existing per-language try/catch skips that language with a warning (captions never
+// take down a run), and no neurons are burned as fallback by design.
+export async function translateCaptionsLocal(lines, targetLang) {
+  const { spawn } = await import("node:child_process");
+  const scriptPath = new URL("./translate-captions.py", import.meta.url);
+  const payload = JSON.stringify({ lines, lang: targetLang });
+  const { stdout, stderr } = await new Promise((resolve, reject) => {
+    const proc = spawn("python3", [scriptPath.pathname], { maxBuffer: 32 * 1024 * 1024 });
+    let out = "";
+    let err = "";
+    proc.stdout.on("data", (d) => (out += d));
+    proc.stderr.on("data", (d) => (err += d));
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0) resolve({ stdout: out, stderr: err });
+      else {
+        // Exit 2 = a line stayed garbled/untranslated after retries: this TRACK fails.
+        // No English-as-translation and no partial track - the caller records the
+        // language as an explicit recoverable failure in the caption status.
+        let detail = err.trim().split("\n").pop() || "";
+        reject(new Error(`translate-captions.py exited ${code} for ${targetLang}: ${detail.slice(0, 300)}`));
+      }
+    });
+    proc.stdin.end(payload);
+  });
+  const parsed = JSON.parse(stdout);
+  if (!Array.isArray(parsed.lines) || parsed.lines.length !== lines.length) {
+    throw new Error(`translate-captions.py returned ${parsed.lines?.length ?? "no"} lines for ${lines.length} inputs`);
+  }
+  return parsed.lines;
 }
 
 export async function translateMeta(title, description, targetLang) {
@@ -1714,4 +1768,4 @@ Answer as JSON: choice = the number of the term (1-${candidates.length}) or 0 fo
   const fit = Number(parsed.fit);
   if (!Number.isInteger(choice) || choice < 1 || choice > candidates.length) return null;
   return { index: choice - 1, fit: Number.isFinite(fit) ? fit : 0, tieIn: String(parsed.tie_in || "").trim().slice(0, 240) };
-}
+                                                                   }
