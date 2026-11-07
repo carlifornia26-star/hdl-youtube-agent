@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-11-07",
+      "channel": "2",
+      "term": "Stock Market Today",
+      "headline": null
+    },
+    {
+      "date": "2026-11-07",
       "channel": "1",
       "term": "Channel 7",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "2",
       "term": "Singapore Pollution Index High 2026",
       "headline": null
-    },
-    {
-      "date": "2026-10-09",
-      "channel": "1",
-      "term": "Bet9ja",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-07T10:30:02.047Z"
+  "updated_at": "2026-11-07T11:48:58.417Z"
 }
