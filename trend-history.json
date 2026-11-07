@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-11-07",
+      "channel": "1",
+      "term": "Channel 7",
+      "headline": null
+    },
+    {
+      "date": "2026-11-07",
       "channel": "4",
       "term": "London Underground",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "1",
       "term": "Bet9ja",
       "headline": null
-    },
-    {
-      "date": "2026-10-09",
-      "channel": "4",
-      "term": "Game",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-07T07:24:20.661Z"
+  "updated_at": "2026-11-07T10:30:02.047Z"
 }
