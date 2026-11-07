@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-11-07",
+      "channel": "4",
+      "term": "London Underground",
+      "headline": null
+    },
+    {
       "date": "2026-11-06",
       "channel": "3",
       "term": "Petrol Prices",
@@ -473,13 +479,7 @@
       "channel": "4",
       "term": "Game",
       "headline": null
-    },
-    {
-      "date": "2026-10-08",
-      "channel": "3",
-      "term": "Coca-cola",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-06T15:12:09.446Z"
+  "updated_at": "2026-11-07T07:24:20.661Z"
 }

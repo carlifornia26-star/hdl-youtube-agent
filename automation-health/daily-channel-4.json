@@ -1,14 +1,62 @@
 {
   "channel": "4",
-  "status": "success",
-  "checkedAt": "2026-11-06T08:30:19.493Z",
-  "repositoryCommitSha": "b255f223d5081798b12ac306120bbdb9d08c42d0",
+  "status": "failure",
+  "checkedAt": "2026-11-07T07:55:45.786Z",
+  "repositoryCommitSha": "99770fa5e70d9076a4aa89a3065f2e88789c9538",
+  "captionTracks": {
+    "videoId": "gL5TS0mk6Mo",
+    "engine": "argos-local",
+    "generatedAt": "2026-11-07T07:55:45.360Z",
+    "expectedLanguages": [
+      "es",
+      "fr",
+      "pt",
+      "de",
+      "hi",
+      "ar",
+      "id",
+      "sw",
+      "ja",
+      "ru",
+      "ko",
+      "zh",
+      "it",
+      "tr",
+      "vi"
+    ],
+    "allLanguagesPresent": false,
+    "englishCaptionOk": true,
+    "shortVideoId": "aT1TwuQ4V3E",
+    "shortCaptionStatus": {
+      "en": "failed:YouTube quota already exhausted this run; skipping caption.",
+      "es": "failed:No translated lines for es",
+      "pt": "failed:YouTube quota already exhausted this run; skipping caption.",
+      "hi": "failed:YouTube quota already exhausted this run; skipping caption."
+    },
+    "status": {
+      "es": "failed:after-retry:translate-captions.py exited 2 for es: {\"error\": \"persistent garbled/untranslated line after retries\", \"line_index\": 12, \"lang\": \"es\"}",
+      "fr": "ok",
+      "pt": "ok",
+      "de": "ok",
+      "hi": "failed:after-retry:YouTube quota already exhausted this run; skipping caption.",
+      "ar": "failed:after-retry:translate-captions.py exited 2 for ar: {\"error\": \"persistent garbled/untranslated line after retries\", \"line_index\": 8, \"lang\": \"ar\"}",
+      "id": "failed:after-retry:YouTube quota already exhausted this run; skipping caption.",
+      "sw": "failed:after-retry:YouTube quota already exhausted this run; skipping caption.",
+      "ja": "failed:after-retry:translate-captions.py exited 2 for ja: {\"error\": \"persistent garbled/untranslated line after retries\", \"line_index\": 31, \"lang\": \"ja\"}",
+      "ru": "failed:after-retry:YouTube quota already exhausted this run; skipping caption.",
+      "ko": "failed:after-retry:YouTube quota already exhausted this run; skipping caption.",
+      "zh": "failed:after-retry:YouTube quota already exhausted this run; skipping caption.",
+      "it": "failed:after-retry:YouTube quota already exhausted this run; skipping caption.",
+      "tr": "failed:after-retry:YouTube quota already exhausted this run; skipping caption.",
+      "vi": "failed:after-retry:YouTube quota already exhausted this run; skipping caption."
+    }
+  },
   "keywordFile": {
     "updatedAt": "2026-11-02T10:33:53.699Z",
     "week": null
   },
   "workflow": "HDL Daily YouTube Teaser",
-  "runId": "42184691516",
-  "runNumber": "361",
+  "runId": "42350910317",
+  "runNumber": "365",
   "eventName": "schedule"
 }
