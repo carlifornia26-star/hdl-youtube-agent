@@ -1,0 +1,104 @@
+name: Verify private reviewed pack transport
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-private-transport:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch only the approved private media repository
+        env:
+          PACK_READ_KEY: ${{ secrets.REVIEWED_PACK_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "$PACK_READ_KEY"
+          mkdir -p "$RUNNER_TEMP/reviewed-transport"
+          printf '%s\n' "$PACK_READ_KEY" > "$RUNNER_TEMP/reviewed-transport/read-key"
+          trap 'rm -f "$RUNNER_TEMP/reviewed-transport/read-key"' EXIT
+          curl --fail --silent --show-error https://api.github.com/meta | jq -r '.ssh_keys[] | "github.com " + .' > "$RUNNER_TEMP/reviewed-transport/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/reviewed-transport/read-key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/reviewed-transport/known_hosts"
+          git clone --quiet --no-checkout --depth 1 git@github.com:carlifornia26-star/hdl-reviewed-video-packs.git "$RUNNER_TEMP/reviewed-transport/pack"
+          git -C "$RUNNER_TEMP/reviewed-transport/pack" fetch --quiet --depth 1 origin 2b90df6ab8f1f002663d4c55ecb400ea8ddaf963
+          git -C "$RUNNER_TEMP/reviewed-transport/pack" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/reviewed-transport/pack" rev-parse HEAD)" = "2b90df6ab8f1f002663d4c55ecb400ea8ddaf963"
+      - name: Restore and import without rendering or publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYVERIFY'
+          #!/usr/bin/env python3
+          """Import an explicit private reviewed media pack. No network, account or upload actions."""
+          import argparse, hashlib, json, os, pathlib, shutil, stat, tempfile, zipfile
+          LIMIT=500*1024*1024
+          REQUIRED_LANGS={'en','es','fr','pt','de','hi','ar','id','sw','ja','ru','ko','zh','it','tr','vi'}
+          def digest(data):return hashlib.sha256(data).hexdigest()
+          def safe_name(name):
+           p=pathlib.PurePosixPath(name)
+           if not name or name.startswith('/') or '\\' in name or '..' in p.parts or ':' in name or name!=p.as_posix():raise ValueError('Unsafe pack path')
+           return p
+          
+          def import_pack(archive, expected_sha256, out_dir, expected_book):
+           archive=pathlib.Path(archive);out_dir=pathlib.Path(out_dir)
+           if archive.stat().st_size>LIMIT:raise ValueError('Archive size limit')
+           if digest(archive.read_bytes())!=expected_sha256:raise ValueError('Archive hash differs from reviewed bytes')
+           if out_dir.exists():raise ValueError('Destination must not exist, never overwrite a reviewed pack')
+           with zipfile.ZipFile(archive) as z:
+            infos=z.infolist();names=[x.filename for x in infos]
+            if len(infos)>300 or len(names)!=len(set(names)) or sum(x.file_size for x in infos)>LIMIT:raise ValueError('Pack size/duplicate-entry limit')
+            for item in infos:
+             safe_name(item.filename)
+             if item.is_dir() or stat.S_ISLNK(item.external_attr>>16):raise ValueError('Only regular files permitted')
+             if item.flag_bits&1:raise ValueError('Encrypted ZIP not a portable private pack')
+            if 'pack-index.json' not in names:raise ValueError('Pack index missing')
+            index=json.loads(z.read('pack-index.json'))
+            if index.get('mode')!='private-portable-pack' or index.get('publishEligible') is not False or index.get('bookSlug')!=expected_book:raise ValueError('Private book scope mismatch')
+            files=index.get('files',{})
+            if set(files)!=(set(names)-{'pack-index.json'}):raise ValueError('Unindexed or missing payload')
+            for name,sha in files.items():
+             safe_name(name)
+             if len(sha)!=64 or digest(z.read(name))!=sha:raise ValueError('Payload hash mismatch')
+            manifest_path=index.get('manifest');safe_name(manifest_path)
+            if manifest_path not in files:raise ValueError('Manifest not indexed')
+            m=json.loads(z.read(manifest_path));base=pathlib.PurePosixPath(manifest_path).parent
+            if m.get('mode')!='private-review' or m.get('publishEligible') is not False or m.get('topic')!=expected_book:raise ValueError('Manifest publication/book mismatch')
+            if set(m.get('captions',{}))!=REQUIRED_LANGS:raise ValueError('All16 captions required')
+            if any(c.get('fidelityReviewed') is not True for c in m['captions'].values()):raise ValueError('Caption fidelity review missing')
+            if m.get('audio',{}).get('loudnessReviewed') is not True or m['audio'].get('targetLufs')!=-14 or m['audio'].get('truePeakCeiling')!=-1.5:raise ValueError('Unchanged loudness review missing')
+            if not m.get('scenes') or any(not isinstance(s.get('frames'),int) or isinstance(s.get('frames'),bool) or s['frames']<=0 for s in m['scenes']):raise ValueError('Positive measured frames required')
+            assets=m.get('scenes',[])+list(m['captions'].values())+[m['audio']]
+            if m.get('englishBurnIn'):assets.append(m['englishBurnIn'])
+            for a in assets:
+             name=(base/safe_name(a['path'])).as_posix()
+             if name not in files or files[name]!=a['sha256']:raise ValueError('Manifest reference differs from reviewed payload')
+            frames=sum(s['frames'] for s in m['scenes']);stock=sum(s['frames'] for s in m['scenes'] if s.get('pexelsVisible'))
+            if frames<12750 or abs(stock-frames*.2)>1:raise ValueError('Measured runtime/20percent mismatch')
+            for s in m['scenes']:
+             if any(s.get(k) is not True for k in ['rightsReviewed','relevanceReviewed','pixelsReviewed','audioReviewed']):raise ValueError('Source review missing')
+            out_dir.parent.mkdir(parents=True,exist_ok=True);tmp=pathlib.Path(tempfile.mkdtemp(prefix='reviewed-pack-',dir=out_dir.parent))
+            try:
+             for name in names:
+              p=tmp/pathlib.Path(name);p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(z.read(name))
+             # Atomic promotion only after every reference, payload and book check passed.
+             os.rename(tmp,out_dir)
+            except Exception:
+             shutil.rmtree(tmp,ignore_errors=True);raise
+           return {'privateOnly':True,'publishEligible':False,'bookSlug':expected_book,'manifest':str(out_dir/manifest_path),'files':len(files),'frames':frames,'pexelsFrames':stock,'transportVerified':False,'scheduledRuntimeActivated':False,'remainingGates':['Approved private transport into execution host','Current factual/source/voice and final assembled review','Separate caption/release/account gates']}
+          
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'reviewed-transport'
+          names=['1-joy-reviewed-portable-pack.zip.part1','3-joy-pack-tail-1.bin','4-joy-pack-tail-2.bin','5-joy-pack-tail-3.bin','6-joy-pack-tail-4.bin']
+          archive=root/'reviewed.zip'
+          with archive.open('wb') as target:
+           for name in names:
+            with (root/'pack'/name).open('rb') as source:shutil.copyfileobj(source,target)
+          assert archive.stat().st_size==35078697,'Archive size differs'
+          report=import_pack(archive,'1a962a002854200ddc5e9c9ac1d3954598cf561d992b9ba185d442158a420f28',root/'imported','art-of-joy')
+          print(json.dumps({'transportVerified':True,'files':report['files'],'frames':report['frames'],'pexelsFrames':report['pexelsFrames'],'bytes':archive.stat().st_size,'sha256':digest(archive.read_bytes()),'publishEligible':False,'dailyActivated':False,'rendered':False}))
+          PYVERIFY
+      - name: Remove private media and credentials
+        if: always()
+        shell: bash
+        run: rm -rf -- "$RUNNER_TEMP/reviewed-transport"
