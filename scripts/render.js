@@ -429,12 +429,10 @@ export async function mixBackgroundMusic({ videoPath, musicPath, outPath }) {
 
 // Pre-masters the finished mix to YouTube's own target (-14 LUFS integrated) instead of relying
 // on YouTube's playback-time normalization, which only ever turns audio DOWN to match -14 —
-// anything already quieter than that stays quiet. Single-pass loudnorm (not the more "accurate"
-// two-pass form, which needs a first analysis-only run) — the difference matters for mastering
-// studios chasing broadcast-spec precision, not for a teaser video, and two-pass would double
-// ffmpeg's runtime on every single video for a gain not worth it here.
-// Runs as the LAST audio-touching step, after mixBackgroundMusic (or straight after concatScenes
-// if music failed) — so it's normalizing the actual final mix, not narration alone.
+// anything already quieter than that stays quiet. Two-pass analysis keeps the same targets;
+// the actual AAC output is measured again because encoding can add true-peak overshoot.
+// Called on narration before music and again on the actual final mix after music.
+// Only the final verified mix may proceed toward upload.
 const LOUDNESS_TARGET_LUFS = -14;
 const LOUDNESS_TRUE_PEAK = -1.5; // dBTP ceiling, keeps normalization from clipping on peaks
 const LOUDNESS_RANGE = 11; // LRA target — ffmpeg's own loudnorm default, fine for narration+music
@@ -457,15 +455,30 @@ export async function measureLoudness(filePath, label = "") {
 
 export async function normalizeLoudness({ videoPath, outPath }) {
   await measureLoudness(videoPath, "before normalize");
-  await run("ffmpeg", [
-    "-y",
-    "-i", videoPath,
-    "-af", `loudnorm=I=${LOUDNESS_TARGET_LUFS}:TP=${LOUDNESS_TRUE_PEAK}:LRA=${LOUDNESS_RANGE}`,
-    "-c:v", "copy", // video stream is untouched, no need to re-encode it
-    "-c:a", "aac",
-    outPath,
-  ]);
-  await measureLoudness(outPath, "after normalize");
+  const analysis = await run("ffmpeg", ["-hide_banner", "-i", videoPath, "-af", `loudnorm=I=${LOUDNESS_TARGET_LUFS}:TP=${LOUDNESS_TRUE_PEAK}:LRA=${LOUDNESS_RANGE}:print_format=json`, "-f", "null", "-"]);
+  const jsonText = String(analysis.stderr).match(/\{[^{}]*"input_i"[^{}]*\}/s)?.[0];
+  if (!jsonText) throw new Error("Loudness analysis missing");
+  const a = JSON.parse(jsonText);
+  if (["input_i","input_tp","input_lra","input_thresh","target_offset"].some(k => !Number.isFinite(Number(a[k])))) throw new Error("Loudness analysis invalid");
+  const filter = `loudnorm=I=${LOUDNESS_TARGET_LUFS}:TP=${LOUDNESS_TRUE_PEAK}:LRA=${LOUDNESS_RANGE}:measured_I=${a.input_i}:measured_TP=${a.input_tp}:measured_LRA=${a.input_lra}:measured_thresh=${a.input_thresh}:offset=${a.target_offset}:linear=true`;
+  await run("ffmpeg", ["-y", "-i", videoPath, "-af", filter, "-c:v", "copy", "-ar", "44100", "-ac", "2", "-c:a", "aac", "-b:a", "192k", outPath]);
+  let measured = await measureLoudness(outPath, "after normalize");
+  const valid = (m) => m && Number.isFinite(m.integrated_lufs) && Number.isFinite(m.true_peak_dbtp);
+  if (!valid(measured)) throw new Error("Final encoded loudness could not be verified");
+  // AAC may add inter-sample overshoot after loudnorm's PCM limiter. Keep targets fixed,
+  // correct only the measured overshoot, and re-measure the actual encoded output.
+  for (let attempt = 0; measured.true_peak_dbtp > LOUDNESS_TRUE_PEAK && attempt < 3; attempt++) {
+    const attenuation = measured.true_peak_dbtp - LOUDNESS_TRUE_PEAK + 0.15;
+    const temp = outPath + `.peak-fix-${attempt}.mp4`;
+    try {
+      await run("ffmpeg", ["-y", "-i", outPath, "-af", `volume=-${attenuation.toFixed(3)}dB`, "-c:v", "copy", "-ar", "44100", "-ac", "2", "-c:a", "aac", "-b:a", "192k", temp]);
+      await fs.rename(temp, outPath);
+    } finally { await fs.rm(temp, { force: true }); }
+    measured = await measureLoudness(outPath, "encoded peak correction");
+    if (!valid(measured)) throw new Error("Corrected encoded loudness could not be verified");
+  }
+  if (measured.true_peak_dbtp > LOUDNESS_TRUE_PEAK) throw new Error("Final encoded true peak exceeds unchanged -1.5 dBTP ceiling");
+  if (Math.abs(measured.integrated_lufs - LOUDNESS_TARGET_LUFS) > 0.5) throw new Error("Final encoded integrated loudness misses unchanged -14 LUFS target");
   return outPath;
 }
 
