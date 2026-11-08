@@ -434,6 +434,14 @@ function loadDailyTrendingTags(dailyData, usedChars) {
 }
 
 async function main() {
+  // Private reviewed-source render returns before model, stock, account or upload work.
+  if (process.env.REVIEWED_SOURCE_MANIFEST) {
+    const { renderReviewedPrivate } = await import('./reviewed-source-render.js');
+    const result = await renderReviewedPrivate({manifestPath:process.env.REVIEWED_SOURCE_MANIFEST,outDir:process.env.REVIEWED_SOURCE_OUT || 'build/reviewed-private'});
+    console.log(JSON.stringify(result,null,2));
+    return;
+  }
+
   await fs.mkdir(BUILD_DIR, { recursive: true });
 
   // Preflight: confirm the local Kokoro TTS package actually resolves before burning through a
