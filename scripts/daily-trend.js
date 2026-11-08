@@ -263,12 +263,12 @@ export async function pickTodaysTrend({ book, channelId }) {
   const history = await loadHistory();
   const blocked = recentlyUsedTerms(history);
   const shortlist = trends
-    .filter((t) => usableTerm(t.term) && !isSensitive(t.term) && !(t.news && isSensitive(t.news.headline)) && !blocked.has(t.term.toLowerCase()))
+    .filter((t) => usableTerm(t.term) && t.news?.headline && t.news?.url && !isSensitive(t.term) && !(t.news && isSensitive(t.news.headline)) && !blocked.has(t.term.toLowerCase()))
     .slice(0, SHORTLIST_SIZE);
   console.log(`Trend shortlist (${source}): ${shortlist.map((t) => t.term).join(" | ") || "(empty)"}`);
   if (!shortlist.length) return null;
 
-  const pick = await selectTrendTieIn(book, shortlist.map((t) => t.term));
+  const pick = await selectTrendTieIn(book, shortlist.map((t) => ({ term: t.term, headline: t.news.headline, source: t.news.source, url: t.news.url })));
   if (!pick) {
     console.log("No trending term could be tied to today's topic honestly — continuing without one.");
     return null;
