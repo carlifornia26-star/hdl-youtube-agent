@@ -923,6 +923,12 @@ async function main() {
     }
   }
 
+  // Verify the actual final encoded mix after music, not only narration before it.
+  // A failure must stop before upload rather than fall back to unverified audio.
+  const finalMasterPath = path.join(BUILD_DIR, "final_mastered.mp4");
+  await normalizeLoudness({ videoPath: uploadPath, outPath: finalMasterPath });
+  uploadPath = finalMasterPath;
+
   // 3bb) Title — computed HERE, before the thumbnail block below, so the thumbnail's text
   // overlay (variant B) can draw the ACTUAL final title/number instead of a separate
   // approximation built from the book alone. Title deliberately does NOT include the book name
@@ -1335,6 +1341,11 @@ async function main() {
           console.warn("Short background music failed, uploading without it:", e.message);
         }
       }
+
+      // The Short has its own encoded mix and needs the same final fail-closed check.
+      const shortMasterPath = path.join(BUILD_DIR, "short_mastered.mp4");
+      await normalizeLoudness({ videoPath: shortUploadPath, outPath: shortMasterPath });
+      shortUploadPath = shortMasterPath;
 
       // No book name here either — same reasoning as enTitle above. If today's channel has a
       // number title (isNumberChannelToday/todaysNumber, computed back in step 3bb), the Short
