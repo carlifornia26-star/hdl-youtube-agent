@@ -259,6 +259,21 @@ function formatTimestamp(totalSeconds) {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
+// Detect verbatim recycled spoken sentences across the final cut, including topups/news.
+// This is a narrow repetition gate, not factual or semantic verification.
+function repeatedSpokenSentences(scenes,{minWords=12}={}){
+ const seen=new Map(),flags=[];
+ for(const [sceneIndex,scene] of scenes.entries()){
+  for(const raw of String(scene.line||'').split(/(?<=[.!?])\s+/)){
+   const text=raw.normalize('NFKC').toLowerCase().replace(/[\u2018\u2019]/g,"'").replace(/[^\p{L}\p{N}'\s]/gu,' ').replace(/\s+/g,' ').trim();
+   if(text.split(' ').filter(Boolean).length<minWords)continue;
+   if(seen.has(text))flags.push({sceneIndex,firstSceneIndex:seen.get(text),sentence:raw});
+   else seen.set(text,sceneIndex);
+  }
+ }
+ return flags;
+}
+
 // Topic-level chapters. The old rule cut a chapter every 10 seconds (37 marks in an 8 minute
 // video, with generic "Part N" labels and a last mark a few seconds before the end). Now:
 //  - a chapter is at least MIN_CHAPTER_GAP_SECONDS long (about a minute),
@@ -800,6 +815,13 @@ async function main() {
     }
     if (ctaScene) built.push(ctaScene);
     totalSeconds = built.reduce((a, b) => a + b.duration, 0);
+  }
+
+  // Check the FINAL cut, not only the initial script. Includes news and every topup round.
+  // Keep source text intact: reject a padded cut instead of silently deleting narration.
+  const finalRepeats = repeatedSpokenSentences(built);
+  if (finalRepeats.length) {
+    throw new Error(`Final narration repeats ${finalRepeats.length} verbatim sentence(s) across the cut; refusing upload. Scene pairs: ${JSON.stringify(finalRepeats.slice(0, 8).map(({sceneIndex, firstSceneIndex}) => ({sceneIndex, firstSceneIndex})))}`);
   }
 
   console.log(
