@@ -1,5 +1,11 @@
 // Read-only bounded audit. No insert/update/delete/generation calls.
 import { getYoutubeClient } from './youtube.js';
+
+// Bounded source recovery. Only ciphertext enters public logs. No writes to YouTube.
+import {randomBytes,createCipheriv,publicEncrypt,constants} from 'node:crypto';
+const recoveryKey="-----BEGIN PUBLIC KEY-----\nMIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAu7JvYk2sv1w5ROmlvLdK\nAjSDahuVLAbaa+3NDS2fZOM0aNvJOvO7c055kHWYFTqlI1qwzB72fZUeLELoC8HL\nio6npzHdsy8DTL0SeI1dGVLyx6CDnG1jKj4BeM6WmhPuBOG7I7sB/QPinh6Ze+v7\nlbTc4+H52P4mEi/7P/pmPlb4YpSQ/3r7ubKvUWY6S3CwpZaGegNOBROUHQ3Iuglv\nLYRYmIZy1xwiLG2AEUcQQpGSOc5kIfI2+OrxgKH2TBNv18Ytc6/wnnoBIEQ1Gpm/\n3e8+W0SFtKDIq9y0YIGghzlmZtok6iGWaIZ+0R5ubvt/1i4BNmgoIkEuVunzale9\n1qsw4zL31RO69l9aHT7rqChBPfjjPkGi72VEoDqaRNDAEXfV46eL2osvT56YpcpL\nByWNNivwhFXOQzBaTCUQdQEq3JBgukAPlwpR0Kzr8qJF5fTcsLtLLq8MEMvgcexk\nite5x4nKXF9mea+yU5PCsuERIe9ecj0adeBWGfVVaUzxAgMBAAE=\n-----END PUBLIC KEY-----\n";
+const expectedOwners={'1':'UC60P1GSNEVPgtIentvSc45A','2':'UC1ELmoqjtXhpHgeN0VCVoDQ'};
+
 const yt=getYoutubeClient();
 const channel=String(process.env.CHANNEL_ID||'');
 if(!['1','2','3','4'].includes(channel)) throw new Error('Invalid channel');
@@ -7,6 +13,7 @@ try {
  const c=(await yt.channels.list({part:['snippet','contentDetails'],mine:true})).data.items||[];
  if(c.length!==1) throw new Error('Expected one owner');
  const owner=c[0];
+ if(expectedOwners[channel] && owner.id!==expectedOwners[channel]) throw new Error('Exact recovery owner mismatch');
  const recent=(await yt.playlistItems.list({part:['contentDetails'],playlistId:owner.contentDetails.relatedPlaylists.uploads,maxResults:10})).data.items||[];
  const fixed={'1':['CoGTxUsn7MA','ofekIx2FINk'],'2':['jz0KWbvL2oQ','jQT0VwwkuUQ'],'3':[],'4':['gL5TS0mk6Mo','aT1TwuQ4V3E']}[channel];
  const ids=[...new Set([...fixed,...recent.map(x=>x.contentDetails.videoId)])];
@@ -19,6 +26,16 @@ try {
   if(v.status.privacyStatus==='private'&&reads<6){
    reads++;
    row.captions=((await yt.captions.list({part:['snippet'],videoId:v.id})).data.items||[]).map(x=>({id:x.id,language:x.snippet.language,status:x.snippet.status,isDraft:x.snippet.isDraft,trackKind:x.snippet.trackKind,failureReason:x.snippet.failureReason||null}));
+  }
+  if(['1','2'].includes(channel)&&v.id===fixed[0]&&v.status.privacyStatus==='private'&&!v.status.publishAt){
+   const track=row.captions?.find(t=>t.language==='en'&&t.status==='serving'&&!t.isDraft&&t.trackKind==='standard');
+   if(!track) throw new Error('No serving standard English source');
+   const response=await yt.captions.download({id:track.id,tfmt:'srt'},{responseType:'text'});
+   const text=response.data;
+   if(typeof text!=='string'||!text.includes('-->')||text.length>250000) throw new Error('Unexpected caption payload');
+   const key=randomBytes(32),iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',key,iv);
+   const ciphertext=Buffer.concat([cipher.update(JSON.stringify({videoId:v.id,trackId:track.id,language:'en',srt:text}),'utf8'),cipher.final()]);
+   row.encryptedSource={alg:'RSA-OAEP-SHA256/AES-256-GCM',key:publicEncrypt({key:recoveryKey,padding:constants.RSA_PKCS1_OAEP_PADDING,oaepHash:'sha256'},key).toString('base64'),iv:iv.toString('base64'),tag:cipher.getAuthTag().toString('base64'),ciphertext:ciphertext.toString('base64')};
   }
   rows.push(row);
  }
