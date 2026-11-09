@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-11-09",
+      "channel": "2",
+      "term": "Revolut Mobile",
+      "headline": null
+    },
+    {
+      "date": "2026-11-09",
       "channel": "1",
       "term": "Quantum State",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "3",
       "term": "Epl Table",
       "headline": null
-    },
-    {
-      "date": "2026-10-10",
-      "channel": "4",
-      "term": "Aurora Borealis",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-09T11:52:37.109Z"
+  "updated_at": "2026-11-09T14:00:55.912Z"
 }
