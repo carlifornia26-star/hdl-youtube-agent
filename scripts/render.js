@@ -454,32 +454,31 @@ export async function measureLoudness(filePath, label = "") {
 }
 
 export async function normalizeLoudness({ videoPath, outPath }) {
-  await measureLoudness(videoPath, "before normalize");
-  const analysis = await run("ffmpeg", ["-hide_banner", "-i", videoPath, "-af", `loudnorm=I=${LOUDNESS_TARGET_LUFS}:TP=${LOUDNESS_TRUE_PEAK}:LRA=${LOUDNESS_RANGE}:print_format=json`, "-f", "null", "-"]);
-  const jsonText = String(analysis.stderr).match(/\{[^{}]*"input_i"[^{}]*\}/s)?.[0];
-  if (!jsonText) throw new Error("Loudness analysis missing");
-  const a = JSON.parse(jsonText);
-  if (["input_i","input_tp","input_lra","input_thresh","target_offset"].some(k => !Number.isFinite(Number(a[k])))) throw new Error("Loudness analysis invalid");
-  const filter = `loudnorm=I=${LOUDNESS_TARGET_LUFS}:TP=${LOUDNESS_TRUE_PEAK}:LRA=${LOUDNESS_RANGE}:measured_I=${a.input_i}:measured_TP=${a.input_tp}:measured_LRA=${a.input_lra}:measured_thresh=${a.input_thresh}:offset=${a.target_offset}:linear=true`;
-  await run("ffmpeg", ["-y", "-i", videoPath, "-af", filter, "-c:v", "copy", "-ar", "44100", "-ac", "2", "-c:a", "aac", "-b:a", "192k", outPath]);
-  let measured = await measureLoudness(outPath, "after normalize");
-  const valid = (m) => m && Number.isFinite(m.integrated_lufs) && Number.isFinite(m.true_peak_dbtp);
-  if (!valid(measured)) throw new Error("Final encoded loudness could not be verified");
-  // AAC may add inter-sample overshoot after loudnorm's PCM limiter. Keep targets fixed,
-  // correct only the measured overshoot, and re-measure the actual encoded output.
-  for (let attempt = 0; measured.true_peak_dbtp > LOUDNESS_TRUE_PEAK && attempt < 3; attempt++) {
-    const attenuation = measured.true_peak_dbtp - LOUDNESS_TRUE_PEAK + 0.15;
-    const temp = outPath + `.peak-fix-${attempt}.mp4`;
+  if (path.resolve(videoPath) === path.resolve(outPath)) throw new Error('Input and output must differ');
+  await measureLoudness(videoPath, 'before normalize');
+  const valid = m => m && Number.isFinite(m.integrated_lufs) && Number.isFinite(m.true_peak_dbtp);
+  // Encode every candidate from the original mix. Never compound AAC generations or
+  // lower the finished mix's integrated level to compensate for codec overshoot.
+  let last = null;
+  for (const internalPeak of [-1.5, -2.0, -2.5, -3.0]) {
+    const analysis = await run('ffmpeg', ['-hide_banner', '-i', videoPath, '-af', `loudnorm=I=${LOUDNESS_TARGET_LUFS}:TP=${internalPeak}:LRA=${LOUDNESS_RANGE}:print_format=json`, '-f', 'null', '-']);
+    const jsonText = String(analysis.stderr).match(/\{[^{}]*"input_i"[^{}]*\}/s)?.[0];
+    if (!jsonText) throw new Error('Loudness analysis missing');
+    const a = JSON.parse(jsonText);
+    if (['input_i','input_tp','input_lra','input_thresh','target_offset'].some(k => !Number.isFinite(Number(a[k])))) throw new Error('Loudness analysis invalid');
+    const filter = `loudnorm=I=${LOUDNESS_TARGET_LUFS}:TP=${internalPeak}:LRA=${LOUDNESS_RANGE}:measured_I=${a.input_i}:measured_TP=${a.input_tp}:measured_LRA=${a.input_lra}:measured_thresh=${a.input_thresh}:offset=${a.target_offset}:linear=true`;
+    const candidate = outPath + `.candidate-${Math.abs(internalPeak)}.mp4`;
     try {
-      await run("ffmpeg", ["-y", "-i", outPath, "-af", `volume=-${attenuation.toFixed(3)}dB`, "-c:v", "copy", "-ar", "44100", "-ac", "2", "-c:a", "aac", "-b:a", "192k", temp]);
-      await fs.rename(temp, outPath);
-    } finally { await fs.rm(temp, { force: true }); }
-    measured = await measureLoudness(outPath, "encoded peak correction");
-    if (!valid(measured)) throw new Error("Corrected encoded loudness could not be verified");
+      await run('ffmpeg', ['-y','-i',videoPath,'-map','0:v:0','-map','0:a:0','-af',filter,'-c:v','copy','-ar','44100','-ac','2','-c:a','aac','-b:a','192k',candidate]);
+      last = await measureLoudness(candidate, `encoded candidate internal TP ${internalPeak}`);
+      if (!valid(last)) throw new Error('Final encoded loudness could not be verified');
+      if (last.true_peak_dbtp <= LOUDNESS_TRUE_PEAK && Math.abs(last.integrated_lufs - LOUDNESS_TARGET_LUFS) <= 0.5) {
+        await fs.rename(candidate, outPath);
+        return outPath;
+      }
+    } finally { await fs.rm(candidate, {force:true}); }
   }
-  if (measured.true_peak_dbtp > LOUDNESS_TRUE_PEAK) throw new Error("Final encoded true peak exceeds unchanged -1.5 dBTP ceiling");
-  if (Math.abs(measured.integrated_lufs - LOUDNESS_TARGET_LUFS) > 0.5) throw new Error("Final encoded integrated loudness misses unchanged -14 LUFS target");
-  return outPath;
+  throw new Error(`Encoded mix fails unchanged -14 LUFS (+/-0.5) / -1.5 dBTP gates: ${JSON.stringify(last)}`);
 }
 
 export async function concatScenes(sceneOutPaths, listFile, outPath) {
