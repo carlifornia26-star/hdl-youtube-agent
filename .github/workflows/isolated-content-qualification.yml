@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   qualify:
-    if: github.event.head_commit.message == 'Qualify one free content revision without upload'
+    if: startsWith(github.event.head_commit.message, 'Qualify one free content revision without upload')
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
