@@ -1,0 +1,56 @@
+name: Isolated mastering regression
+on:
+  push:
+    branches: [quality-repair-2026-11-09]
+    paths: [.github/workflows/isolated-mastering-regression.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Ensure local codec exists
+        run: |
+          command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y ffmpeg; }
+      - name: Test committed normalization with synthetic media only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/ci-regression.mjs <<'JS'
+          import fs from 'node:fs/promises';
+          import {execFile} from 'node:child_process';
+          import {promisify} from 'node:util';
+          import path from 'node:path';
+          import assert from 'node:assert/strict';
+          import crypto from 'node:crypto';
+          const execFileAsync=promisify(execFile), MAX_BUFFER=64*1024*1024;
+          const run=(cmd,args)=>execFileAsync(cmd,args,{maxBuffer:MAX_BUFFER});
+          const source=await fs.readFile(process.env.RENDER_SOURCE||'scripts/render.js','utf8');
+          const start=source.indexOf('const LOUDNESS_TARGET_LUFS'),end=source.indexOf('export async function concatScenes',start);
+          assert(start>0&&end>start);
+          const block=source.slice(start,end).replaceAll('export ','');
+          const module=await fs.mkdtemp('/tmp/mastering-regression-');
+          const prefix=`import fs from 'node:fs/promises';import path from 'node:path';import {execFile} from 'node:child_process';import {promisify} from 'node:util';const execFileAsync=promisify(execFile),MAX_BUFFER=64*1024*1024;const run=(c,a)=>execFileAsync(c,a,{maxBuffer:MAX_BUFFER});\n`;
+          await fs.writeFile(path.join(module,'actual.mjs'),prefix+block+'\nexport {normalizeLoudness,measureLoudness};');
+          const {normalizeLoudness,measureLoudness}=await import(path.join(module,'actual.mjs'));
+          const defs=[['loud','sine=frequency=911:sample_rate=44100:duration=8,volume=6'],['quiet','sine=frequency=401:sample_rate=44100:duration=8,volume=0.02'],['transient',"aevalsrc=0.2*sin(2*PI*317*t)+if(lt(mod(t\\,0.23)\\,0.002)\\,0.7\\,0):s=44100:d=12"],['silence','anullsrc=r=44100:cl=stereo']];
+          const results=[];
+          try{
+           for(const [name,filter] of defs){
+            const input=path.join(module,name+'.mp4'),output=path.join(module,name+'-out.mp4');
+            await run('ffmpeg',['-v','error','-y','-f','lavfi','-i','color=c=black:s=64x64:r=25:d=12','-f','lavfi','-i',filter,'-t',name==='transient'?'12':'8','-c:v','libx264','-c:a','aac',input]);
+            let error;try{await normalizeLoudness({videoPath:input,outPath:output});}catch(e){error=e.message;}
+            if(name==='silence'){assert.equal(error,'Loudness analysis invalid');results.push({name,rejected:true});continue;}
+            assert(!error,error);const m=await measureLoudness(output,'regression independent read');assert(m.true_peak_dbtp<=-1.5);assert(Math.abs(m.integrated_lufs+14)<=.5);
+            const probe=async file=>JSON.parse((await run('ffprobe',['-v','error','-show_entries','stream=codec_type,duration,nb_frames','-of','json',file])).stdout).streams;
+            const a=await probe(input),b=await probe(output);assert.equal(a.find(s=>s.codec_type==='video').nb_frames,b.find(s=>s.codec_type==='video').nb_frames);assert(Number(b.find(s=>s.codec_type==='audio').duration)>=Number(a.find(s=>s.codec_type==='audio').duration)-.03);
+            const packets=async file=>(await run('ffmpeg',['-v','error','-i',file,'-map','0:v:0','-c','copy','-f','hash','-hash','sha256','-'])).stdout.trim();assert.equal(await packets(input),await packets(output));results.push({name,measured:m,frames:b.find(s=>s.codec_type==='video').nb_frames,videoPacketsEqual:true,audioTailRetained:true});
+           }
+           console.log(JSON.stringify({masteringRegressionPassed:true,renderSourceSha256:crypto.createHash('sha256').update(source).digest('hex'),results,uploadAttempted:false,modelCalls:0,privateMediaUsed:false,exactFailedRunTested:false}));
+          }finally{await fs.rm(module,{recursive:true,force:true});}
+          JS
+          node /tmp/ci-regression.mjs
