@@ -101,47 +101,77 @@ async function translateLineWorkerAI(line, lang) {
 // 1) retry with the line normalized, 2) retry with the line split in halves (rejoined
 //    after translation), 3) translate ONLY that line via Workers AI m2m100 and splice it
 //    into the Argos results for the rest. Still failing => throw (fail loudly, as before).
+// Translate every line, mitigating each deterministic Argos garble as it surfaces.
+// One line garbling must not doom the rest: work through the failures one at a time
+// (normalize -> split in halves -> Workers AI m2m100 for that line only), then keep
+// going - a SECOND garbled line (seen in production: ar had two) gets the same
+// treatment. Bounded by MAX_MITIGATIONS so a pathological file fails loudly instead
+// of looping. Lines already translated are never re-sent, so a resolved line can't
+// re-trigger a garble.
+const MAX_MITIGATIONS = 8;
 async function translateLines(lines, lang) {
-  let attempt = tryTranslate(lines, lang);
-  if (attempt.ok) return attempt.lines;
-
-  let idx = attempt.failIndex;
-  if (idx == null || !lines[idx]) {
-    throw new Error(`translate-captions.py failed for ${lang} without a usable line_index: ${attempt.stderr}`);
-  }
-  console.error(`Argos garble on ${lang} line_index ${idx}: "${lines[idx]}"`);
-
-  const normalized = normalizeLine(lines[idx]);
-  if (normalized && normalized !== lines[idx]) {
-    console.error(`Retrying ${lang} with normalized line: "${normalized}"`);
-    const patched = [...lines]; patched[idx] = normalized;
-    attempt = tryTranslate(patched, lang);
-    if (attempt.ok) return attempt.lines;
-    idx = attempt.failIndex ?? idx;
-    console.error(`Normalized retry still failed (line_index ${attempt.failIndex}).`);
-  }
-
-  const halves = splitHalves(normalizeLine(lines[idx]));
-  if (halves) {
-    console.error(`Retrying ${lang} with line split in halves.`);
-    const patched = [...lines.slice(0, idx), ...halves, ...lines.slice(idx + 1)];
-    attempt = tryTranslate(patched, lang);
+  // work item: { text, out (null until translated), splitTried, mergeGroup }
+  // mergeGroup links halves of a split source line so their translations rejoin.
+  const work = lines.map((t) => ({ text: t, out: null, splitTried: false, mergeGroup: null }));
+  let nextGroup = 1;
+  let mitigations = 0;
+  for (;;) {
+    const pendingIdx = [];
+    work.forEach((w, i) => { if (w.out === null) pendingIdx.push(i); });
+    if (!pendingIdx.length) break;
+    const attempt = tryTranslate(pendingIdx.map((i) => work[i].text), lang);
     if (attempt.ok) {
-      const merged = [...attempt.lines.slice(0, idx), `${attempt.lines[idx]} ${attempt.lines[idx + 1]}`.trim(), ...attempt.lines.slice(idx + 2)];
-      return merged;
+      pendingIdx.forEach((wi, k) => { work[wi].out = attempt.lines[k]; });
+      break;
     }
-    console.error(`Split retry still failed (line_index ${attempt.failIndex}).`);
-  }
+    const idx = attempt.failIndex;
+    if (idx == null || idx >= pendingIdx.length) {
+      throw new Error(`translate-captions.py failed for ${lang} without a usable line_index: ${attempt.stderr}`);
+    }
+    if (mitigations >= MAX_MITIGATIONS) {
+      throw new Error(`translate-captions.py still failing for ${lang} after ${mitigations} line mitigations: ${attempt.stderr}`);
+    }
+    mitigations++;
+    const wi = pendingIdx[idx];
+    const srcLine = work[wi].text;
+    console.error(`Argos garble on ${lang} pending line_index ${idx}: "${srcLine}"`);
 
-  console.error(`Falling back to Workers AI m2m100 for ${lang} line_index ${idx} only.`);
-  const workerLine = await translateLineWorkerAI(normalizeLine(lines[idx]), lang);
-  const rest = [...lines.slice(0, idx), ...lines.slice(idx + 1)];
-  const restResult = tryTranslate(rest, lang);
-  if (!restResult.ok) {
-    throw new Error(`Argos also failed on ${lang} line_index ${restResult.failIndex} with the garbled line removed: ${restResult.stderr}`);
+    // 1) normalize invisible junk and retry that exact line.
+    const normalized = normalizeLine(srcLine);
+    if (normalized && normalized !== srcLine) {
+      console.error(`Mitigation ${mitigations}: normalized the line, retrying.`);
+      work[wi].text = normalized;
+      continue;
+    }
+    // 2) split once into halves; both halves rejoin after translation.
+    const halves = !work[wi].splitTried ? splitHalves(normalized) : null;
+    if (halves) {
+      console.error(`Mitigation ${mitigations}: split the line in halves, retrying.`);
+      const group = nextGroup++;
+      work.splice(wi, 1,
+        { text: halves[0], out: null, splitTried: true, mergeGroup: group },
+        { text: halves[1], out: null, splitTried: true, mergeGroup: group });
+      continue;
+    }
+    // 3) Workers AI m2m100 for this one line, garble-guarded by the same python guard.
+    console.error(`Mitigation ${mitigations}: Workers AI m2m100 fallback for this line only.`);
+    work[wi].out = await translateLineWorkerAI(normalized, lang);
+    console.error(`Workers AI fallback produced: "${work[wi].out}"`);
   }
-  const merged = [...restResult.lines.slice(0, idx), workerLine, ...restResult.lines.slice(idx)];
-  console.error(`Workers AI fallback succeeded for ${lang} line_index ${idx}: "${workerLine}"`);
+  // Reassemble, rejoining split halves into their original single line.
+  const out = [];
+  for (const w of work) {
+    const last = out[out.length - 1];
+    if (w.mergeGroup != null && last && last.group === w.mergeGroup) {
+      last.text = `${last.text} ${w.out}`.trim();
+    } else {
+      out.push({ group: w.mergeGroup, text: w.out });
+    }
+  }
+  const merged = out.map((o) => o.text);
+  if (merged.length !== lines.length) {
+    throw new Error(`Internal reassembly error for ${lang}: ${merged.length} lines out for ${lines.length} inputs.`);
+  }
   return merged;
 }
 
