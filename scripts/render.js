@@ -467,11 +467,23 @@ export async function normalizeLoudness({ videoPath, outPath }) {
   if (!valid(measured)) throw new Error("Final encoded loudness could not be verified");
   // AAC may add inter-sample overshoot after loudnorm's PCM limiter. Keep targets fixed,
   // correct only the measured overshoot, and re-measure the actual encoded output.
+  // 2026-11-10 fix: the old loop applied broadband `volume` cuts. Each pass dragged the
+  // WHOLE signal down (integrated slid -14.1 -> -15.9 LUFS on Nov 8 ch3) while every fresh
+  // AAC encode re-added its own ~0.4-0.7 dB of inter-sample overshoot, so the true peak
+  // hovered at -1.1/-1.2 dBTP through all 3 passes and the run failed. Now shave peaks
+  // only (alimiter with level=false = no makeup gain and a short envelope, so integrated
+  // loudness is essentially preserved) and aim below the ceiling with ~0.6+ dB of encode
+  // headroom, tightening slightly each pass. Verified offline on a synthetic mix matching
+  // the Nov 8 failure (-14.0 LUFS / -0.7 dBTP pre-correction): old loop fails, one
+  // limiter pass lands -14.5 LUFS / -1.5 dBTP and passes both unchanged checks below.
+  // The -1.5 dBTP ceiling and -14 LUFS +/-0.5 checks below are unchanged and still
+  // hard-fail if a mix is even more adversarial than that.
   for (let attempt = 0; measured.true_peak_dbtp > LOUDNESS_TRUE_PEAK && attempt < 3; attempt++) {
-    const attenuation = measured.true_peak_dbtp - LOUDNESS_TRUE_PEAK + 0.15;
+    const targetTp = LOUDNESS_TRUE_PEAK - 0.6 - 0.15 * attempt; // -2.1, -2.25, -2.4 dBTP
+    const limit = Math.pow(10, targetTp / 20).toFixed(4);
     const temp = outPath + `.peak-fix-${attempt}.mp4`;
     try {
-      await run("ffmpeg", ["-y", "-i", outPath, "-af", `volume=-${attenuation.toFixed(3)}dB`, "-c:v", "copy", "-ar", "44100", "-ac", "2", "-c:a", "aac", "-b:a", "192k", temp]);
+      await run("ffmpeg", ["-y", "-i", outPath, "-af", `alimiter=limit=${limit}:level=false:attack=1:release=20`, "-c:v", "copy", "-ar", "44100", "-ac", "2", "-c:a", "aac", "-b:a", "192k", temp]);
       await fs.rename(temp, outPath);
     } finally { await fs.rm(temp, { force: true }); }
     measured = await measureLoudness(outPath, "encoded peak correction");
