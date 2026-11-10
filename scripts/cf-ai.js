@@ -230,6 +230,65 @@ function countRepetition(scenes, priorLines = []) {
   return dupes;
 }
 
+// Normalization shared by the verbatim-repeat gate (repeatedSpokenSentences in
+// generate-video.js) and the pre-build repeat repair below, so both judge the exact
+// same text. Any change here must stay in sync with the gate.
+export function normalizeSpokenSentence(raw) {
+  return String(raw || "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[^\p{L}\p{N}'\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Deterministic pre-build repair for verbatim repeated narration (2026-11-10). The
+// final-cut gate in generate-video.js still rejects any repeat that survives; this
+// pass removes LATER verbatim duplicates before synthesis so a repairable cut stops
+// failing the whole day's upload (Nov 9: all 4 channels failed the final gate on
+// verbatim repeats and no video uploaded). First occurrences always stay; only exact
+// repeats (same normalization + minWords rule as the gate) are stripped, and scenes
+// left with nothing else are dropped. `priorLines` seeds sentences already spoken
+// earlier in the SAME video (used for top-up batches, which are generated separately
+// from the main script). The closing call-to-action scene is never silently emptied:
+// if stripping would leave it with no line, its original line is restored and the
+// hard gate still judges it. No AI call, no rewording - unique narration is never
+// touched.
+export function repairRepeatedSentences(scenes, { minWords = 12, priorLines = [], protectLast = true } = {}) {
+  const seen = new Set();
+  const note = (raw) => {
+    const text = normalizeSpokenSentence(raw);
+    if (text.split(" ").filter(Boolean).length >= minWords) seen.add(text);
+  };
+  for (const line of priorLines) String(line || "").split(/(?<=[.!?])\s+/).forEach(note);
+  let removedSentences = 0;
+  let removedScenes = 0;
+  const out = [];
+  scenes.forEach((scene, i) => {
+    const isLast = i === scenes.length - 1;
+    const kept = [];
+    for (const raw of String(scene.line || "").split(/(?<=[.!?])\s+/)) {
+      const text = normalizeSpokenSentence(raw);
+      const countable = text.split(" ").filter(Boolean).length >= minWords;
+      if (countable && seen.has(text)) {
+        removedSentences++;
+        continue;
+      }
+      if (countable) seen.add(text);
+      kept.push(raw);
+    }
+    let line = kept.join(" ").replace(/\s+/g, " ").trim();
+    if (!line && isLast && protectLast) line = String(scene.line || "").trim();
+    if (!line) {
+      removedScenes++;
+      return;
+    }
+    out.push({ ...scene, line });
+  });
+  return { scenes: out, removedSentences, removedScenes };
+}
+
 // Catches the "tells me to go buy the book constantly" retention killer: the prompt's CTA
 // CONCENTRATION RULE tells the model buy/visit-the-website language belongs in exactly one
 // scene, but nothing used to VERIFY that — an LLM instruction with no check behind it fails
@@ -1771,4 +1830,4 @@ Answer as JSON: choice = the number of the term (1-${candidates.length}) or 0 fo
   const fit = Number(parsed.fit);
   if (!Number.isInteger(choice) || choice < 1 || choice > candidates.length) return null;
   return { index: choice - 1, fit: Number.isFinite(fit) ? fit : 0, tieIn: String(parsed.tie_in || "").trim().slice(0, 240) };
-                                                                   }
+}
