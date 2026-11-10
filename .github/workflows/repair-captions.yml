@@ -1,0 +1,80 @@
+name: Repair Captions
+
+# Manual button only - Actions tab -> Repair Captions -> Run workflow.
+# Adds ONLY missing translated caption tracks to one uploaded video (scheduled or public).
+# Existing tracks are never overwritten or deleted; re-runs are safe. Translation runs
+# locally via Argos (same engine and garble guards as the daily pipeline, zero neurons).
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Which channel owns the video (1-4)"
+        required: true
+        type: choice
+        options:
+          - "1"
+          - "2"
+          - "3"
+          - "4"
+      video_id:
+        description: "YouTube video ID to repair (e.g. Q4lnEhNUkWw)"
+        required: true
+        type: string
+      langs:
+        description: "Comma-separated languages to add (e.g. zh or ar,es)"
+        required: true
+        type: string
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cache Argos translation models
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/argos-translate
+          key: argos-models-en15-v1
+      - name: Install Argos + requested language pairs
+        run: |
+          set -euo pipefail
+          pip install --user argostranslate
+          IFS=',' read -ra LANGS <<< "${{ github.event.inputs.langs }}"
+          for lang in "${LANGS[@]}"; do
+            lang="$(echo "$lang" | xargs)"
+            argospm install "translate-en_${lang}" || { echo "argospm install failed for ${lang}"; exit 1; }
+          done
+      - name: Resolve channel secrets
+        id: resolve
+        run: |
+          set -euo pipefail
+          case "${{ github.event.inputs.channel }}" in
+            1)
+              ID_KEY="YT_CLIENT_ID"; SECRET_KEY="YT_CLIENT_SECRET"; TOKEN_KEY="YT_REFRESH_TOKEN" ;;
+            2)
+              ID_KEY="YOUTUBE_CLIENT_ID_2"; SECRET_KEY="YOUTUBE_CLIENT_SECRET_2"; TOKEN_KEY="YOUTUBE_REFRESH_TOKEN_2" ;;
+            3)
+              ID_KEY="YOUTUBE_CLIENT_ID_3"; SECRET_KEY="YOUTUBE_CLIENT_SECRET_3"; TOKEN_KEY="YOUTUBE_REFRESH_TOKEN_3" ;;
+            4)
+              ID_KEY="YOUTUBE_CLIENT_ID_4"; SECRET_KEY="YOUTUBE_CLIENT_SECRET_4"; TOKEN_KEY="YOUTUBE_REFRESH_TOKEN_4" ;;
+            *)
+              echo "Invalid channel"; exit 1 ;;
+          esac
+          echo "id_key=$ID_KEY" >> "$GITHUB_OUTPUT"
+          echo "secret_key=$SECRET_KEY" >> "$GITHUB_OUTPUT"
+          echo "token_key=$TOKEN_KEY" >> "$GITHUB_OUTPUT"
+      - run: node scripts/repair-captions.js
+        env:
+          YT_CLIENT_ID: ${{ secrets[steps.resolve.outputs.id_key] }}
+          YT_CLIENT_SECRET: ${{ secrets[steps.resolve.outputs.secret_key] }}
+          YT_REFRESH_TOKEN: ${{ secrets[steps.resolve.outputs.token_key] }}
+          VIDEO_ID: ${{ github.event.inputs.video_id }}
+          REPAIR_LANGS: ${{ github.event.inputs.langs }}
