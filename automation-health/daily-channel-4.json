@@ -1,15 +1,62 @@
 {
   "channel": "4",
   "status": "failure",
-  "checkedAt": "2026-11-09T08:31:42.377Z",
-  "repositoryCommitSha": "ad4c965072729f5a0e0a330772535191d13df244",
-  "captionTracks": null,
+  "checkedAt": "2026-11-10T08:53:04.288Z",
+  "repositoryCommitSha": "59c5d11c61fad10dd3fbea7e7c84b086fffe770e",
+  "captionTracks": {
+    "videoId": "Q4lnEhNUkWw",
+    "engine": "argos-local",
+    "generatedAt": "2026-11-10T08:53:03.940Z",
+    "expectedLanguages": [
+      "es",
+      "fr",
+      "pt",
+      "de",
+      "hi",
+      "ar",
+      "id",
+      "sw",
+      "ja",
+      "ru",
+      "ko",
+      "zh",
+      "it",
+      "tr",
+      "vi"
+    ],
+    "allLanguagesPresent": false,
+    "englishCaptionOk": true,
+    "shortVideoId": "tWPQk--h6gA",
+    "shortCaptionStatus": {
+      "en": "ok",
+      "es": "ok",
+      "pt": "ok",
+      "hi": "ok"
+    },
+    "status": {
+      "es": "ok",
+      "fr": "ok",
+      "pt": "ok",
+      "de": "ok",
+      "hi": "ok",
+      "ar": "ok",
+      "id": "ok",
+      "sw": "ok",
+      "ja": "ok",
+      "ru": "ok",
+      "ko": "ok",
+      "zh": "failed:after-retry:translate-captions.py exited 2 for zh: {\"error\": \"persistent garbled/untranslated line after retries\", \"line_index\": 9, \"lang\": \"zh\"}",
+      "it": "ok",
+      "tr": "ok",
+      "vi": "ok"
+    }
+  },
   "keywordFile": {
-    "updatedAt": "2026-11-02T10:33:53.699Z",
+    "updatedAt": "2026-11-09T10:55:44.003Z",
     "week": null
   },
   "workflow": "HDL Daily YouTube Teaser",
-  "runId": "42583826792",
-  "runNumber": "373",
+  "runId": "42783071665",
+  "runNumber": "377",
   "eventName": "schedule"
 }
