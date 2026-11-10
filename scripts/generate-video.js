@@ -823,42 +823,51 @@ async function main() {
         `(avg ${avgSceneSeconds.toFixed(1)}s/scene), generating ${scenesThisRound} bonus scenes with word budget ${wordBudget} (round ${topupRound}/${MAX_TOPUP_ROUNDS})...`
     );
     let bonusScenes;
-    try {
-      // Pass every line built so far (main script + any earlier top-up rounds) so this round
-      // is steered away from — and hard-checked against — ideas/openings already used. Without
-      // this, each top-up round only ever compared its own 10 scenes to each other, which is
-      // why separate rounds could open with near-identical lines (see cf-ai.js countRepetition).
+    // One generation+repair attempt for this round. Pass every line built so far (main
+    // script + any earlier top-up rounds) so the round is steered away from — and
+    // hard-checked against — ideas/openings already used; then drop bonus lines that
+    // verbatim-repeat anything already in the cut (or each other) BEFORE paying
+    // synthesis for them. A batch that repairs to empty stops the top-up, same as a
+    // generation failure - the duration invariant below still judges the result.
+    const tryBonusRound = async () => {
       const existingLines = built.map((s) => s.line);
-      bonusScenes = sanitizeScenePauses(await generateBonusScenes(book, scenesThisRound, existingLines, { wordBudget }));
-      // Same pre-build repeat repair for the top-up batch: drop bonus lines that
-      // verbatim-repeat anything already in the cut (or each other) BEFORE paying
-      // synthesis for them. A batch that repairs to empty stops the top-up, same as a
-      // generation failure - the duration invariant below still judges the result.
-      {
-        const repair = repairRepeatedSentences(bonusScenes, { priorLines: existingLines, protectLast: false });
-        if (repair.removedSentences || repair.removedScenes) {
-          console.warn(
-            `Repeat repair (top-up round ${topupRound}): removed ${repair.removedSentences} verbatim duplicate sentence(s) and dropped ${repair.removedScenes} now-empty bonus scene(s).`
-          );
-          bonusScenes = repair.scenes;
-        }
-        if (!bonusScenes.length) {
-          console.warn(`Top-up round ${topupRound}: every bonus scene duplicated earlier narration - stopping top-up early.`);
-          break;
-        }
+      let round = sanitizeScenePauses(await generateBonusScenes(book, scenesThisRound, existingLines, { wordBudget }));
+      const repair = repairRepeatedSentences(round, { priorLines: existingLines, protectLast: false });
+      if (repair.removedSentences || repair.removedScenes) {
+        console.warn(
+          `Repeat repair (top-up round ${topupRound}): removed ${repair.removedSentences} verbatim duplicate sentence(s) and dropped ${repair.removedScenes} now-empty bonus scene(s).`
+        );
+        round = repair.scenes;
       }
-      // Truncation check (owner review 2026-11-03): if the model returned fewer scenes than
-      // requested, say so with real numbers - silently accepting a short round is how the
-      // undershoot hid before.
-      if (bonusScenes.length < scenesThisRound) {
-        console.warn(`Top-up round ${topupRound}: requested ${scenesThisRound} scenes, model returned ${bonusScenes.length} - continuing with what was returned.`);
-      }
-      const deliveredWords = bonusScenes.reduce((a, s) => a + wordCount(s.line), 0);
-      console.log(`Top-up round ${topupRound}: word budget ${wordBudget}, model delivered ${deliveredWords} words across ${bonusScenes.length} scenes.`);
+      return round;
+    };
+    try {
+      bonusScenes = await tryBonusRound();
     } catch (e) {
-      console.warn("Bonus scene generation failed, stopping top-up early:", e.message);
+      // One bounded retry on hard generation failure (2026-11-10): the Nov 9 ch3 run lost
+      // its only top-up round to a degenerate model response (unparseable whitespace),
+      // leaving the cut 201s short with no second chance. One extra call, only on hard
+      // failure; a second failure still stops the top-up and the gates decide.
+      console.warn(`Bonus scene generation failed (round ${topupRound}), retrying once:`, e.message);
+      try {
+        bonusScenes = await tryBonusRound();
+      } catch (e2) {
+        console.warn("Bonus scene generation failed on retry, stopping top-up early:", e2.message);
+        break;
+      }
+    }
+    if (!bonusScenes.length) {
+      console.warn(`Top-up round ${topupRound}: every bonus scene duplicated earlier narration - stopping top-up early.`);
       break;
     }
+    // Truncation check (owner review 2026-11-03): if the model returned fewer scenes than
+    // requested, say so with real numbers - silently accepting a short round is how the
+    // undershoot hid before.
+    if (bonusScenes.length < scenesThisRound) {
+      console.warn(`Top-up round ${topupRound}: requested ${scenesThisRound} scenes, model returned ${bonusScenes.length} - continuing with what was returned.`);
+    }
+    const deliveredWords = bonusScenes.reduce((a, s) => a + wordCount(s.line), 0);
+    console.log(`Top-up round ${topupRound}: word budget ${wordBudget}, model delivered ${deliveredWords} words across ${bonusScenes.length} scenes.`);
     // Insert top-up scenes BEFORE the closing call-to-action scene (always the last scene of
     // the main script), so the CTA stays at the very end of the video instead of landing in the
     // middle with more scenes after it. `nextIndex` keeps scene filenames unique.
