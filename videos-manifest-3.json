@@ -1,6 +1,34 @@
 {
   "videos": [
     {
+      "video_id": "FEvudcFw7f4",
+      "short_video_id": "Cnw1dBwAUyA",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Vitality Depends On Daily Wellness Practices",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/FEvudcFw7f4/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "myth-bust",
+      "caption_style": "classic-pop",
+      "story_mode": "comparison",
+      "evidence": {
+        "type": "stat",
+        "source": "WHO physical activity guidelines, 2020",
+        "label": "VERIFIED FACT",
+        "url": null,
+        "alsoUrl": null
+      },
+      "claims_flagged": 0,
+      "duration_seconds": 585,
+      "duration_target_met": true,
+      "published_at": "2026-11-10T16:06:37.910Z"
+    },
+    {
       "video_id": "yB7xhTxQ-HY",
       "short_video_id": "XviJC1_bGw4",
       "book_slug": "bitcoin-standard",
@@ -1001,5 +1029,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-11-04T16:13:50.473Z"
+  "updated_at": "2026-11-10T16:06:37.910Z"
 }
