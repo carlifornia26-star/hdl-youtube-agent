@@ -185,7 +185,7 @@ async function main() {
     const ytLang = YT_LOCALE_MAP[lang] ?? lang;
     try {
       const allLines = blocks.flatMap((b) => b.textLines);
-      const translated = translateLines(allLines, lang);
+      const translated = await translateLines(allLines, lang);
       let k = 0;
       const outBlocks = blocks.map((b) => {
         const n = b.textLines.length;
