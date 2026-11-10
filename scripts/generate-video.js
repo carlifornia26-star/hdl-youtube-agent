@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pickTodaysBook, pickTodaysBookForChannel } from "./catalog.js";
-import { generateScript, generateBonusScenes, topupScenesForRound, generateTrendExplainer, translateMeta, translateCaptionsLocal, VIDEO_LANGS, pickTodaysFormat, sanitizeScenePauses, generateCuriosityTitle, generateNumberTitle, pickTitleStyleIndex, pickTodaysStoryMode, shiftStoryMode, getTodaysGroundingItems, getTodaysEvidenceItem, lintUnsupportedClaims, sceneWordStats, wordCount, logAiUsageSummary } from "./cf-ai.js";
+import { generateScript, generateBonusScenes, topupScenesForRound, generateTrendExplainer, translateMeta, translateCaptionsLocal, VIDEO_LANGS, pickTodaysFormat, sanitizeScenePauses, generateCuriosityTitle, generateNumberTitle, pickTitleStyleIndex, pickTodaysStoryMode, shiftStoryMode, getTodaysGroundingItems, getTodaysEvidenceItem, lintUnsupportedClaims, sceneWordStats, wordCount, logAiUsageSummary, normalizeSpokenSentence, repairRepeatedSentences } from "./cf-ai.js";
 import { fetchStockClip, fetchUnsplashPhoto, unsplashAttributionLine } from "./assets.js";
 import { loadUsedClipIds, saveUsedClipIds } from "./scene-history.js";
 import { synthesizeVoice, pickTodaysVoice } from "./voice.js";
@@ -265,7 +265,7 @@ function repeatedSpokenSentences(scenes,{minWords=12}={}){
  const seen=new Map(),flags=[];
  for(const [sceneIndex,scene] of scenes.entries()){
   for(const raw of String(scene.line||'').split(/(?<=[.!?])\s+/)){
-   const text=raw.normalize('NFKC').toLowerCase().replace(/[\u2018\u2019]/g,"'").replace(/[^\p{L}\p{N}'\s]/gu,' ').replace(/\s+/g,' ').trim();
+   const text=normalizeSpokenSentence(raw); // shared with the pre-build repair (cf-ai.js) - keep the two judging the exact same text
    if(text.split(' ').filter(Boolean).length<minWords)continue;
    if(seen.has(text))flags.push({sceneIndex,firstSceneIndex:seen.get(text),sentence:raw});
    else seen.set(text,sceneIndex);
@@ -625,6 +625,18 @@ async function main() {
         });
         const insertAt = Math.min(2, Math.max(0, scenes.length - 1));
         newsScenes = newsScenes.map((sc) => ({ ...sc, isNewsSegment: true }));
+        // Spoken intro for the headline-screenshot segment (owner request 2026-11-10,
+        // WhatsApp): the narrator must clearly SAY the trending-screenshots section is
+        // starting, so the first screenshot never appears on screen unexplained. Fixed
+        // grounded wording from today's real trend term - the owner's sample phrasing
+        // ("before we get into it, let's see what's trending today around the world"),
+        // treated as guidance, not exact dictation. Added AFTER the card spread above so
+        // headline cards stay on explainer scenes; no card on the intro itself.
+        newsScenes.unshift({
+          line: `Before we get into it, let's see what's trending today around the world, starting with ${trend.term}.`,
+          visual: "person scrolling news headlines on a phone",
+          isNewsSegment: true,
+        });
         scenes.splice(insertAt, 0, ...newsScenes);
         console.log(`Inserted news segment: ${newsScenes.length} scenes, ${cardPaths.length} headline screenshot(s), starting at position ${insertAt + 1}.`);
       }
@@ -736,6 +748,22 @@ async function main() {
     return { ...scene, duration, outPath: built_scene.outPath, clipPath, voicePath: usableVoicePath };
   }
 
+  // Pre-build repeat repair (2026-11-10): strip verbatim duplicate sentences BEFORE
+  // synthesis instead of discovering them in the finished cut and losing the whole
+  // day's upload (Nov 9: all 4 channels failed the final-cut repeat gate and nothing
+  // uploaded). First occurrences always stay; only exact repeats are removed, and
+  // scenes left empty are dropped. The hard gate on the final cut below is unchanged
+  // and still fails the run if any repeat survives this repair.
+  {
+    const repair = repairRepeatedSentences(scenes);
+    if (repair.removedSentences || repair.removedScenes) {
+      console.warn(
+        `Repeat repair: removed ${repair.removedSentences} verbatim duplicate sentence(s) and dropped ${repair.removedScenes} now-empty scene(s) before build (first occurrences kept; final-cut gate unchanged).`
+      );
+      scenes = repair.scenes;
+    }
+  }
+
   // H1 observability: word stats on the FINAL pre-build scene list (after news/evidence
   // insertions), so the logged numbers match what is actually voiced. Logging only.
   {
@@ -802,6 +830,23 @@ async function main() {
       // why separate rounds could open with near-identical lines (see cf-ai.js countRepetition).
       const existingLines = built.map((s) => s.line);
       bonusScenes = sanitizeScenePauses(await generateBonusScenes(book, scenesThisRound, existingLines, { wordBudget }));
+      // Same pre-build repeat repair for the top-up batch: drop bonus lines that
+      // verbatim-repeat anything already in the cut (or each other) BEFORE paying
+      // synthesis for them. A batch that repairs to empty stops the top-up, same as a
+      // generation failure - the duration invariant below still judges the result.
+      {
+        const repair = repairRepeatedSentences(bonusScenes, { priorLines: existingLines, protectLast: false });
+        if (repair.removedSentences || repair.removedScenes) {
+          console.warn(
+            `Repeat repair (top-up round ${topupRound}): removed ${repair.removedSentences} verbatim duplicate sentence(s) and dropped ${repair.removedScenes} now-empty bonus scene(s).`
+          );
+          bonusScenes = repair.scenes;
+        }
+        if (!bonusScenes.length) {
+          console.warn(`Top-up round ${topupRound}: every bonus scene duplicated earlier narration - stopping top-up early.`);
+          break;
+        }
+      }
       // Truncation check (owner review 2026-11-03): if the model returned fewer scenes than
       // requested, say so with real numbers - silently accepting a short round is how the
       // undershoot hid before.
