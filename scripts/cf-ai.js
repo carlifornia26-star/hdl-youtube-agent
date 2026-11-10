@@ -1179,11 +1179,17 @@ function renderGroundingBlock(items) {
 VERIFIED GROUNDING LIBRARY — the ONLY specific citations you're allowed to use in this script:
 ${list}
 
-- GROUNDING RULE — naturally weave in 2 to 4 of the items above, wherever they genuinely support a point being made — never all of them crammed in, never forced into a scene they don't fit. Paraphrase each one into your own sentence (no quotation marks, per the rule above) but never change the name, number, date, or attribution given — use it exactly as stated. Do NOT invent any additional named study, statistic, historical date, quote, or custom beyond this list — if a point would benefit from a citation but nothing above fits, stay general ("researchers have found," "it's well documented that") instead of manufacturing one. A fabricated fact is worse than no fact.
+- GROUNDING RULE — naturally weave in 2 to 4 of the items above, wherever they genuinely support a point being made — never all of them crammed in, never forced into a scene they don't fit. Paraphrase each one into your own sentence (no quotation marks, per the rule above) but never change the name, number, date, or attribution given — use it exactly as stated. Do NOT invent any additional named study, statistic, historical date, quote, or custom beyond this list — if a point would benefit from a citation but nothing above fits, stay general ("it's well documented that," "many people find") instead of manufacturing one, and never attribute it to researchers, studies, surveys, or any other named or unnamed source. A fabricated fact is worse than no fact.
 - PHRASING VARIETY RULE — never introduce two of these with the same lead-in, and don't default to "As [name] once said" every single time. Rotate across different natural framings depending on what fits the sentence — for example: naming the year first ("Back in [year]..."), naming the number first ("Here's a number that still surprises people..."), naming the source first ("A [institution] survey found..."), framing it as a belief held before it was proven right ("Long before anyone agreed with them, [name] was convinced that..."), or framing it as an established custom ("This isn't new — [place] has treated it as ordinary for [time period]..."). Pick whichever reads most naturally for that specific fact; never force the same lead-in twice in one script.`;
 }
 
-export async function generateScript(book, format = FORMAT_POOL[0], channelOffset = 0, trend = null, storyMode = null) {
+// `avoidClaims` (2026-11-10): specific sentences the claims lint already rejected on an
+// earlier draft of THIS video (see generate-video.js). Passed into the revision prompt so
+// the single allowed revision pass knows exactly what failed instead of regenerating blind
+// and often reproducing the same invented number (Nov 8 ch2: "Over 18 million units...";
+// Nov 9 ch1: an unsourced "85%" company-AI stat - both survived a blind revision). The
+// lint itself is unchanged: it re-checks the revision and still fails the run on flags.
+export async function generateScript(book, format = FORMAT_POOL[0], channelOffset = 0, trend = null, storyMode = null, avoidClaims = []) {
   const disclaimer = pickTodaysDisclaimer(book.complianceTopic, new Date(), channelOffset);
   // Today's trending Google search term (see daily-trend.js), or null. When present the script must
   // work that exact term in twice — as an honest hook, never as a claim about the term itself,
@@ -1259,7 +1265,11 @@ Strict rules:
     disclaimer
       ? `\n- COMPLIANCE RULE — somewhere between the one-third and two-thirds mark of the scenes (never in the first third, where it would undercut the opening hook right as it's landing), work in this exact idea as a natural, spoken aside (not a legal footnote): ${disclaimer}`
       : ""
-  }${trendRule}${modeBlock}${renderGroundingBlock(grounding)}`;
+  }${trendRule}${modeBlock}${renderGroundingBlock(grounding)}${
+    avoidClaims.length
+      ? `\n- REVISION RULE — an earlier draft of this exact video was rejected for these specific unsupported claim(s): ${avoidClaims.map((c) => `[${c}]`).join(" ")}. Do NOT include these numbers or claims, or any close variant of them, anywhere in the new script. Where one of them carried a point, make the same point WITHOUT the specific number or source flavour, or support it with an item from the VERIFIED GROUNDING LIBRARY above instead.`
+      : ""
+  }`;
 
   return requestSceneScript(prompt, SCRIPT_MIN_SCENES, SCRIPT_MAX_SCENES, 6000, [], "finalOnly");
 }
