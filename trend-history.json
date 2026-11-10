@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-11-10",
+      "channel": "2",
+      "term": "Forex Factory",
+      "headline": null
+    },
+    {
       "date": "2026-11-09",
       "channel": "2",
       "term": "Revolut Mobile",
@@ -473,13 +479,7 @@
       "channel": "4",
       "term": "Wordle Hint",
       "headline": null
-    },
-    {
-      "date": "2026-10-10",
-      "channel": "3",
-      "term": "Epl Table",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-09T14:00:55.912Z"
+  "updated_at": "2026-11-10T13:39:37.204Z"
 }
