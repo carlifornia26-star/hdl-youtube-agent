@@ -78,3 +78,7 @@ jobs:
           YT_REFRESH_TOKEN: ${{ secrets[steps.resolve.outputs.token_key] }}
           VIDEO_ID: ${{ github.event.inputs.video_id }}
           REPAIR_LANGS: ${{ github.event.inputs.langs }}
+          # Only used if Argos deterministically garbles one source line: single-line
+          # m2m100 fallback, garble-guarded, ~zero neurons.
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
