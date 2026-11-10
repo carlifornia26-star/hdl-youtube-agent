@@ -1728,14 +1728,30 @@ async function main() {
   }
 
   // CAPTION_PUBLICATION_GATE_BEGIN
-  const missingMainCaptions = [
-    ...(!englishCaptionOk ? ["en"] : []),
-    ...VIDEO_LANGS.filter((lang) => !captionStatus[lang]?.startsWith("ok")),
-  ];
+  // Owner instruction 2026-11-10 ("every video should stay scheduled and released at a
+  // specific time everyday on every channel"): a missing TRANSLATED caption track no longer
+  // holds the videos private - both still get the fixed daily publishAt below, and the
+  // missing tracks stay recorded in captions-status.json for separate repair. The run still
+  // fails loudly (process.exitCode = 1) so the debt stays visible in Actions. A missing
+  // ENGLISH track (core caption, generated locally, not a translation) still blocks
+  // publication as before. All other quality gates are unchanged.
+  const shortEnglishOk = !shortVideoId || shortCaptionStatus["en"] === "ok";
+  if (!englishCaptionOk || !shortEnglishOk) {
+    throw new Error(
+      `Caption publication gate: ${!englishCaptionOk ? "main video" : "Short"} missing its English caption track. ` +
+        `Both held PRIVATE with no publishAt. Repair the en track before publication.`
+    );
+  }
+  const missingMainCaptions = VIDEO_LANGS.filter((lang) => !captionStatus[lang]?.startsWith("ok"));
   const missingShortCaptions = shortVideoId
-    ? ["en", ...SHORT_CAPTION_LANGS].filter((lang) => shortCaptionStatus[lang] !== "ok") : [];
+    ? SHORT_CAPTION_LANGS.filter((lang) => shortCaptionStatus[lang] !== "ok") : [];
   if (missingMainCaptions.length || missingShortCaptions.length) {
-    throw new Error(`Caption publication gate: main missing [${missingMainCaptions.join(", ")}]; Short missing [${missingShortCaptions.join(", ")}]. Both held PRIVATE with no publishAt. Repair missing tracks before publication.`);
+    console.error(
+      `Caption debt (scheduling anyway per owner instruction 2026-11-10): main missing ` +
+        `[${missingMainCaptions.join(", ")}]; Short missing [${missingShortCaptions.join(", ")}]. ` +
+        `Recorded in captions-status.json for separate repair; this run still fails loudly so the debt stays visible.`
+    );
+    process.exitCode = 1;
   }
   // CAPTION_PUBLICATION_GATE_END
 
