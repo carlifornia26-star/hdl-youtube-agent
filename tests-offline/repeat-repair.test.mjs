@@ -74,7 +74,8 @@ test("source: final-cut gate still throws (repair does not weaken it)", () => {
   const src = readFileSync(new URL("../scripts/generate-video.js", import.meta.url), "utf8");
   assert.match(src, /Final narration repeats \$\{finalRepeats\.length\} verbatim sentence\(s\) across the cut; refusing upload/);
   assert.match(src, /repairRepeatedSentences\(scenes\)/); // pre-build repair wired in
-  assert.match(src, /repairRepeatedSentences\(bonusScenes, \{ priorLines: existingLines, protectLast: false \}\)/); // top-up wired
+  assert.match(src, /repairRepeatedSentences\(round, \{ priorLines: existingLines, protectLast: false \}\)/); // top-up wired
+  assert.match(src, /retrying once/); // one bounded retry on hard top-up generation failure
 });
 
 test("source: trending-screenshots segment gets a clear spoken intro before the cards", () => {
