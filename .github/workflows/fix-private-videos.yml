@@ -1,11 +1,30 @@
 name: Fix Private Videos
 
-# Manual button only — Actions tab -> Fix Private Videos -> Run workflow.
-# Publishes every currently-private video on the channel tied to the secrets below.
-# If you run more than one channel, duplicate this file per channel (different filename,
-# e.g. fix-private-videos-channel2.yml) pointing at that channel's own YT_* secrets, the
-# same way daily-video.yml resolves CHANNEL_ID per channel.
-on: workflow_dispatch
+# Manual button only - Actions tab -> Fix Private Videos -> Run workflow.
+# Puts the EXACT listed private videos back on the fixed daily schedule (private with a
+# publishAt), never immediate-public. Owner rule 2026-11-10: every video stays scheduled
+# for the fixed daily slot. Pick the channel whose account owns the videos.
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Which channel owns the videos (1-4)"
+        required: true
+        type: choice
+        options:
+          - "1"
+          - "2"
+          - "3"
+          - "4"
+      video_ids:
+        description: "Comma-separated YouTube video IDs to schedule (only these are touched)"
+        required: true
+        type: string
+      publish_at:
+        description: "ISO publish time (e.g. 2026-11-10T16:00:00Z). Empty = next daily 16:00 UTC slot"
+        required: false
+        type: string
 
 jobs:
   fix:
@@ -16,8 +35,31 @@ jobs:
         with:
           node-version: 20
       - run: npm install
+      - name: Resolve channel secrets
+        id: resolve
+        run: |
+          set -euo pipefail
+          case "${{ github.event.inputs.channel }}" in
+            1)
+              ID_KEY="YT_CLIENT_ID"; SECRET_KEY="YT_CLIENT_SECRET"; TOKEN_KEY="YT_REFRESH_TOKEN" ;;
+            2)
+              ID_KEY="YOUTUBE_CLIENT_ID_2"; SECRET_KEY="YOUTUBE_CLIENT_SECRET_2"; TOKEN_KEY="YOUTUBE_REFRESH_TOKEN_2" ;;
+            3)
+              ID_KEY="YOUTUBE_CLIENT_ID_3"; SECRET_KEY="YOUTUBE_CLIENT_SECRET_3"; TOKEN_KEY="YOUTUBE_REFRESH_TOKEN_3" ;;
+            4)
+              ID_KEY="YOUTUBE_CLIENT_ID_4"; SECRET_KEY="YOUTUBE_CLIENT_SECRET_4"; TOKEN_KEY="YOUTUBE_REFRESH_TOKEN_4" ;;
+            *)
+              echo "Invalid channel"; exit 1 ;;
+          esac
+          echo "id_key=$ID_KEY" >> "$GITHUB_OUTPUT"
+          echo "secret_key=$SECRET_KEY" >> "$GITHUB_OUTPUT"
+          echo "token_key=$TOKEN_KEY" >> "$GITHUB_OUTPUT"
       - run: node scripts/fix-private-videos.js
         env:
-          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
-          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YT_CLIENT_ID: ${{ secrets[steps.resolve.outputs.id_key] }}
+          YT_CLIENT_SECRET: ${{ secrets[steps.resolve.outputs.secret_key] }}
+          YT_REFRESH_TOKEN: ${{ secrets[steps.resolve.outputs.token_key] }}
+          VIDEO_IDS: ${{ github.event.inputs.video_ids }}
+          PUBLISH_AT: ${{ github.event.inputs.publish_at }}
+          PUBLISH_HOUR_UTC: "16"
+          PUBLISH_MINUTE_UTC: "0"
