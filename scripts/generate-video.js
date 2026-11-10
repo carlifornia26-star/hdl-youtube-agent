@@ -561,7 +561,10 @@ async function main() {
   if (claimFlags.length > 0) {
     console.warn(`Claims lint: ${claimFlags.length} unsupported-looking claim(s):`, JSON.stringify(claimFlags.slice(0, 5)));
     try {
-      const revised = sanitizeScenePauses(await generateScript(book, format, Number(CHANNEL_ID) - 1, trend, storyMode));
+      // Flags-aware revision (2026-11-10): pass the exact rejected sentences into the
+      // revision prompt so the model knows what failed. Same single revision pass, same
+      // quota, lint re-checks the result unchanged.
+      const revised = sanitizeScenePauses(await generateScript(book, format, Number(CHANNEL_ID) - 1, trend, storyMode, claimFlags.map((f) => f.sentence)));
       const revisedFlags = lintUnsupportedClaims(revised, todaysGrounding);
       if (revisedFlags.length < claimFlags.length) {
         console.warn(`Claims lint: revision improved (${claimFlags.length} -> ${revisedFlags.length}) — using the revised script.`);
