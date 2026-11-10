@@ -1,0 +1,58 @@
+name: Verify Uploaded Videos
+
+# Manual button only - Actions tab -> Verify Uploaded Videos -> Run workflow.
+# READ-ONLY: prints YouTube's own record (status, duration, audio/video streams) plus a
+# spoken-content check comparing the uploaded English captions (script) against YouTube's
+# own auto-ASR transcription of the actual uploaded audio. Changes nothing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Which channel owns the videos (1-4)"
+        required: true
+        type: choice
+        options:
+          - "1"
+          - "2"
+          - "3"
+          - "4"
+      video_ids:
+        description: "Comma-separated YouTube video IDs"
+        required: true
+        type: string
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - name: Resolve channel secrets
+        id: resolve
+        run: |
+          set -euo pipefail
+          case "${{ github.event.inputs.channel }}" in
+            1)
+              ID_KEY="YT_CLIENT_ID"; SECRET_KEY="YT_CLIENT_SECRET"; TOKEN_KEY="YT_REFRESH_TOKEN" ;;
+            2)
+              ID_KEY="YOUTUBE_CLIENT_ID_2"; SECRET_KEY="YOUTUBE_CLIENT_SECRET_2"; TOKEN_KEY="YOUTUBE_REFRESH_TOKEN_2" ;;
+            3)
+              ID_KEY="YOUTUBE_CLIENT_ID_3"; SECRET_KEY="YOUTUBE_CLIENT_SECRET_3"; TOKEN_KEY="YOUTUBE_REFRESH_TOKEN_3" ;;
+            4)
+              ID_KEY="YOUTUBE_CLIENT_ID_4"; SECRET_KEY="YOUTUBE_CLIENT_SECRET_4"; TOKEN_KEY="YOUTUBE_REFRESH_TOKEN_4" ;;
+            *)
+              echo "Invalid channel"; exit 1 ;;
+          esac
+          echo "id_key=$ID_KEY" >> "$GITHUB_OUTPUT"
+          echo "secret_key=$SECRET_KEY" >> "$GITHUB_OUTPUT"
+          echo "token_key=$TOKEN_KEY" >> "$GITHUB_OUTPUT"
+      - run: node scripts/verify-upload.js
+        env:
+          YT_CLIENT_ID: ${{ secrets[steps.resolve.outputs.id_key] }}
+          YT_CLIENT_SECRET: ${{ secrets[steps.resolve.outputs.secret_key] }}
+          YT_REFRESH_TOKEN: ${{ secrets[steps.resolve.outputs.token_key] }}
+          VIDEO_IDS: ${{ github.event.inputs.video_ids }}
