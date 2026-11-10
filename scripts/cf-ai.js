@@ -1117,7 +1117,7 @@ export function lintUnsupportedClaims(scenes, allowedFacts = []) {
     const sentences = String(s.line || "").split(/(?<=[.!?])\s+/).filter(Boolean);
     for (const sentence of sentences) {
       if (FABRICATED_ATTRIBUTION.test(sentence) && !allowedFacts.some((f) => f.type === "viewer-comment")) {
-        flags.push({ sceneIndex, sentence: sentence.slice(0, 140), fabricatedAttribution: true, hasSourceClaim: false, unsupportedNumbers: [], overlap: 0 });
+        flags.push({ sceneIndex, sentence: sentence.slice(0, 140), fullSentence: sentence, fabricatedAttribution: true, hasSourceClaim: false, unsupportedNumbers: [], overlap: 0 });
         continue;
       }
       const hasSourceClaim = SOURCE_CLAIM.test(sentence);
@@ -1141,6 +1141,7 @@ export function lintUnsupportedClaims(scenes, allowedFacts = []) {
         flags.push({
           sceneIndex,
           sentence: sentence.slice(0, 140),
+          fullSentence: sentence, // untruncated, for the flags-aware revision pass (slice above is log-only; an unsupported fact can sit past char 140)
           hasSourceClaim,
           unsupportedNumbers: badNums,
           overlap: Number(best.toFixed(2)),
@@ -1171,7 +1172,7 @@ function pickTodaysGrounding(slug, count = 3, date = new Date(), channelOffset =
 
 // Renders the picked grounding facts into a prompt block, plus the phrasing-variety guidance
 // that keeps this from turning into a fixed "As so-and-so once said" template every time.
-function renderGroundingBlock(items) {
+export function renderGroundingBlock(items) {
   if (!items.length) return "";
   const list = items.map((it, i) => `  ${i + 1}. [${it.type}] ${it.fact}`).join("\n");
   return `
@@ -1179,16 +1180,24 @@ function renderGroundingBlock(items) {
 VERIFIED GROUNDING LIBRARY — the ONLY specific citations you're allowed to use in this script:
 ${list}
 
-- GROUNDING RULE — naturally weave in 2 to 4 of the items above, wherever they genuinely support a point being made — never all of them crammed in, never forced into a scene they don't fit. Paraphrase each one into your own sentence (no quotation marks, per the rule above) but never change the name, number, date, or attribution given — use it exactly as stated. Do NOT invent any additional named study, statistic, historical date, quote, or custom beyond this list — if a point would benefit from a citation but nothing above fits, stay general ("it's well documented that," "many people find") instead of manufacturing one, and never attribute it to researchers, studies, surveys, or any other named or unnamed source. A fabricated fact is worse than no fact.
+- GROUNDING RULE — naturally weave in 2 to 4 of the items above, wherever they genuinely support a point being made — never all of them crammed in, never forced into a scene they don't fit. Paraphrase each one into your own sentence (no quotation marks, per the rule above) but never change the name, number, date, or attribution given — use it exactly as stated. Do NOT invent any additional named study, statistic, historical date, quote, or custom beyond this list — if a point would benefit from a citation but nothing above fits, either leave the point out entirely, or state it openly as your own general interpretation — and in that case do NOT claim or imply it is documented, researched, surveyed, measured, widely known, or popular: no numbers, no source flavour, no appeal to evidence you do not have. A claim laundered into sourceless general wording is as dishonest as a fabricated citation.
 - PHRASING VARIETY RULE — never introduce two of these with the same lead-in, and don't default to "As [name] once said" every single time. Rotate across different natural framings depending on what fits the sentence — for example: naming the year first ("Back in [year]..."), naming the number first ("Here's a number that still surprises people..."), naming the source first ("A [institution] survey found..."), framing it as a belief held before it was proven right ("Long before anyone agreed with them, [name] was convinced that..."), or framing it as an established custom ("This isn't new — [place] has treated it as ordinary for [time period]..."). Pick whichever reads most naturally for that specific fact; never force the same lead-in twice in one script.`;
 }
 
+// renderRevisionRule (2026-11-10, corrected after ops review): tells the single allowed
+// revision pass exactly which sentences the claims lint rejected — full and untruncated —
+// and what an honest fix is: support from the VERIFIED GROUNDING LIBRARY or remove the
+// claim. Explicitly forbids laundering the same assertion past the lint by stripping just
+// the number or attribution. The lint itself is unchanged: it re-checks the revision and
+// still fails the run on flags. (Why: Nov 8 ch2 "Over 18 million units..." and Nov 9 ch1
+// an unsourced "85%" company-AI stat both survived a blind revision.)
+export function renderRevisionRule(avoidClaims = []) {
+  if (!avoidClaims.length) return "";
+  return `\n- REVISION RULE — an earlier draft of this exact video was rejected for these specific unsupported claim(s): ${avoidClaims.map((c) => `[${c}]`).join(" ")}. Do NOT include these claims, any close variant of them, or the same assertion with just the number or attribution stripped, anywhere in the new script. Where one of them carried a point, either support the point with an item from the VERIFIED GROUNDING LIBRARY above, or remove the claim entirely.`;
+}
+
 // `avoidClaims` (2026-11-10): specific sentences the claims lint already rejected on an
-// earlier draft of THIS video (see generate-video.js). Passed into the revision prompt so
-// the single allowed revision pass knows exactly what failed instead of regenerating blind
-// and often reproducing the same invented number (Nov 8 ch2: "Over 18 million units...";
-// Nov 9 ch1: an unsourced "85%" company-AI stat - both survived a blind revision). The
-// lint itself is unchanged: it re-checks the revision and still fails the run on flags.
+// earlier draft of THIS video (see generate-video.js) - passed through renderRevisionRule.
 export async function generateScript(book, format = FORMAT_POOL[0], channelOffset = 0, trend = null, storyMode = null, avoidClaims = []) {
   const disclaimer = pickTodaysDisclaimer(book.complianceTopic, new Date(), channelOffset);
   // Today's trending Google search term (see daily-trend.js), or null. When present the script must
@@ -1265,11 +1274,7 @@ Strict rules:
     disclaimer
       ? `\n- COMPLIANCE RULE — somewhere between the one-third and two-thirds mark of the scenes (never in the first third, where it would undercut the opening hook right as it's landing), work in this exact idea as a natural, spoken aside (not a legal footnote): ${disclaimer}`
       : ""
-  }${trendRule}${modeBlock}${renderGroundingBlock(grounding)}${
-    avoidClaims.length
-      ? `\n- REVISION RULE — an earlier draft of this exact video was rejected for these specific unsupported claim(s): ${avoidClaims.map((c) => `[${c}]`).join(" ")}. Do NOT include these numbers or claims, or any close variant of them, anywhere in the new script. Where one of them carried a point, make the same point WITHOUT the specific number or source flavour, or support it with an item from the VERIFIED GROUNDING LIBRARY above instead.`
-      : ""
-  }`;
+  }${trendRule}${modeBlock}${renderGroundingBlock(grounding)}${renderRevisionRule(avoidClaims)}`;
 
   return requestSceneScript(prompt, SCRIPT_MIN_SCENES, SCRIPT_MAX_SCENES, 6000, [], "finalOnly");
 }
@@ -1840,4 +1845,4 @@ Answer as JSON: choice = the number of the term (1-${candidates.length}) or 0 fo
   const fit = Number(parsed.fit);
   if (!Number.isInteger(choice) || choice < 1 || choice > candidates.length) return null;
   return { index: choice - 1, fit: Number.isFinite(fit) ? fit : 0, tieIn: String(parsed.tie_in || "").trim().slice(0, 240) };
-}
+                    }
