@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-11-12",
+      "channel": "1",
+      "term": "Dbs Paylah China Qr Expansion",
+      "headline": null
+    },
+    {
       "date": "2026-11-11",
       "channel": "2",
       "term": "Stock Market Open Today",
@@ -473,13 +479,7 @@
       "channel": "4",
       "term": "Kospi Index",
       "headline": null
-    },
-    {
-      "date": "2026-10-11",
-      "channel": "1",
-      "term": "Eliud Kipchoge",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-11T12:48:53.005Z"
+  "updated_at": "2026-11-12T11:32:32.939Z"
 }
