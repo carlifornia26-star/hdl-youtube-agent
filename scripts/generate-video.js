@@ -855,6 +855,20 @@ async function main() {
       try {
         bonusScenes = await tryBonusRound();
       } catch (e2) {
+        // One hard-failed round must not forfeit the remaining round(s) (2026-11-12): the
+        // Nov 12 ch3 run lost top-up round 1 of 2 to malformed model JSON and broke out,
+        // so round 2 never ran and the cut failed the duration invariant at 334s. A failed
+        // round produced no scenes and changed no state, so the next round retries the same
+        // shortfall fresh. Still bounded: at most MAX_TOPUP_ROUNDS x (1 initial + 1 retry)
+        // Workers AI calls, and the duration invariant below still fails the run loudly if
+        // every round fails. Single-round channels (MAX_TOPUP_ROUNDS=1) keep the old stop.
+        if (topupRound < MAX_TOPUP_ROUNDS) {
+          console.warn(
+            `Bonus scene generation failed on retry (round ${topupRound}/${MAX_TOPUP_ROUNDS}); continuing to the remaining round(s) - the duration invariant still judges the final cut:`,
+            e2.message
+          );
+          continue;
+        }
         console.warn("Bonus scene generation failed on retry, stopping top-up early:", e2.message);
         break;
       }
