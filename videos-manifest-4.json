@@ -1,6 +1,34 @@
 {
   "videos": [
     {
+      "video_id": "E-_IK-jHoUU",
+      "short_video_id": "rQTbPMNAXfA",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "Overlooking Dietary Needs",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/E-_IK-jHoUU/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "direct-address",
+      "caption_style": "wide-orange",
+      "story_mode": "concept-deep-dive",
+      "evidence": {
+        "type": "historical",
+        "source": "The Kennel Club, founded 1873",
+        "label": "VERIFIED FACT",
+        "url": null,
+        "alsoUrl": null
+      },
+      "claims_flagged": 0,
+      "duration_seconds": 533,
+      "duration_target_met": true,
+      "published_at": "2026-11-12T08:55:20.480Z"
+    },
+    {
       "video_id": "0cFXVaoU2FQ",
       "short_video_id": "dVqhtbSWYDs",
       "book_slug": "pet-friendly",
@@ -881,5 +909,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-11-11T08:22:49.435Z"
+  "updated_at": "2026-11-12T08:55:20.481Z"
 }
