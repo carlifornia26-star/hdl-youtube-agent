@@ -157,20 +157,47 @@ print("detector OK")
   assert.match(checks, /detector OK/);
 });
 
-test("publication gate holds main and Short on missing, skipped, failed or absent captions", () => {
+test("publication gate: English fail-closed on main+Short, translated-track debt publishes loudly", () => {
+  // Current owner-instructed semantics (owner instruction 2026-11-10, "every video should stay
+  // scheduled and released at a specific time everyday on every channel", gate change cbef97d0):
+  // a missing/failed/never-attempted TRANSLATED track no longer holds the videos private - the
+  // gate records the debt and fails the run loudly (process.exitCode = 1) but publication
+  // proceeds; a missing ENGLISH track on either video still blocks publication for both.
   const gv = readFileSync(new URL("../scripts/generate-video.js", import.meta.url), "utf8");
   const gate = gv.split("// CAPTION_PUBLICATION_GATE_BEGIN")[1].split("// CAPTION_PUBLICATION_GATE_END")[0];
-  const check = new Function("englishCaptionOk", "VIDEO_LANGS", "captionStatus", "shortVideoId", "SHORT_CAPTION_LANGS", "shortCaptionStatus", gate);
+  // Shadow process/console so the gate's debt logging can't touch the test runner's own exitCode.
+  const check = new Function("englishCaptionOk", "VIDEO_LANGS", "captionStatus", "shortVideoId", "SHORT_CAPTION_LANGS", "shortCaptionStatus", "process", "console", gate);
   const langs = ["es", "pt", "hi", "ja"];
   const good = Object.fromEntries(langs.map(l => [l, "ok"]));
   const short = { en: "ok", es: "ok", pt: "ok", hi: "ok" };
-  assert.doesNotThrow(() => check(true, langs, good, "short-id", ["es", "pt", "hi"], short));
-  assert.doesNotThrow(() => check(true, langs, good, null, ["es", "pt", "hi"], {}));
+  const silent = { error() {}, log() {}, warn() {} };
+  const probe = (...args) => {
+    const fakeProcess = { exitCode: 0 };
+    return { fn: () => check(...args, fakeProcess, silent), fakeProcess };
+  };
+  // Translated-track debt (missing, failed, or skipped) publishes but fails the run loudly.
   for (const status of [undefined, "failed:after-retry", "skipped:no-localization"]) {
-    assert.throws(() => check(true, langs, { ...good, ja: status }, "short-id", ["es", "pt", "hi"], short), /Both held PRIVATE with no publishAt/);
+    const { fn, fakeProcess } = probe(true, langs, { ...good, ja: status }, "short-id", ["es", "pt", "hi"], short);
+    assert.doesNotThrow(fn, `translated debt (ja=${status}) must not hold publication`);
+    assert.equal(fakeProcess.exitCode, 1, `debt must fail the run loudly for ja=${status}`);
   }
-  assert.throws(() => check(false, langs, good, "short-id", ["es", "pt", "hi"], short));
-  assert.throws(() => check(true, langs, good, "short-id", ["es", "pt", "hi"], { ...short, pt: "failed" }));
+  {
+    const { fn, fakeProcess } = probe(true, langs, good, "short-id", ["es", "pt", "hi"], { ...short, pt: "failed" });
+    assert.doesNotThrow(fn, "Short translated debt must not hold publication");
+    assert.equal(fakeProcess.exitCode, 1, "Short translated debt must fail the run loudly");
+  }
+  // Fully captioned main + Short: no debt, exitCode untouched. No Short: no Short debt.
+  for (const args of [
+    [true, langs, good, "short-id", ["es", "pt", "hi"], short],
+    [true, langs, good, null, ["es", "pt", "hi"], {}],
+  ]) {
+    const { fn, fakeProcess } = probe(...args);
+    assert.doesNotThrow(fn);
+    assert.equal(fakeProcess.exitCode, 0);
+  }
+  // English stays fail-closed on BOTH videos: a missing en track holds both private.
+  assert.throws(() => check(false, langs, good, "short-id", ["es", "pt", "hi"], short, { exitCode: 0 }, silent), /Both held PRIVATE with no publishAt/);
+  assert.throws(() => check(true, langs, good, "short-id", ["es", "pt", "hi"], { ...short, en: "failed" }, { exitCode: 0 }, silent), /Both held PRIVATE with no publishAt/);
   assert.ok(gv.indexOf("// CAPTION_PUBLICATION_GATE_END") < gv.indexOf("await publishVideo({ videoId: uploaded.id"));
   assert.ok(gv.indexOf("// CAPTION_PUBLICATION_GATE_END") < gv.indexOf("await publishVideo({ videoId: shortVideoId"));
   // All three upload paths (main, localized Short, fallback Short) must be unscheduled.
