@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-11-13",
+      "channel": "2",
+      "term": "Microsoft",
+      "headline": null
+    },
+    {
       "date": "2026-11-12",
       "channel": "2",
       "term": "Smart-id",
@@ -473,13 +479,7 @@
       "channel": "2",
       "term": "Fuel",
       "headline": null
-    },
-    {
-      "date": "2026-10-12",
-      "channel": "1",
-      "term": "Assistance Dog",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-12T13:52:25.762Z"
+  "updated_at": "2026-11-13T13:13:55.809Z"
 }
