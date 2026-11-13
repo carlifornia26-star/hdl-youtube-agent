@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-11-13",
+      "channel": "3",
+      "term": "Meals on Wheels",
+      "headline": null
+    },
+    {
+      "date": "2026-11-13",
       "channel": "2",
       "term": "Microsoft",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "3",
       "term": "Gasoline Fuel Prices",
       "headline": null
-    },
-    {
-      "date": "2026-10-12",
-      "channel": "2",
-      "term": "Fuel",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-13T13:13:55.809Z"
+  "updated_at": "2026-11-13T15:34:12.816Z"
 }
