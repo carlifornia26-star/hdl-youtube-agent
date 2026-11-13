@@ -1,6 +1,34 @@
 {
   "videos": [
     {
+      "video_id": "dFhbc-ApuJo",
+      "short_video_id": "PD1Q-dmvD6c",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "Channel Growth Often Requires Less Algorithm Focus",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/dFhbc-ApuJo/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "cold-open",
+      "caption_style": "punchy-duo",
+      "story_mode": "question-led",
+      "evidence": {
+        "type": "historical",
+        "source": "YouTube Shorts launch, 2020",
+        "label": "VERIFIED FACT",
+        "url": null,
+        "alsoUrl": null
+      },
+      "claims_flagged": 0,
+      "duration_seconds": 528,
+      "duration_target_met": true,
+      "published_at": "2026-11-13T11:40:12.801Z"
+    },
+    {
       "video_id": "ED_QxHC2Mn4",
       "short_video_id": "p5Vy0Qjo-lc",
       "book_slug": "age-one",
@@ -1092,5 +1120,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-11-11T11:41:58.882Z"
+  "updated_at": "2026-11-13T11:40:12.802Z"
 }
