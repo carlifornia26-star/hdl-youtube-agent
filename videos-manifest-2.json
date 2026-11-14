@@ -1,6 +1,34 @@
 {
   "videos": [
     {
+      "video_id": "cbrkfq_Jq8U",
+      "short_video_id": "8BPHUrbRmf4",
+      "book_slug": "bitcoin-standard",
+      "page_url": "https://highdefinitionlearning.pages.dev/bitcoin-standard-pure-mathematics",
+      "title": "Bitcoin Finance Missteps Like Wang Shuiming Singapore Money Laundering",
+      "description": "Curious about Bitcoin & digital finance? Bitcoin Standard breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/cbrkfq_Jq8U/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": "Wang Shuiming Singapore Money Laundering",
+      "trend_in_title": true,
+      "news_headline": "Inside the S$3b money laundering case and the undoing of Wang Shuiming’s crime empire",
+      "script_format": "direct-address",
+      "caption_style": "wide-orange",
+      "story_mode": "comparison",
+      "evidence": {
+        "type": "counter",
+        "source": "K33 Research bitcoin drawdown analysis, September 2022",
+        "label": "THE OTHER SIDE",
+        "url": "https://k33.com/research/archive/articles/the-2022-bear-market-is-on-track-with-the-2018-bear-market",
+        "alsoUrl": null
+      },
+      "claims_flagged": 0,
+      "duration_seconds": 609,
+      "duration_target_met": true,
+      "published_at": "2026-11-14T12:43:37.736Z"
+    },
+    {
       "video_id": "kfFtrsSYzr0",
       "short_video_id": "WSUuHb6zWE4",
       "book_slug": "bitcoin-standard",
@@ -981,5 +1009,5 @@
       "published_at": "2026-08-30T07:07:27.919Z"
     }
   ],
-  "updated_at": "2026-11-13T13:37:34.811Z"
+  "updated_at": "2026-11-14T12:43:37.736Z"
 }

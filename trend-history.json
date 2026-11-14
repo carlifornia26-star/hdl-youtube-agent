@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-11-14",
+      "channel": "2",
+      "term": "Wang Shuiming Singapore Money Laundering",
+      "headline": null
+    },
+    {
+      "date": "2026-11-14",
       "channel": "4",
       "term": "Dark Chocolate",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "1",
       "term": "Weather",
       "headline": null
-    },
-    {
-      "date": "2026-10-13",
-      "channel": "4",
-      "term": "Tether",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-14T07:43:57.878Z"
+  "updated_at": "2026-11-14T12:18:41.047Z"
 }
