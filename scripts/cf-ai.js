@@ -854,7 +854,7 @@ const FORMAT_POOL = [
     id: "cold-open",
     label: "Cold-Open Scene",
     opening:
-      "Open mid-scene: describe one vivid, specific, relatable moment a reader in this situation might recognize from their own life (a specific time of day, a specific feeling, a specific small detail) — as if the video started partway through a story, not with an introduction. Only pull back to explain the topic generally in scene 2.",
+      "Open mid-scene: describe one vivid, specific, relatable moment a reader in this situation might recognize from their own life (a specific time of day, a specific feeling, a specific small detail) — as if the video started partway through a story, not with an introduction. Still land the day's one-line learning promise inside that same scene (see LESSON OPENING RULE) - a single sentence woven into the moment is enough; only pull back to explain the topic generally in scene 2.",
   },
   {
     id: "stat-hook",
@@ -882,9 +882,10 @@ export function pickTodaysFormat(date = new Date(), channelOffset = 0) {
 // STORY MODE POOL (owner requirement 2026-11-03: "videos should feel different every day from
 // the same channel, not like scripted"). FORMAT_POOL varies the opening TECHNIQUE; this varies
 // the day's whole storytelling shape - one day a case study, the next a comparison, then a
-// viewer-style question, a process walkthrough, a concept deep-dive. Stepped by a different
-// multiplier (dayOfYear * 3) than pickTodaysFormat and pickTodaysGrounding so mode, format and
-// facts drift independently; consecutive days always land on a different mode (3 mod 5 cycle).
+// viewer-style question, a process walkthrough, a concept deep-dive, a before-and-after arc. Stepped by a different
+// multiplier (dayOfYear * 5) than pickTodaysFormat and pickTodaysGrounding so mode, format and
+// facts drift independently; consecutive days always land on a different mode and every mode in
+// the pool is reached (5 is coprime with the 6-entry pool, so the cycle visits all six).
 const STORY_MODE_POOL = [
   {
     id: "case-study",
@@ -911,6 +912,11 @@ const STORY_MODE_POOL = [
     label: "Concept Deep-Dive",
     block: "take ONE concept from this topic and go deeper than a normal teaser would - where it came from, why it works, where it breaks down - anchoring each layer to one concrete grounded detail rather than stacking abstract claims",
   },
+  {
+    id: "before-after",
+    label: "Before and After",
+    block: "structure the script as a before-and-after story arc: open on the verified situation as it actually was (the before - a real situation from the VERIFIED GROUNDING LIBRARY below or widely documented, checkable history of this topic, with its concrete detail), narrate the genuine struggle or tension that made change necessary, land the turning point where things shifted, and close the arc with the lesson the viewer can carry away. HONESTY RULE: use only real, verified people, places and events - never invent personal experiences, first-person anecdotes, or a friend-of-mine story, and never attribute the journey to a made-up person; if no grounded before-and-after exists for this book, build the arc around the documented history of the topic itself rather than a fabricated character",
+  },
 ];
 
 // Same day-of-year + channelOffset pattern as pickTodaysFormat, different multiplier so the
@@ -918,7 +924,7 @@ const STORY_MODE_POOL = [
 export function pickTodaysStoryMode(date = new Date(), channelOffset = 0) {
   const start = new Date(date.getFullYear(), 0, 0);
   const dayOfYear = Math.floor((date - start) / 86400000);
-  return STORY_MODE_POOL[(dayOfYear * 3 + channelOffset * 2) % STORY_MODE_POOL.length];
+  return STORY_MODE_POOL[(dayOfYear * 5 + channelOffset * 2) % STORY_MODE_POOL.length];
 }
 
 // Move N steps along the pool - used by generate-video.js when the channel's previous upload
@@ -1241,7 +1247,7 @@ Strict rules:
 - DIRECT-ADDRESS RULE — use second-person "you" language addressing the viewer's specific situation regularly across the WHOLE script, not only in scenes using today's Direct Address opening technique. Talking about "creators" or "readers" in the abstract is weaker than speaking to the one person watching.
 - PAYOFF RULE — the curiosity built throughout must feel rewarded by the end, even though the book's actual chapters/frameworks/conclusions stay withheld. The closing scenes should land as a genuine synthesis or a satisfying "here's the real shape of the problem" moment, not just one more promise stacked on the pile — a script that only ever teases and never pays off trains the viewer to stop trusting the next hook.
 - ARGUMENT STRUCTURE RULE — build the script as an argument, not a list: at least once, run a clear point -> evidence -> explanation sequence (a claim, then the grounded detail that backs it, then what it means for the viewer). And if the VERIFIED GROUNDING LIBRARY below includes an item marked [counter], use it exactly once: acknowledge that criticism or downside honestly in the narrator's own words, then answer it - never present only the shiny side, and never invent a counterargument that is not in the list.
-- LESSON OPENING RULE — by the end of scene 2 the viewer must know what they will come away understanding today (the day's question, case, comparison or process - see the STORY MODE RULE). Deliver that as a promise of understanding, not a table of contents and not a sales line.
+- LESSON OPENING RULE — scene 1 must do BOTH opening jobs in the same scene: land the day's hook (today's opening technique above) AND tell the viewer exactly what they will come away understanding today (the day's question, case, comparison or process - see the STORY MODE RULE), with one plain reason it matters for them right now. Deliver that as a promise of understanding, not a table of contents and not a sales line. Never defer the promise to scene 2 - a viewer who reaches the 15-22 second mark without knowing what they will learn has no reason to stay.
 - ANSWER-THE-OPENING RULE — before the final call-to-action scene, explicitly resolve whatever the opening set up: answer the question, close the case, land the comparison. Give the viewer one concrete, usable takeaway they could act on or repeat to a friend today. The CTA scene itself stays exactly as constrained elsewhere.
 - UNCERTAINTY RULE — distinguish plainly between established fact, estimate, and the channel's own interpretation. If a number or claim is approximate, say so in natural spoken words ("roughly," "the best estimate we have," "our read of this is") rather than stating everything with the same flat certainty.
 - AUTHORITY RULE — don't stay in constant "expert mode." Alternate a sharp, precise, authoritative line ("this is the single biggest ranking factor almost nobody optimizes for") with a plain, relatable one right after it ("and yeah, most creators get this wrong for years without knowing it"). That shift between "insider explaining something precisely" and "friend leveling with you" is what makes a narrator sound like a real expert rather than a script reciting facts. Never more than 2-3 sentences of pure declaration before a plainer beat.
