@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-11-14",
+      "channel": "4",
+      "term": "Dark Chocolate",
+      "headline": null
+    },
+    {
       "date": "2026-11-13",
       "channel": "3",
       "term": "Meals on Wheels",
@@ -473,13 +479,7 @@
       "channel": "4",
       "term": "Tether",
       "headline": null
-    },
-    {
-      "date": "2026-10-12",
-      "channel": "3",
-      "term": "Gasoline Fuel Prices",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-13T15:34:12.816Z"
+  "updated_at": "2026-11-14T07:43:57.878Z"
 }
