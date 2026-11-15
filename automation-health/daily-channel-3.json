@@ -1,15 +1,62 @@
 {
   "channel": "3",
   "status": "failure",
-  "checkedAt": "2026-11-14T14:39:14.173Z",
-  "repositoryCommitSha": "889520f6a1af65c0ce0f5f9831688685a06a30ac",
-  "captionTracks": null,
+  "checkedAt": "2026-11-15T15:24:51.672Z",
+  "repositoryCommitSha": "bdfb950fb8b8467ee5a551b61a38b1ba472f140e",
+  "captionTracks": {
+    "videoId": "YHi9dw_328E",
+    "engine": "argos-local",
+    "generatedAt": "2026-11-15T15:24:48.017Z",
+    "expectedLanguages": [
+      "es",
+      "fr",
+      "pt",
+      "de",
+      "hi",
+      "ar",
+      "id",
+      "sw",
+      "ja",
+      "ru",
+      "ko",
+      "zh",
+      "it",
+      "tr",
+      "vi"
+    ],
+    "allLanguagesPresent": true,
+    "englishCaptionOk": true,
+    "shortVideoId": "SHyVP5uFvWY",
+    "shortCaptionStatus": {
+      "en": "ok",
+      "es": "ok",
+      "pt": "ok",
+      "hi": "ok"
+    },
+    "status": {
+      "es": "ok",
+      "fr": "ok",
+      "pt": "ok",
+      "de": "ok",
+      "hi": "ok",
+      "ar": "ok",
+      "id": "ok",
+      "sw": "ok",
+      "ja": "ok",
+      "ru": "ok",
+      "ko": "ok",
+      "zh": "ok",
+      "it": "ok",
+      "tr": "ok",
+      "vi": "ok"
+    }
+  },
   "keywordFile": {
     "updatedAt": "2026-11-09T10:55:44.003Z",
     "week": null
   },
   "workflow": "HDL Daily YouTube Teaser",
-  "runId": "43604203015",
-  "runNumber": "396",
+  "runId": "43726605182",
+  "runNumber": "400",
   "eventName": "schedule"
 }
