@@ -63,7 +63,9 @@ async function main() {
       continue;
     }
     if (st.publishAt) {
-      console.warn(`${id}: has existing publishAt ${st.publishAt}; resetting to ${publishAtIso} per explicit request`);
+      console.log(`${id}: already has publishAt ${st.publishAt} - refusing to change an existing schedule, skipping`);
+      skipped++;
+      continue;
     }
     try {
       await publishVideo({ videoId: id, publishAt: publishAtIso });
