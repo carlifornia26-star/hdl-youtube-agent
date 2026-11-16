@@ -1,6 +1,34 @@
 {
   "videos": [
     {
+      "video_id": "GtSBugKsYVI",
+      "short_video_id": "lzoEWmAX80k",
+      "book_slug": "youtube-algorithms",
+      "page_url": "https://highdefinitionlearning.pages.dev/youtube-algorithms-playbook-original",
+      "title": "Growing Channels Rely On Algorithm Understanding",
+      "description": "Curious about growing a channel with the algorithm? YouTube Algorithms breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/GtSBugKsYVI/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "direct-hook",
+      "caption_style": "classic-pop",
+      "story_mode": "concept-deep-dive",
+      "evidence": {
+        "type": "historical",
+        "source": "widely reported YouTube algorithm history, 2012",
+        "label": "VERIFIED FACT",
+        "url": null,
+        "alsoUrl": null
+      },
+      "claims_flagged": 0,
+      "duration_seconds": 653,
+      "duration_target_met": true,
+      "published_at": "2026-11-16T12:21:38.299Z"
+    },
+    {
       "video_id": "mp5wp6GTpAE",
       "short_video_id": "80rPV_8Xzxc",
       "book_slug": "age-one-premium",
@@ -1176,5 +1204,5 @@
       "published_at": "2026-08-15T12:00:00Z"
     }
   ],
-  "updated_at": "2026-11-15T11:37:56.972Z"
+  "updated_at": "2026-11-16T12:21:38.300Z"
 }
