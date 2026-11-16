@@ -1,62 +1,15 @@
 {
   "channel": "4",
   "status": "failure",
-  "checkedAt": "2026-11-15T08:29:05.818Z",
-  "repositoryCommitSha": "f40d715b271114226248592a8de82880463a8497",
-  "captionTracks": {
-    "videoId": "rcq5VVTEdww",
-    "engine": "argos-local",
-    "generatedAt": "2026-11-15T08:28:31.978Z",
-    "expectedLanguages": [
-      "es",
-      "fr",
-      "pt",
-      "de",
-      "hi",
-      "ar",
-      "id",
-      "sw",
-      "ja",
-      "ru",
-      "ko",
-      "zh",
-      "it",
-      "tr",
-      "vi"
-    ],
-    "allLanguagesPresent": false,
-    "englishCaptionOk": true,
-    "shortVideoId": "0wGI568YAto",
-    "shortCaptionStatus": {
-      "en": "ok",
-      "es": "ok",
-      "pt": "ok",
-      "hi": "ok"
-    },
-    "status": {
-      "es": "ok",
-      "fr": "ok",
-      "pt": "ok",
-      "de": "ok",
-      "hi": "ok",
-      "ar": "failed:after-retry:translate-captions.py exited 2 for ar: {\"error\": \"persistent garbled/untranslated line after retries\", \"line_index\": 42, \"lang\": \"ar\"}",
-      "id": "ok",
-      "sw": "ok",
-      "ja": "ok",
-      "ru": "ok",
-      "ko": "ok",
-      "zh": "ok",
-      "it": "ok",
-      "tr": "ok",
-      "vi": "ok"
-    }
-  },
+  "checkedAt": "2026-11-16T08:11:04.906Z",
+  "repositoryCommitSha": "702c1d3e7a33b2b5ab7681741be440826f4ef16c",
+  "captionTracks": null,
   "keywordFile": {
     "updatedAt": "2026-11-09T10:55:44.003Z",
     "week": null
   },
   "workflow": "HDL Daily YouTube Teaser",
-  "runId": "43692226436",
-  "runNumber": "397",
+  "runId": "43828433874",
+  "runNumber": "401",
   "eventName": "schedule"
 }
