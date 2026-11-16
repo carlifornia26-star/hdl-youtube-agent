@@ -1,6 +1,34 @@
 {
   "videos": [
     {
+      "video_id": "IrCCS1Gpbc0",
+      "short_video_id": "yQG6v_aDm6c",
+      "book_slug": "science-of-feeling-great",
+      "page_url": "https://highdefinitionlearning.pages.dev/science-of-feeling-great-5pillar-vitality-blueprint",
+      "title": "Conventional Wellness Methods Meet Holistic Vitality Approaches",
+      "description": "Curious about wellness & vitality? Science of Feeling Great breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/IrCCS1Gpbc0/maxresdefault.jpg",
+      "thumbnail_variant": "A",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "cold-open",
+      "caption_style": "lower-third",
+      "story_mode": "question-led",
+      "evidence": {
+        "type": "stat",
+        "source": "WHO physical activity guidelines, 2020",
+        "label": "VERIFIED FACT",
+        "url": null,
+        "alsoUrl": null
+      },
+      "claims_flagged": 0,
+      "duration_seconds": 568,
+      "duration_target_met": true,
+      "published_at": "2026-11-16T17:39:55.997Z"
+    },
+    {
       "video_id": "k6sOrCDvQbY",
       "short_video_id": "_9MtL9-Ihmo",
       "book_slug": "art-of-joy",
@@ -1057,5 +1085,5 @@
       "published_at": "2026-08-30T06:33:49.681Z"
     }
   ],
-  "updated_at": "2026-11-13T15:57:04.669Z"
+  "updated_at": "2026-11-16T17:39:55.998Z"
 }
