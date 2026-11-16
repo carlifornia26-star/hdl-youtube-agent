@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-11-16",
+      "channel": "2",
+      "term": "Spacex Starship Flight 15",
+      "headline": null
+    },
+    {
       "date": "2026-11-15",
       "channel": "2",
       "term": "Unemployment",
@@ -473,13 +479,7 @@
       "channel": "3",
       "term": "Imf World Economic Outlook South Africa",
       "headline": null
-    },
-    {
-      "date": "2026-10-13",
-      "channel": "2",
-      "term": "Singapore Haze Air Purifier Sales",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-15T12:50:27.592Z"
+  "updated_at": "2026-11-16T13:46:19.967Z"
 }
