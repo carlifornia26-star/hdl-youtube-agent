@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import fs from "node:fs";
 import fetch from "node-fetch";
+import { validateUploadMetadata } from "./upload-metadata.js";
 
 function oauth2Client() {
   const oauth2 = new google.auth.OAuth2(process.env.YT_CLIENT_ID, process.env.YT_CLIENT_SECRET);
@@ -84,6 +85,8 @@ function latchIfQuota(err) { if (isQuotaExceeded(err)) quotaLatched = true; }
 
 export async function uploadVideo({ videoPath, title, description, tags, localizations, categoryId, privacyStatus, location, publishAt }) {
   if (quotaLatched) throw new Error("YouTube quota already exhausted this run; skipping uploadVideo.");
+  // Fail before OAuth/client creation or media upload; preserve all supplied languages.
+  validateUploadMetadata({ title, description, localizations });
   const youtube = client();
   const isPrivate = process.env.DRY_RUN_PRIVATE === "true";
   const parts = ["snippet", "status", "localizations"];
@@ -101,12 +104,8 @@ export async function uploadVideo({ videoPath, title, description, tags, localiz
     parts.push("recordingDetails");
   }
 
-  // Drop any localization entries with an empty/blank title — an empty or malformed
-  // localization entry is enough to make YouTube reject the whole request with the
-  // generic "invalidVideoMetadata" error (no indication of which field caused it).
-  const cleanLocalizations = Object.fromEntries(
-    Object.entries(localizations || {}).filter(([, v]) => v?.title?.trim())
-  );
+  // Validated above. Do not silently drop or replace a corrupt localization.
+  const cleanLocalizations = localizations || {};
 
   const requestBody = {
     snippet: {
