@@ -32,7 +32,8 @@ on:
     - cron: "23 3 * * *"  # Channel 1 trigger — 03:23 UTC
     # Channel 2 trigger — resumed. Translations restored 2026-11-06 (local Argos captions, zero neurons).
     - cron: "23 5 * * *"  # Channel 2 trigger — 05:23 UTC
-    - cron: "23 7 * * *"  # Channel 3 trigger — 07:23 UTC
+    # Channel 3 trigger REMOVED 2026-11-17 (owner instruction, WhatsApp 07:51 SAST): channel 3
+    # (@HighDefinitionLearningPublish) is now managed directly outside this repo. Channels 1, 2, 4 unchanged.
 
   workflow_dispatch:
     inputs:
@@ -106,7 +107,6 @@ jobs:
               "23 1 * * *") CHANNEL=4 ;;
               "23 3 * * *") CHANNEL=1 ;;
               "23 5 * * *") CHANNEL=2 ;;
-              "23 7 * * *") CHANNEL=3 ;;
               *)
                 echo "Unknown schedule: $SCHEDULE"
                 exit 1
