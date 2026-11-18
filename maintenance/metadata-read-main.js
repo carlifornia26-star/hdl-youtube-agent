@@ -11,14 +11,14 @@ import {seal} from './metadata-envelope.js';
 // discarded and never cause rejection; malformed (wrong-typed) data fails
 // closed with no output. Generic failure marker only.
 const dir='metadata-read-output';
-const ALLOWED=new Set(['G_H_scsEaos']);
+const ALLOWED=new Set(['GtSBugKsYVI']);
 const TOKEN_URL='https://oauth2.googleapis.com/token';
 const API_URL='https://www.googleapis.com/youtube/v3/videos?part=localizations&id=';
 const TIMEOUT_MS=15000;
 const LOCALE_RE=/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
 // Observed baseline locale key set for this video at plan time (29 keys).
 // Used for deviation diagnostics only, never for rejection.
-const BASELINE_LOCALES=['de-DE','ja','pt','hi','es-US','ml','iw','sw','de','ko','te','fr','en','pa','ar','fr-FR','ru','ta','id','zh-Hans','tr','uk','es','pt-BR','bn','it','nl-NL','pl','vi'];
+const BASELINE_LOCALES=['de','pt-BR','te','pt','ar','ja','ko','es','pa','es-US','hi','it','zh-Hans','pl','ml','nl-NL','iw','tr','vi','ru','bn','fr','de-DE','sw','fr-FR','uk','id','ta','en'];
 async function cleanup(){for (const k of ['YT_CLIENT_ID','YT_CLIENT_SECRET','YT_REFRESH_TOKEN','READ_PUBLIC_KEY_PEM','READ_EXPECTED_SPKI_SHA256']) delete process.env[k];}
 function validateEntry(k,v){
   if (!LOCALE_RE.test(k)) return null;
