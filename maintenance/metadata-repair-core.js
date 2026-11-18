@@ -14,6 +14,11 @@ export function stable(value) {
   return JSON.stringify(value);
 }
 export const hash = value => crypto.createHash('sha256').update(stable(value)).digest('hex');
+export function snapshotHash(resource) {
+  const projected=structuredClone(resource);
+  delete projected.etag; // Only top-level provider response token, never nested fields.
+  return hash(projected);
+}
 export function scope(video, channel, authenticatedIds) {
   const target = TARGETS[video?.id];
   assert(target && target.channel === channel, 'Video/channel not allowlisted');
@@ -24,7 +29,7 @@ export function scope(video, channel, authenticatedIds) {
 }
 export function buildUpdate(before, plan) {
   assert.equal(plan.videoId, before.id, 'Plan video mismatch');
-  assert.equal(plan.snapshotHash, hash(before), 'Snapshot hash mismatch');
+  assert.equal(plan.snapshotHash, snapshotHash(before), 'Snapshot hash mismatch');
   assert(Array.isArray(plan.changes) && plan.changes.length > 0, 'Empty changes');
   const localizations = structuredClone(before.localizations);
   const seen = new Set();
