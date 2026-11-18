@@ -1,0 +1,38 @@
+name: Bounded private metadata read candidate
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: bounded-metadata-maintenance
+  cancel-in-progress: false
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Read current localizations for one allowlisted video
+        run: node maintenance/metadata-read-main.js
+        env:
+          # Single allowlisted video for this read. No free-text dispatch input.
+          READ_VIDEO_ID: G_H_scsEaos
+          # Reviewed pin: canonical SPKI SHA-256 of the fresh task-only RSA-3072
+          # recipient public key stored in the secret below.
+          READ_EXPECTED_SPKI_SHA256: "f192c156d3edb2f08c1e12910e82ede8901c5f598b63debfbd1edc8112295242"
+          READ_PUBLIC_KEY_PEM: ${{ secrets.METADATA_READ_PUBLIC_KEY_PEM }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bounded-metadata-read-${{ github.run_id }}
+          path: metadata-read-output/*.enc
+          retention-days: 7
+          if-no-files-found: warn
