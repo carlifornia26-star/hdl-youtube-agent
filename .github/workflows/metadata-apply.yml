@@ -21,9 +21,9 @@ jobs:
         run: node maintenance/metadata-apply-main.js
         env:
           REPAIR_MODE: apply
-          # Placeholders deliberately fail closed; no production channel/envelope selected.
+          # Private reviewed candidate only. Deployment and enablement remain held.
           REPAIR_CHANNEL: '1'
-          REVIEWED_INPUT_SHA256: 5b9b753222465968ee86ac44b65b8af0df924861d228902316091a04519aa8c7
+          REVIEWED_INPUT_SHA256: 8f5eefc97189f2c6fe3b556645b255a2a90f9534952b5be2a287513204b5f219
           YT_BOUNDED_METADATA_INPUT: ${{ secrets.YT_BOUNDED_METADATA_INPUT }}
           # For one channel only: bind existing 1 OR 4 credentials during reviewed activation.
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
