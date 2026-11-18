@@ -13,7 +13,7 @@ export async function execute({env,makeClient,writeCiphertext,log}) {
     const get=()=>client??=makeClient();
     const yt={channels:{list:(...a)=>get().channels.list(...a)},videos:{list:(...a)=>get().videos.list(...a),update:(...a)=>get().videos.update(...a)}};
     await runApply({yt,mode:'apply',channel:input.channel,plans:input.plans,reviewRecord:input.reviewRecord,
-      write:async(name,value)=>writeCiphertext(name+'.enc',seal(value,input.evidenceRecipientPem))});
+      write:async(name,value)=>writeCiphertext(name+'.enc',seal(value,input.evidenceRecipientPem)),log});
     log('Bounded metadata apply completed; verify encrypted evidence and public state.');
     return true;
   } catch {
