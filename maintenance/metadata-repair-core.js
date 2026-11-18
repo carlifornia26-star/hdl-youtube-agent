@@ -2,7 +2,8 @@ import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
 import { validateUploadMetadata } from '../scripts/upload-metadata.js';
 export const TARGETS = Object.freeze({
-  G_H_scsEaos: {channel: '1', owner: 'UC60P1GSNEVPgtIentvSc45A'},
+  // G_H_scsEaos removed 2026-11-18: repaired state confirmed by owning-source
+  // read (run 44267771642 evidence). Never re-add to an apply target list.
   GtSBugKsYVI: {channel: '1', owner: 'UC60P1GSNEVPgtIentvSc45A'},
   mp5wp6GTpAE: {channel: '1', owner: 'UC60P1GSNEVPgtIentvSc45A'},
   SadjccrotLo: {channel: '4', owner: 'UCZv9QcBMtyi4n2PkuxTCiPg'},
@@ -27,8 +28,16 @@ export function scope(video, channel, authenticatedIds) {
   assert(authenticatedIds.includes(target.owner), 'Credential does not own expected channel');
   assert(video.localizations && typeof video.localizations === 'object' && !Array.isArray(video.localizations), 'Missing raw localizations');
 }
+// Binds a plan entry to its approved intended end-state, computed offline from
+// the retained approved before-resource plus exactly the reviewed changes.
+// Used to recognize an already-correct current map WITHOUT weakening any gate.
+export function assertIntendedBinding(plan) {
+  assert(typeof plan.intendedSnapshotHash==='string' && /^[0-9a-f]{64}$/.test(plan.intendedSnapshotHash),'Missing approved intended snapshot binding');
+  assert.notEqual(plan.intendedSnapshotHash,plan.snapshotHash,'No-op repair plan');
+}
 export function buildUpdate(before, plan) {
   assert.equal(plan.videoId, before.id, 'Plan video mismatch');
+  assertIntendedBinding(plan);
   assert.equal(plan.snapshotHash, snapshotHash(before), 'Snapshot hash mismatch');
   assert(Array.isArray(plan.changes) && plan.changes.length > 0, 'Empty changes');
   const localizations = structuredClone(before.localizations);
@@ -54,8 +63,19 @@ export function buildUpdate(before, plan) {
   validateUploadMetadata({title: before.snippet.title, description: before.snippet.description, localizations});
   return {id:before.id,localizations};
 }
+// Classifies the post-write readback without throwing: only 'confirmed' may
+// proceed to another write. Any divergence or an unavailable readback is an
+// UNCONFIRMED outcome: the runner stops, retains evidence and never retries.
+export function classifyAfter(before, after, request) {
+  const divergences=[];
+  if (after.id!==before.id) divergences.push('video-id');
+  if (JSON.stringify(stable(after.localizations))!==JSON.stringify(stable(request.localizations))) divergences.push('localizations');
+  for (const key of ['snippet','status','contentDetails']) {
+    if (JSON.stringify(stable(after[key]))!==JSON.stringify(stable(before[key]))) divergences.push(key);
+  }
+  return {confirmed:divergences.length===0,divergences};
+}
 export function verifyAfter(before, after, request) {
-  assert.equal(after.id,before.id,'Readback video mismatch');
-  assert.deepEqual(after.localizations,request.localizations,'Full locale-map readback mismatch');
-  for (const key of ['snippet','status','contentDetails']) assert.deepEqual(after[key],before[key],`Unrelated ${key} changed`);
+  const v=classifyAfter(before,after,request);
+  assert(v.confirmed,`Readback mismatch: ${v.divergences.join(',')}`);
 }
