@@ -1,0 +1,42 @@
+# CONTINUATION CANDIDATE - offline review only. The existing metadata-apply.yml
+# stays disabled and untouched. REVIEWED_INPUT_SHA256 below pins the exact
+# assembled private-input envelope (fresh RSA-3072 evidence recipient, SPKI pin
+# 98fed7ac1f2a6db96adf3447c03424ec198912ced03821c841f489983f93e011; never the
+# retired recipient). Installing the envelope secret and dispatching remain
+# separate activation decisions; nothing here is live.
+name: Bounded private metadata apply continuation candidate
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: bounded-metadata-maintenance
+  cancel-in-progress: false
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Apply reviewed two-video ch1 localized metadata repair
+        run: node maintenance/metadata-apply-main.js
+        env:
+          REPAIR_MODE: apply
+          REPAIR_CHANNEL: '1'
+          REVIEWED_INPUT_SHA256: 'cf281fe8b8a6f329025f43876c33fa2350a338032b874aeb2b3c4469fe980009'
+          YT_BOUNDED_METADATA_INPUT: ${{ secrets.YT_BOUNDED_METADATA_INPUT_CH1_CONTINUATION }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bounded-metadata-apply-continuation-${{ github.run_id }}
+          path: metadata-apply-output/*.enc
+          retention-days: 7
+          if-no-files-found: warn
