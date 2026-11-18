@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {generateKeyPairSync} from 'node:crypto';
+import {hash} from '../maintenance/metadata-repair-core.js';
+import {loadPrivateInput} from '../maintenance/metadata-private-input.js';
+const {publicKey}=generateKeyPairSync('rsa',{modulusLength:3072,publicKeyEncoding:{format:'pem',type:'spki'},privateKeyEncoding:{format:'pem',type:'pkcs8'}});
+const v={version:1,channel:'1',plans:[],reviewRecord:{},evidenceRecipientPem:publicKey};
+test('exact independently pinned envelope loads without I/O',()=>assert.deepEqual(loadPrivateInput(JSON.stringify(v),hash(v),'1'),v));
+for(const [name,mutate] of [['extra key',x=>x.url='https://example.test'],['wrong channel',x=>x.channel='4'],['wrong version',x=>x.version=2]])test(name,()=>{const x=structuredClone(v);mutate(x);assert.throws(()=>loadPrivateInput(JSON.stringify(x),hash(v),'1'));});
+test('oversize fails closed',()=>assert.throws(()=>loadPrivateInput(' '.repeat(47001),hash(v),'1')));
+test('no pinned digest fails closed',()=>assert.throws(()=>loadPrivateInput(JSON.stringify(v),'','1')));
