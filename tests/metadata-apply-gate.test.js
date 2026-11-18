@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {runApply} from '../maintenance/metadata-apply-run.js';
+import {hash,TARGETS} from '../maintenance/metadata-repair-core.js';
+const plan=Object.keys(TARGETS).filter(id=>TARGETS[id].channel==='4').map(videoId=>({videoId,changes:[{locale:'ar',review:{status:'pending-independent-clearance'}}]}));
+const denied={channels:{list:async()=>{throw new Error('Must not reach auth');}}};
+test('no manifest rejects before auth',async()=>{await assert.rejects(runApply({yt:denied,mode:'apply',channel:'4',plans:plan}),/manifest/);});
+test('uncleared ch4 rejects complete plan before auth',async()=>{await assert.rejects(runApply({yt:denied,mode:'apply',channel:'4',plans:plan,reviewRecord:{scope:'five-video-faults-only',videos:{}}}),/pending/);});
+test('partial ch4 plan rejects before auth',async()=>{await assert.rejects(runApply({yt:denied,mode:'apply',channel:'4',plans:plan.slice(0,1),reviewRecord:{scope:'five-video-faults-only',videos:{}}}));});
+test('modified plan cannot inherit clearance',async()=>{const videos=Object.fromEntries(plan.map(p=>[p.videoId,{status:'all-required-changes-cleared',planHash:hash(p)}]));const changed=structuredClone(plan);changed[0].changes[0].review.status='source-fidelity-reviewed';await assert.rejects(runApply({yt:denied,mode:'apply',channel:'4',plans:changed,reviewRecord:{scope:'five-video-faults-only',videos}}),/does not match/);});
+test('wrong mode rejects before auth',async()=>{await assert.rejects(runApply({yt:denied,mode:'export',channel:'4',plans:plan}));});
