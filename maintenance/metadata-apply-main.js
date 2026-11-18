@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
-import {google} from 'googleapis';
 import {execute} from './metadata-apply-entry.js';
+import {makeNativeClient} from './metadata-native-client.js';
 const dir='metadata-apply-output';
 try {
   await fs.mkdir(dir,{recursive:true});
@@ -9,12 +9,10 @@ try {
       const {YT_CLIENT_ID,YT_CLIENT_SECRET,YT_REFRESH_TOKEN}=process.env;
       delete process.env.YT_CLIENT_ID;delete process.env.YT_CLIENT_SECRET;delete process.env.YT_REFRESH_TOKEN;
       if(!YT_CLIENT_ID||!YT_CLIENT_SECRET||!YT_REFRESH_TOKEN)throw new Error('Credential unavailable');
-      const auth=new google.auth.OAuth2(YT_CLIENT_ID,YT_CLIENT_SECRET);
-      auth.setCredentials({refresh_token:YT_REFRESH_TOKEN});
-      return google.youtube({version:'v3',auth});
+      return makeNativeClient(YT_CLIENT_ID,YT_CLIENT_SECRET,YT_REFRESH_TOKEN);
     },
     writeCiphertext:async(name,value)=>{
-      if(!/^[A-Za-z0-9_-]+-(before|request|after)\.json\.enc$/.test(name))throw new Error('Invalid evidence filename');
+      if(!/^[A-Za-z0-9_-]+-(before|request|after|update-response)\.json\.enc$/.test(name))throw new Error('Invalid evidence filename');
       await fs.writeFile(`${dir}/${name}`,value,{mode:0o600});
     },log:message=>console.log(message)});
   if(!ok)process.exitCode=1;
