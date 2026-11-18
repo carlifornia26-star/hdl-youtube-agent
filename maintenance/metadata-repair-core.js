@@ -30,6 +30,7 @@ export function buildUpdate(before, plan) {
   const seen = new Set();
   for (const c of plan.changes) {
     assert(typeof c.locale === 'string' && Object.hasOwn(localizations,c.locale), 'Locale absent from raw provider map');
+    assert(!/^en(?:-|$)/i.test(c.locale), 'English localizations are outside repair scope');
     assert(!seen.has(c.locale), 'Repeated locale'); seen.add(c.locale);
     assert(!(before.id === 'GtSBugKsYVI' && c.locale === 'fr'), 'Borderline French improvement explicitly excluded');
     assert.equal(c.review?.status,'source-fidelity-reviewed','Translation review missing');
