@@ -29,3 +29,7 @@ for (const [name,mutate] of [
 test('unrelated status readback change fails',()=>{const[b,p]=fixture();const r=buildUpdate(b,p);assert.throws(()=>verifyAfter(b,{...b,status:{privacyStatus:'private'},localizations:r.localizations},r));});
 test('lost untouched locale fails readback',()=>{const[b,p]=fixture();const r=buildUpdate(b,p);const a=structuredClone(r.localizations);delete a.ar;assert.throws(()=>verifyAfter(b,{...b,localizations:a},r));});
 test('excluded French improvement fails',()=>{const[b,p]=fixture();b.id='GtSBugKsYVI';b.localizations.fr=b.localizations.es;p.videoId=b.id;p.snapshotHash=hash(b);p.changes[0].locale='fr';assert.throws(()=>buildUpdate(b,p));});
+test('English locale edit explicitly rejects even with valid review and raw hashes',()=>{
+ const[b,p]=fixture();b.localizations.en=structuredClone(b.localizations.es);p.snapshotHash=hash(b);p.changes[0].locale='en';p.changes[0].originalHash=hash(b.localizations.en);
+ assert.throws(()=>buildUpdate(b,p),/English localizations are outside repair scope/);
+});
