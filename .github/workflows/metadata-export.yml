@@ -1,0 +1,54 @@
+name: Bounded metadata repair
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        required: true
+        type: choice
+        options: [export]
+        default: export
+      channel:
+        required: true
+        type: choice
+        options: ['1', '4']
+permissions:
+  contents: read
+concurrency:
+  group: bounded-metadata-repair
+  cancel-in-progress: false
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Channel 1 bounded repair
+        if: inputs.channel == '1'
+        run: node maintenance/metadata-repair.js
+        env:
+          REPAIR_MODE: ${{ inputs.mode }}
+          REPAIR_CHANNEL: '1'
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+      - name: Channel 4 bounded repair
+        if: inputs.channel == '4'
+        run: node maintenance/metadata-repair.js
+        env:
+          REPAIR_MODE: ${{ inputs.mode }}
+          REPAIR_CHANNEL: '4'
+          YT_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID_4 }}
+          YT_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET_4 }}
+          YT_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN_4 }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: metadata-repair-${{ inputs.channel }}-${{ github.run_id }}
+          path: metadata-repair-output/
+          retention-days: 7
+          if-no-files-found: warn
