@@ -1,4 +1,4 @@
-import {TARGETS,scope,hash,buildUpdate,verifyAfter} from './metadata-repair-core.js';
+import {TARGETS,scope,hash,snapshotHash,buildUpdate,verifyAfter} from './metadata-repair-core.js';
 const parts=['snippet','status','localizations','contentDetails'];
 export async function runApply({yt,mode,channel,plans,write,reviewRecord}) {
   if (mode!=='apply' || !['1','4'].includes(channel)) throw new Error('Invalid mode or channel');
@@ -30,7 +30,7 @@ export async function runApply({yt,mode,channel,plans,write,reviewRecord}) {
   }
   for (const id of targets) {
     const current=await read(id);
-    if (hash(current)!==hash(before[id])) throw new Error('Provider state drift before update');
+    if (snapshotHash(current)!==snapshotHash(before[id])) throw new Error('Provider state drift before update');
     await write(`${id}-request.json`,requests[id]);
     // Never add snippet/status or reuse the upload/generation pipeline here.
     await yt.videos.update({part:['localizations'],requestBody:requests[id]}, {headers:{'If-Match':current.etag}});
