@@ -1,4 +1,4 @@
-name: Bounded private metadata read candidate
+name: Bounded private metadata read candidate (GtSBugKsYVI)
 on:
   workflow_dispatch:
 permissions:
@@ -21,10 +21,10 @@ jobs:
         run: node maintenance/metadata-read-main.js
         env:
           # Single allowlisted video for this read. No free-text dispatch input.
-          READ_VIDEO_ID: G_H_scsEaos
+          READ_VIDEO_ID: GtSBugKsYVI
           # Reviewed pin: canonical SPKI SHA-256 of the fresh task-only RSA-3072
           # recipient public key stored in the secret below.
-          READ_EXPECTED_SPKI_SHA256: "f192c156d3edb2f08c1e12910e82ede8901c5f598b63debfbd1edc8112295242"
+          READ_EXPECTED_SPKI_SHA256: "aab1276a79ae5f54e582a57ac427871f2f015d497328964c7900c796c3010a70"
           READ_PUBLIC_KEY_PEM: ${{ secrets.METADATA_READ_PUBLIC_KEY_PEM }}
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
