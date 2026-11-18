@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {TARGETS,scope,hash,buildUpdate,verifyAfter} from '../maintenance/metadata-repair-core.js';
+import {TARGETS,scope,hash,snapshotHash,buildUpdate,verifyAfter} from '../maintenance/metadata-repair-core.js';
 function fixture(){
  const b={id:'G_H_scsEaos',etag:'version1',snippet:{channelId:TARGETS.G_H_scsEaos.owner,title:'English',description:'English tail',tags:['keep'],categoryId:'27'},status:{privacyStatus:'public',madeForKids:false},contentDetails:{caption:'true'},localizations:{es:{title:'Bad',description:'Bad hook\nhttps://example.test/full?x=1&y=2'},ar:{title:'Remain',description:'unchanged'}}};
  const c={locale:'es',title:'Good',hook:'Correct hook',originalHook:'Bad hook',tail:'\nhttps://example.test/full?x=1&y=2',originalHash:hash(b.localizations.es),review:{status:'source-fidelity-reviewed',evidence:'offline fixture, not real review'}};
- c.tailHash=hash(c.tail);return [b,{videoId:b.id,snapshotHash:hash(b),changes:[c]}];
+ c.tailHash=hash(c.tail);return [b,{videoId:b.id,snapshotHash:snapshotHash(b),changes:[c]}];
 }
 test('exact allowlist identity',()=>{const [b]=fixture();scope(b,'1',[b.snippet.channelId]);});
 for (const [name,mutate] of [
@@ -28,8 +28,11 @@ for (const [name,mutate] of [
 ]) test(name,()=>{const[b,p]=fixture();mutate(b,p);assert.throws(()=>buildUpdate(b,p));});
 test('unrelated status readback change fails',()=>{const[b,p]=fixture();const r=buildUpdate(b,p);assert.throws(()=>verifyAfter(b,{...b,status:{privacyStatus:'private'},localizations:r.localizations},r));});
 test('lost untouched locale fails readback',()=>{const[b,p]=fixture();const r=buildUpdate(b,p);const a=structuredClone(r.localizations);delete a.ar;assert.throws(()=>verifyAfter(b,{...b,localizations:a},r));});
-test('excluded French improvement fails',()=>{const[b,p]=fixture();b.id='GtSBugKsYVI';b.localizations.fr=b.localizations.es;p.videoId=b.id;p.snapshotHash=hash(b);p.changes[0].locale='fr';assert.throws(()=>buildUpdate(b,p));});
+test('excluded French improvement fails',()=>{const[b,p]=fixture();b.id='GtSBugKsYVI';b.localizations.fr=b.localizations.es;p.videoId=b.id;p.snapshotHash=snapshotHash(b);p.changes[0].locale='fr';assert.throws(()=>buildUpdate(b,p));});
 test('English locale edit explicitly rejects even with valid review and raw hashes',()=>{
- const[b,p]=fixture();b.localizations.en=structuredClone(b.localizations.es);p.snapshotHash=hash(b);p.changes[0].locale='en';p.changes[0].originalHash=hash(b.localizations.en);
+ const[b,p]=fixture();b.localizations.en=structuredClone(b.localizations.es);p.snapshotHash=snapshotHash(b);p.changes[0].locale='en';p.changes[0].originalHash=hash(b.localizations.en);
  assert.throws(()=>buildUpdate(b,p),/English localizations are outside repair scope/);
 });
+test('top-level etag rotation alone does not invalidate approved source snapshot',()=>{const[b,p]=fixture();b.etag='provider-rotated';assert.doesNotThrow(()=>buildUpdate(b,p));});
+test('nested etag remains part of source binding',()=>{const[b,p]=fixture();b.localizations.es.etag='nested-field';assert.throws(()=>buildUpdate(b,p),/Snapshot hash mismatch/);});
+for(const [name,mutate]of [['English',b=>b.snippet.title+=' drift'],['status',b=>b.status.privacyStatus='private'],['tail',b=>b.localizations.es.description+=' drift'],['untouched locale',b=>b.localizations.ar.title+=' drift']])test('semantic drift still blocks: '+name,()=>{const[b,p]=fixture();b.etag='rotated';mutate(b);assert.throws(()=>buildUpdate(b,p),/Snapshot hash mismatch/);});
