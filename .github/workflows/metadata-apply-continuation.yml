@@ -1,9 +1,7 @@
 # CONTINUATION CANDIDATE - offline review only. The existing metadata-apply.yml
-# stays disabled and untouched. REVIEWED_INPUT_SHA256 below pins the exact
-# assembled private-input envelope (fresh RSA-3072 evidence recipient, SPKI pin
-# 98fed7ac1f2a6db96adf3447c03424ec198912ced03821c841f489983f93e011; never the
-# retired recipient). Installing the envelope secret and dispatching remain
-# separate activation decisions; nothing here is live.
+# stays disabled and untouched. REVIEWED_INPUT_SHA256 is pinned at activation
+# time to the exact assembled private-input envelope (fresh evidence recipient,
+# never the retired one); the placeholder makes this file non-runnable as-is.
 name: Bounded private metadata apply continuation candidate
 on:
   workflow_dispatch:
@@ -23,12 +21,12 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Apply reviewed two-video ch1 localized metadata repair
+      - name: Apply reviewed single-video ch1 localized metadata repair (mp5wp6GTpAE only)
         run: node maintenance/metadata-apply-main.js
         env:
           REPAIR_MODE: apply
           REPAIR_CHANNEL: '1'
-          REVIEWED_INPUT_SHA256: 'cf281fe8b8a6f329025f43876c33fa2350a338032b874aeb2b3c4469fe980009'
+          REVIEWED_INPUT_SHA256: '7f78b79a266bd5082c616a98c9e11d73e46451e664f698d48c35acd7a8f688de'
           YT_BOUNDED_METADATA_INPUT: ${{ secrets.YT_BOUNDED_METADATA_INPUT_CH1_CONTINUATION }}
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
