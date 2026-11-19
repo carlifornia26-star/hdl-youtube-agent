@@ -1,4 +1,4 @@
-name: Bounded private metadata read candidate (mp5wp6GTpAE)
+name: Bounded private metadata read candidate (SadjccrotLo)
 on:
   workflow_dispatch:
 permissions:
@@ -21,16 +21,18 @@ jobs:
         run: node maintenance/metadata-read-main.js
         env:
           # Single allowlisted video for this read. No free-text dispatch input.
-          READ_VIDEO_ID: mp5wp6GTpAE
+          # 5WQRQqM8E2E is deliberately not allowlisted: no second-video call.
+          READ_VIDEO_ID: SadjccrotLo
           # Recipient binding deferred to activation: a fresh task-only RSA-3072
           # recipient is generated near activation, its SPKI SHA-256 pinned here
           # and the public key stored in the secret below. The placeholder makes
           # this file non-runnable as-is.
-          READ_EXPECTED_SPKI_SHA256: "6c6710d5762bf326cb6e27683e3d682318bf87bf9675a5265d4d84ca9902f994"
+          READ_EXPECTED_SPKI_SHA256: "5a9bbb95dcd6c7d799097f34df75ed377e615c8c6b60a12856b614c60f6bcbb7"
           READ_PUBLIC_KEY_PEM: ${{ secrets.METADATA_READ_PUBLIC_KEY_PEM }}
-          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
-          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          # Fixed channel-4 credential selection (same names as the ch4 apply binding).
+          YT_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID_4 }}
+          YT_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET_4 }}
+          YT_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN_4 }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
