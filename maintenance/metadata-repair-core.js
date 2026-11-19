@@ -2,13 +2,7 @@ import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
 import { validateUploadMetadata } from '../scripts/upload-metadata.js';
 export const TARGETS = Object.freeze({
-  // G_H_scsEaos removed 2026-11-18: repaired state confirmed by owning-source
-  // read (run 44267771642 evidence). Never re-add to an apply target list.
-  // GtSBugKsYVI removed 2026-11-18: repaired state confirmed by delayed owning
-  // read (run 44318025906 evidence, 29/29 intended byte-exact). Never re-add
-  // to an apply target list.
-  mp5wp6GTpAE: {channel: '1', owner: 'UC60P1GSNEVPgtIentvSc45A'},
-  SadjccrotLo: {channel: '4', owner: 'UCZv9QcBMtyi4n2PkuxTCiPg'},
+  // All four completed repairs excluded. Only the untouched channel4 target remains.
   '5WQRQqM8E2E': {channel: '4', owner: 'UCZv9QcBMtyi4n2PkuxTCiPg'},
 });
 export function stable(value) {
