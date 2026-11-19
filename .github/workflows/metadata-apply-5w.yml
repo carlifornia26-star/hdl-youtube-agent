@@ -1,0 +1,38 @@
+name: Bounded private metadata apply 5W-only
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: bounded-metadata-maintenance
+  cancel-in-progress: false
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Apply exactly one reviewed channel plan
+        run: node maintenance/metadata-apply-main.js
+        env:
+          REPAIR_MODE: apply
+          # Placeholders deliberately fail closed; no production channel/envelope selected.
+          REPAIR_CHANNEL: '4'
+          REVIEWED_INPUT_SHA256: 36316825fd173f3b630bcb3c6d48cb4cc923933cd3ba95f03479f66112499947
+          YT_BOUNDED_METADATA_INPUT: ${{ secrets.YT_BOUNDED_METADATA_INPUT }}
+          # For one channel only: bind existing 1 OR 4 credentials during reviewed activation.
+          YT_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID_4 }}
+          YT_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET_4 }}
+          YT_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN_4 }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bounded-metadata-evidence-${{ github.run_id }}
+          path: metadata-apply-output/*.json.enc
+          retention-days: 7
+          if-no-files-found: warn
