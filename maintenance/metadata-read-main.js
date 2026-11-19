@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import {createPublicKey,createHash,timingSafeEqual} from 'node:crypto';
 import {seal} from './metadata-envelope.js';
 // Single read-only videos.list(part=localizations) for one allowlisted video.
-// Channel-4 variant: target SadjccrotLo only; 5WQRQqM8E2E deliberately NOT allowlisted.
+// Channel-4 variant: target 5WQRQqM8E2E only; all four completed repairs deliberately NOT allowlisted.
 // Exactly one OAuth refresh POST and one videos GET against fixed official
 // HTTPS endpoints. No retries, no redirects, no SDK, no env endpoint overrides.
 // Recipient is pinned (canonical SPKI SHA-256, RSA >= 3072) and validated before
@@ -12,7 +12,7 @@ import {seal} from './metadata-envelope.js';
 // discarded and never cause rejection; malformed (wrong-typed) data fails
 // closed with no output. Generic failure marker only.
 const dir='metadata-read-output';
-const ALLOWED=new Set(['SadjccrotLo']);
+const ALLOWED=new Set(['5WQRQqM8E2E']);
 const TOKEN_URL='https://oauth2.googleapis.com/token';
 const API_URL='https://www.googleapis.com/youtube/v3/videos?part=localizations&id=';
 const TIMEOUT_MS=15000;
