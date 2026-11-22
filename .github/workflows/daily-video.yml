@@ -175,6 +175,11 @@ jobs:
 
       - name: Install dependencies
         if: steps.resolve.outputs.proceed == 'true'
+        env:
+          # onnxruntime-node 1.21.0 (transitive via kokoro-js) defaults to downloading CUDA/GPU
+          # binaries whose release asset 404s; runners have no GPU, so skip CUDA per the
+          # package's own documented flag (script/install.js reads npm_config_onnxruntime_node_install_cuda).
+          npm_config_onnxruntime_node_install_cuda: skip
         run: |
           set -euo pipefail
           npm ci
