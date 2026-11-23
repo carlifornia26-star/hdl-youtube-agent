@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-11-23",
+      "channel": "1",
+      "term": "Gta 6 Update",
+      "headline": null
+    },
+    {
       "date": "2026-11-22",
       "channel": "2",
       "term": "Businesstech",
@@ -473,13 +479,7 @@
       "channel": "1",
       "term": "Game Stores",
       "headline": null
-    },
-    {
-      "date": "2026-10-14",
-      "channel": "4",
-      "term": "Aquarius Horoscope Today",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-22T13:28:31.193Z"
+  "updated_at": "2026-11-23T13:24:43.722Z"
 }
