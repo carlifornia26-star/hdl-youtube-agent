@@ -1,10 +1,10 @@
 {
-  "checkedAt": "2026-11-16T10:40:48Z",
-  "overallStatus": "success",
-  "computeStatus": "success",
+  "checkedAt": "2026-11-23T11:43:00Z",
+  "overallStatus": "failed",
+  "computeStatus": "failure",
   "keywordsFileStatus": "present",
-  "keywordsUpdatedAt": "2026-11-09T10:55:44.003Z",
-  "repositorySha": "e8cae433962a6a723859b95a44fca4453d23246a",
-  "workflowRunId": "43850101090",
-  "workflowRunNumber": "14"
+  "keywordsUpdatedAt": "2026-11-16T10:40:38.285Z",
+  "repositorySha": "35e3008ea3135d29849499211fbd4b166ab6056c",
+  "workflowRunId": "45167624627",
+  "workflowRunNumber": "15"
 }
