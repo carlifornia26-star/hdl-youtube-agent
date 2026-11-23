@@ -860,7 +860,7 @@ const FORMAT_POOL = [
     id: "stat-hook",
     label: "Surprising Stat/Fact",
     opening:
-      "Open with a single striking, specific number, statistic, or lesser-known fact related to the topic — stated plainly, with no preamble before it. Follow immediately with why that number should matter to the viewer personally.",
+      "Open with a single striking statistic or lesser-known fact taken verbatim from the VERIFIED GROUNDING LIBRARY below — stated plainly, with no preamble before it. Never invent a number: if no grounding-library entry carries a fitting number for today's topic, open with a verified fact from the library that needs no number at all. Follow immediately with why it should matter to the viewer personally.",
   },
   {
     id: "direct-address",
