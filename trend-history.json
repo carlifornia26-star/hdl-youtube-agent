@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-11-23",
+      "channel": "2",
+      "term": "Forex Factory",
+      "headline": null
+    },
+    {
+      "date": "2026-11-23",
       "channel": "1",
       "term": "Gta 6 Update",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "3",
       "term": "Bank",
       "headline": null
-    },
-    {
-      "date": "2026-10-14",
-      "channel": "1",
-      "term": "Game Stores",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-23T13:24:43.722Z"
+  "updated_at": "2026-11-23T16:11:43.085Z"
 }
