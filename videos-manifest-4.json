@@ -1,6 +1,34 @@
 {
   "videos": [
     {
+      "video_id": "W6ADmjXtSjQ",
+      "short_video_id": "qt0YO1itAtI",
+      "book_slug": "pet-friendly",
+      "page_url": "https://highdefinitionlearning.pages.dev/pet-friendly",
+      "title": "What Modern Pet Care Looks Like",
+      "description": "Curious about responsible, modern pet care? Pet Friendly breaks it down.",
+      "thumbnail_url": "https://i.ytimg.com/vi/W6ADmjXtSjQ/maxresdefault.jpg",
+      "thumbnail_variant": "B",
+      "thumbnail_bw": false,
+      "trend_term": null,
+      "trend_in_title": false,
+      "news_headline": null,
+      "script_format": "direct-hook",
+      "caption_style": "lower-third",
+      "story_mode": "concept-deep-dive",
+      "evidence": {
+        "type": "stat",
+        "source": "AVMA 2024 Pet Ownership and Demographic Sourcebook",
+        "label": "VERIFIED FACT",
+        "url": null,
+        "alsoUrl": null
+      },
+      "claims_flagged": 0,
+      "duration_seconds": 581,
+      "duration_target_met": true,
+      "published_at": "2026-11-23T09:54:56.814Z"
+    },
+    {
       "video_id": "SadjccrotLo",
       "short_video_id": "5WQRQqM8E2E",
       "book_slug": "pet-friendly",
@@ -1015,5 +1043,5 @@
       "published_at": "2026-09-16T12:53:44.752Z"
     }
   ],
-  "updated_at": "2026-11-17T09:52:45.394Z"
+  "updated_at": "2026-11-23T09:54:56.815Z"
 }
