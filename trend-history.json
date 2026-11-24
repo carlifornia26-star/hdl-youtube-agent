@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-11-24",
+      "channel": "2",
+      "term": "Nasdaq Today",
+      "headline": null
+    },
+    {
       "date": "2026-11-23",
       "channel": "2",
       "term": "Forex Factory",
@@ -473,13 +479,7 @@
       "channel": "1",
       "term": "Fitness",
       "headline": null
-    },
-    {
-      "date": "2026-10-14",
-      "channel": "3",
-      "term": "Bank",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-23T16:11:43.085Z"
+  "updated_at": "2026-11-24T16:01:42.148Z"
 }
