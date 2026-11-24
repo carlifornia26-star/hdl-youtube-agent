@@ -35,6 +35,8 @@ jobs:
         with:
           node-version: 20
       - run: npm install
+        env:
+          npm_config_onnxruntime_node_install_cuda: skip
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
