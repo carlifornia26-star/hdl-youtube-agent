@@ -31,6 +31,8 @@ jobs:
         with:
           node-version: 20
       - run: npm install
+        env:
+          npm_config_onnxruntime_node_install_cuda: skip
       - name: Resolve channel secrets
         id: resolve
         run: |
