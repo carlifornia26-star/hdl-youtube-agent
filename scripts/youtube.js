@@ -1,3 +1,4 @@
+import { assertVideoQuality } from "./render.js";
 import { google } from "googleapis";
 import fs from "node:fs";
 import fetch from "node-fetch";
@@ -84,6 +85,7 @@ export function isQuotaLatched() { return quotaLatched; }
 function latchIfQuota(err) { if (isQuotaExceeded(err)) quotaLatched = true; }
 
 export async function uploadVideo({ videoPath, title, description, tags, localizations, categoryId, privacyStatus, location, publishAt }) {
+  await assertVideoQuality(videoPath); // fail before any remote upload
   if (quotaLatched) throw new Error("YouTube quota already exhausted this run; skipping uploadVideo.");
   // Fail before OAuth/client creation or media upload; preserve all supplied languages.
   validateUploadMetadata({ title, description, localizations });
