@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-11-25",
+      "channel": "2",
+      "term": "Vix",
+      "headline": null
+    },
+    {
       "date": "2026-11-24",
       "channel": "2",
       "term": "Nasdaq Today",
@@ -473,13 +479,7 @@
       "channel": "2",
       "term": "Credit Card Debt",
       "headline": null
-    },
-    {
-      "date": "2026-10-15",
-      "channel": "1",
-      "term": "Fitness",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-24T16:01:42.148Z"
+  "updated_at": "2026-11-25T15:48:10.773Z"
 }
