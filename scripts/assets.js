@@ -16,7 +16,7 @@ import { assertVideoQuality } from "./render.js";
 // `index` still seeds which candidate is tried first within the (unused, or full if all are
 // recently used) pool, so multiple scenes sharing a keyword in the SAME video still tend to land
 // on different clips from each other, same as before.
-export async function fetchStockClip(keyword, outPath, { index = 0, avoidIds = new Set(), orientation = "landscape" } = {}) {
+export async function fetchStockClip(keyword, outPath, { index = 0, avoidIds = new Set(), orientation = "landscape", fallbackKeywords = [] } = {}) {
   const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(keyword)}&orientation=${orientation === "vertical" ? "portrait" : "landscape"}&size=large&per_page=80`;
   let res;
   for (let attempt = 1; attempt <= 4; attempt++) {
@@ -37,6 +37,13 @@ export async function fetchStockClip(keyword, outPath, { index = 0, avoidIds = n
   const [minWidth, minHeight] = orientation === "vertical" ? [1080,1920] : [1920,1080];
   const eligibleFiles = (v) => (v.video_files || []).filter((f) => f.file_type === "video/mp4" && f.width >= minWidth && f.height >= minHeight && (Number(f.fps ?? v.fps) >= 60 || Math.abs(Number(f.fps ?? v.fps)-60000/1001) < 0.00001)).sort((a,b) => a.width*a.height-b.width*b.height);
   const results = (data.videos || []).filter((v) => eligibleFiles(v).length);
+  if (!results.length && fallbackKeywords.length) {
+    const [next, ...rest] = fallbackKeywords.filter((q) => q && q !== keyword);
+    if (next) {
+      console.warn(JSON.stringify({illustrativeStockSearch:true,originalQuery:keyword,nextQuery:next,qualityUnchanged:true}));
+      return fetchStockClip(next,outPath,{index,avoidIds,orientation,fallbackKeywords:rest});
+    }
+  }
   if (!results.length) throw new Error(`No native ${minWidth}x${minHeight}@60 Pexels footage for ${keyword}; no low-quality fallback`);
   const unused = results.filter((v) => !avoidIds.has(String(v.id)));
   const pool = unused.length ? unused : results;
