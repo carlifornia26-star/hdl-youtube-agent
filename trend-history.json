@@ -2,6 +2,12 @@
   "picks": [
     {
       "date": "2026-11-25",
+      "channel": "3",
+      "term": "Thanksgiving",
+      "headline": null
+    },
+    {
+      "date": "2026-11-25",
       "channel": "2",
       "term": "Vix",
       "headline": null
@@ -473,13 +479,7 @@
       "channel": "3",
       "term": "Peacebuilding",
       "headline": null
-    },
-    {
-      "date": "2026-10-15",
-      "channel": "2",
-      "term": "Credit Card Debt",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-25T15:48:10.773Z"
+  "updated_at": "2026-11-25T18:03:08.411Z"
 }
