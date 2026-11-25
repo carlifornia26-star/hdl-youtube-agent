@@ -16,8 +16,8 @@ import { assertVideoQuality } from "./render.js";
 // `index` still seeds which candidate is tried first within the (unused, or full if all are
 // recently used) pool, so multiple scenes sharing a keyword in the SAME video still tend to land
 // on different clips from each other, same as before.
-export async function fetchStockClip(keyword, outPath, { index = 0, avoidIds = new Set() } = {}) {
-  const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(keyword)}&orientation=landscape&size=large&per_page=80`;
+export async function fetchStockClip(keyword, outPath, { index = 0, avoidIds = new Set(), orientation = "landscape" } = {}) {
+  const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(keyword)}&orientation=${orientation === "vertical" ? "portrait" : "landscape"}&size=large&per_page=80`;
   let res;
   for (let attempt = 1; attempt <= 4; attempt++) {
     res = await fetch(url, { headers: { Authorization: process.env.PEXELS_API_KEY } });
@@ -34,9 +34,10 @@ export async function fetchStockClip(keyword, outPath, { index = 0, avoidIds = n
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
   const data = await res.json();
-  const eligibleFiles = (v) => (v.video_files || []).filter((f) => f.file_type === "video/mp4" && f.width >= 1920 && f.height >= 1080 && Number(f.fps ?? v.fps) >= 60).sort((a,b) => a.width*a.height-b.width*b.height);
+  const [minWidth, minHeight] = orientation === "vertical" ? [1080,1920] : [1920,1080];
+  const eligibleFiles = (v) => (v.video_files || []).filter((f) => f.file_type === "video/mp4" && f.width >= minWidth && f.height >= minHeight && Number(f.fps ?? v.fps) >= 60).sort((a,b) => a.width*a.height-b.width*b.height);
   const results = (data.videos || []).filter((v) => eligibleFiles(v).length);
-  if (!results.length) throw new Error(`No native >=1920x1080@60 Pexels footage for ${keyword}; no low-quality fallback`);
+  if (!results.length) throw new Error(`No native ${minWidth}x${minHeight}@60 Pexels footage for ${keyword}; no low-quality fallback`);
   const unused = results.filter((v) => !avoidIds.has(String(v.id)));
   const pool = unused.length ? unused : results;
   const video = pool[index % pool.length];
@@ -45,7 +46,7 @@ export async function fetchStockClip(keyword, outPath, { index = 0, avoidIds = n
   if (!clip.ok) throw new Error(`Stock download failed: ${clip.status}`);
   const buf = Buffer.from(await clip.arrayBuffer());
   await fs.writeFile(outPath, buf);
-  await assertVideoQuality(outPath, { source: true, orientation: "landscape" });
+  await assertVideoQuality(outPath, { source: true, orientation });
   console.log(JSON.stringify({nativeSource: true, pexelsId: video.id, sourceUrl: video.url, width: file.width, height: file.height, fps: file.fps ?? video.fps}));
   return { outPath, id: String(video.id) };
 }
