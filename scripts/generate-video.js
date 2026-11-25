@@ -1372,8 +1372,10 @@ async function main() {
       for (let i = 0; i < shortScenes.length; i++) {
         const s = shortScenes[i];
         const outPath = path.join(BUILD_DIR, `short_scene_${i}.mp4`);
+        const portraitClipPath = path.join(BUILD_DIR, `short_native_clip_${i}.mp4`);
+        await fetchStockClip(s.visual?.trim() || book.stockKeywords[i % book.stockKeywords.length], portraitClipPath, { index: i, avoidIds, orientation: "vertical" });
         const built_scene = await buildScene({
-          clipPath: s.clipPath,
+          clipPath: portraitClipPath,
           duration: s.duration,
           text: s.line,
           outPath,
