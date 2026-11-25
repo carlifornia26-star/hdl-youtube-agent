@@ -17,6 +17,11 @@ on:
           - "2"
           - "3"
           - "4"
+      inventory_only:
+        description: "Only status, captions inventory and channel long-upload permission; no downloads"
+        type: boolean
+        required: false
+        default: false
       video_ids:
         description: "Comma-separated YouTube video IDs"
         required: true
@@ -57,4 +62,5 @@ jobs:
           YT_CLIENT_ID: ${{ secrets[steps.resolve.outputs.id_key] }}
           YT_CLIENT_SECRET: ${{ secrets[steps.resolve.outputs.secret_key] }}
           YT_REFRESH_TOKEN: ${{ secrets[steps.resolve.outputs.token_key] }}
+          INVENTORY_ONLY: ${{ github.event.inputs.inventory_only }}
           VIDEO_IDS: ${{ github.event.inputs.video_ids }}
