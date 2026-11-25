@@ -42,7 +42,7 @@ export async function assertVideoQuality(filePath, { source = false, orientation
   const { stdout } = await run("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,r_frame_rate,avg_frame_rate", "-of", "json", filePath]);
   const v = JSON.parse(stdout).streams?.[0];
   const rate = (s) => { const [n,d=1] = String(s).split("/").map(Number); return d > 0 ? n/d : NaN; };
-  const acceptedRate = (n) => Number.isFinite(n) && (n >= 60 || Math.abs(n - 60000/1001) < 0.00001);
+  const acceptedRate = (n) => Number.isFinite(n) && (n >= 60 || (source && Math.abs(n - 60000/1001) < 0.00001));
   const fps = rate(v?.avg_frame_rate);
   const nominal = rate(v?.r_frame_rate);
   if (!v || !acceptedRate(fps) || !acceptedRate(nominal)) throw new Error(`Video quality gate: ${filePath} requires measured >=60 fps`);
@@ -766,4 +766,4 @@ export async function extractQcStills({ videoPath, outDir, count = 5 }) {
     paths.push(outPath);
   }
   return paths;
-    }
+}
