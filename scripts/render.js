@@ -179,7 +179,7 @@ const DIMENSIONS = {
 };
 
 export async function buildScene({ clipPath, duration, text, outPath, voicePath, orientation = "landscape", captionStyle = CAPTION_STYLE_POOL[0] }) {
-  await assertVideoQuality(clipPath, { source: true, orientation: "landscape" });
+  await assertVideoQuality(clipPath, { source: true, orientation });
   const dim = DIMENSIONS[orientation] || DIMENSIONS.landscape;
   const captionY = `h*${captionStyle.yFrac}`;
   const clipHasAudio = await hasAudioStream(clipPath);
@@ -764,4 +764,4 @@ export async function extractQcStills({ videoPath, outDir, count = 5 }) {
     paths.push(outPath);
   }
   return paths;
-                                         }
+}
