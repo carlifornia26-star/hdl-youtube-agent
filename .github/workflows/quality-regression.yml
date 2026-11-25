@@ -14,7 +14,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg fonts-dejavu-core
-      - run: npm ci
+      - name: Install media-only test dependencies, no model runtime
+        run: |
+          mkdir -p /tmp/quality-deps
+          npm install --prefix /tmp/quality-deps --ignore-scripts node-fetch@3 exiftool-vendored
+          ln -s /tmp/quality-deps/node_modules node_modules
       - name: Render and measure private test media without upload
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
@@ -32,12 +36,13 @@ jobs:
           import {execFileSync} from 'node:child_process';
           const dir='build/quality-regression';
           execFileSync('ffmpeg',['-v','error','-y','-f','lavfi','-i','testsrc2=size=1280x720:rate=25','-t','1','-c:v','libx264','-preset','ultrafast',`${dir}/bad.mp4`]);
+          execFileSync('ffmpeg',['-v','error','-y','-f','lavfi','-i','sine=frequency=440:sample_rate=44100','-t','2',`${dir}/tone.wav`]);
           let rejected=false;try{await assertVideoQuality(`${dir}/bad.mp4`,{source:true})}catch(e){rejected=true;console.log('EXPECTED_REJECTION',e.message)}if(!rejected)throw Error('Bad source accepted');
           for(const orientation of ['landscape','vertical']){
             const clip=`${dir}/${orientation}-source.mp4`;
             await fetchStockClip('nature forest',clip,{orientation});
             const scene=`${dir}/${orientation}-scene.mp4`;
-            await buildScene({clipPath:clip,duration:2,text:'Private media regression',outPath:scene,orientation});
+            await buildScene({clipPath:clip,duration:2,text:'Private media regression',outPath:scene,orientation,voicePath:`${dir}/tone.wav`});
             const final=`${dir}/${orientation}-final.mp4`;
             await normalizeLoudness({videoPath:scene,outPath:final});
             await assertVideoQuality(final,{orientation});
