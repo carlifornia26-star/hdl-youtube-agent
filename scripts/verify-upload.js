@@ -81,6 +81,22 @@ async function main() {
   const videoIds = String(process.env.VIDEO_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
   if (!videoIds.length) throw new Error("VIDEO_IDS is required (comma-separated).");
 
+  // Explicit minimal inventory mode never downloads or changes captions/videos.
+  if (process.env.INVENTORY_ONLY === "true") {
+    const channels = await youtube.channels.list({ part: ["snippet", "status"], mine: true });
+    for (const c of channels.data.items || []) {
+      console.log("CHANNEL_INVENTORY " + JSON.stringify({ id: c.id, snippet: c.snippet, status: c.status }));
+    }
+    const videos = await youtube.videos.list({ part: ["status", "contentDetails"], id: videoIds });
+    if ((videos.data.items || []).length !== videoIds.length) throw new Error("Incomplete video inventory");
+    for (const v of videos.data.items || []) {
+      console.log("VIDEO_INVENTORY " + JSON.stringify(v));
+      const caps = await youtube.captions.list({ part: ["snippet"], videoId: v.id });
+      console.log("CAPTION_INVENTORY " + JSON.stringify({ videoId: v.id, tracks: caps.data.items || [] }));
+    }
+    return;
+  }
+
   for (const videoId of videoIds) {
     console.log("\n==================================================");
     console.log(`VERIFY ${videoId}`);
