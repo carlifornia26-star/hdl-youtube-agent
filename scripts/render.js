@@ -42,9 +42,10 @@ export async function assertVideoQuality(filePath, { source = false, orientation
   const { stdout } = await run("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,r_frame_rate,avg_frame_rate", "-of", "json", filePath]);
   const v = JSON.parse(stdout).streams?.[0];
   const rate = (s) => { const [n,d=1] = String(s).split("/").map(Number); return d > 0 ? n/d : NaN; };
+  const acceptedRate = (n) => Number.isFinite(n) && (n >= 60 || Math.abs(n - 60000/1001) < 0.00001);
   const fps = rate(v?.avg_frame_rate);
   const nominal = rate(v?.r_frame_rate);
-  if (!v || !Number.isFinite(fps) || fps < 60 || !Number.isFinite(nominal) || nominal < 60) throw new Error(`Video quality gate: ${filePath} requires measured >=60 fps`);
+  if (!v || !acceptedRate(fps) || !acceptedRate(nominal)) throw new Error(`Video quality gate: ${filePath} requires measured >=60 fps`);
   const w = orientation === "vertical" ? 1080 : orientation === "landscape" ? 1920 : null;
   const h = orientation === "vertical" ? 1920 : orientation === "landscape" ? 1080 : null;
   if (w ? (v.width < w || v.height < h) : (Math.min(v.width,v.height) < 1080 || Math.max(v.width,v.height) < 1920)) throw new Error(`Video quality gate: ${filePath} insufficient source/output dimensions`);
@@ -218,10 +219,11 @@ export async function buildScene({ clipPath, duration, text, outPath, voicePath,
   const captionFilters = chunks
     .map(({ text: chunkText, start, end, color }) => {
       const safe = escapeDrawtext(chunkText);
+      const fittedFontsize = Math.min(dim.fontsize, Math.floor(dim.w * 0.88 / Math.max(1, chunkText.length * 0.68)));
       const s = start.toFixed(3);
       const fadeEnd = Math.min(start + POP_IN_SECONDS, end).toFixed(3);
       return (
-        `drawtext=fontfile=${CAPTION_FONT}:text='${safe}':fontcolor=${color}:fontsize=${dim.fontsize}:` +
+        `drawtext=fontfile=${CAPTION_FONT}:text='${safe}':fontcolor=${color}:fontsize=${fittedFontsize}:` +
         `box=1:boxcolor=black@0.6:boxborderw=18:x=(w-text_w)/2:y=${captionY}-text_h/2:expansion=none:` +
         `alpha='if(lt(t,${s}),0,if(lt(t,${fadeEnd}),(t-${s})/${POP_IN_SECONDS},1))':` +
         `enable='between(t,${s},${end.toFixed(3)})'`
@@ -764,4 +766,4 @@ export async function extractQcStills({ videoPath, outDir, count = 5 }) {
     paths.push(outPath);
   }
   return paths;
-}
+    }
