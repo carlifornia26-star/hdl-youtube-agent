@@ -8,6 +8,7 @@ const exec=promisify(execFile);
 async function probe(p){return JSON.parse((await exec('ffprobe',['-v','error','-show_entries','format=duration:stream=codec_type,nb_frames,r_frame_rate,duration,width,height','-of','json',p])).stdout);}
 async function verified(p,sha){const b=await fs.readFile(p);if(crypto.createHash('sha256').update(b).digest('hex')!==sha)throw Error(`Reviewed bytes changed: ${p}`);}
 export async function renderReviewedPrivate({manifestPath,outDir}){
+ throw Error("Legacy reviewed-source renderer is held: 25fps frame ledger requires a fresh native1080p60 source review; no new export allowed");
  const m=JSON.parse(await fs.readFile(manifestPath,'utf8'));if(m.mode==='private-source-plan')return preparePreservedSourcePlan({planPath:manifestPath,outDir});const base=path.dirname(path.resolve(manifestPath));const dest=path.resolve(outDir);await fs.mkdir(dest,{recursive:true});
  if(m.mode!=='private-review'||m.publishEligible!==false)throw Error('This source lane only supports private local review; publication forbidden');
  if(!m.topic||!Array.isArray(m.scenes)||!m.scenes.length)throw Error('Missing topic/source scenes');
@@ -39,6 +40,7 @@ export async function renderReviewedPrivate({manifestPath,outDir}){
 }
 
 export async function buildPreservedSourceScene({source,bookSlug,outPath,orientation='landscape',privateReview,voicePath,loop}){
+ throw Error('Legacy25fps source adapter held until native1080p60 source and timeline review');
  if(privateReview!==true)throw Error('Staged source adapter only supports private review');
  if(voicePath||loop)throw Error('No narration overlay or looping on original-source AV');
  if(!['landscape','vertical'].includes(orientation))throw Error('Unknown orientation');
