@@ -1,0 +1,85 @@
+name: Private wellness production master check
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  current-metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+        env:
+          npm_config_onnxruntime_node_install_cuda: skip
+      - name: Read current owner metadata only
+        env:
+          YT_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID_3 }}
+          YT_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET_3 }}
+          YT_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN_3 }}
+        run: |
+          node --input-type=module <<'JS'
+          import {getYoutubeClient} from './scripts/youtube.js';
+          const youtube=getYoutubeClient();
+          const r=await youtube.videos.list({part:['snippet','status','contentDetails','fileDetails'],id:['g70SaGcxpeE','w4qHOPnvwUU']});
+          console.log(JSON.stringify(r.data.items.map(x=>({id:x.id,title:x.snippet.title,channelId:x.snippet.channelId,status:x.status,duration:x.contentDetails.duration,definition:x.contentDetails.definition,streams:x.fileDetails?.videoStreams})),null,2));
+          JS
+  master:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg fonts-dejavu-core
+      - name: Install production dependencies
+        env:
+          npm_config_onnxruntime_node_install_cuda: skip
+        run: npm ci
+      - name: Make runtime-only fail-closed no-upload copy
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/generate-video.js')
+          s=p.read_text()
+          needle='  uploadPath = finalMasterPath;'
+          assert s.count(needle)==1
+          stop='''
+            const {assertVideoQuality}=await import('./render.js');
+            await assertVideoQuality(finalMasterPath);
+            await fs.writeFile(path.join(BUILD_DIR,'private-master-proof.json'),JSON.stringify({privateNoUpload:true,channel:CHANNEL_ID,master:finalMasterPath,scenes:built.length,duration:await probeDuration(finalMasterPath)},null,2));
+            console.log('PRIVATE_MASTER_COMPLETE_NO_UPLOAD',finalMasterPath);
+            await exiftool.end();
+            return;
+          '''
+          p.write_text(s.replace(needle,needle+stop))
+          PY
+          node --check scripts/generate-video.js
+          test -z "$YT_REFRESH_TOKEN"
+      - name: Generate actual wellness production master without upload
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          CHANNEL_ID: '3'
+          SKIP_TRANSLATIONS: '1'
+        run: |
+          npm run generate
+          ffprobe -v error -show_entries stream=codec_type,width,height,r_frame_rate,avg_frame_rate -show_entries format=duration -of json build/final_mastered.mp4
+      - name: Preserve private master evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: private-wellness-master-${{ github.run_number }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: |
+            build/final_mastered.mp4
+            build/private-master-proof.json
+            build/qc
