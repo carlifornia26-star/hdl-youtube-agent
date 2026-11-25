@@ -714,7 +714,7 @@ async function main() {
     // the book's generic, fixed stockKeywords list — falls back to the old cycling behavior only
     // if a scene is somehow missing one (e.g. an older cached script shape).
     const keyword = scene.visual?.trim() || book.stockKeywords[index % book.stockKeywords.length];
-    const { id: clipId } = await fetchStockClip(keyword, clipPath, { index, avoidIds });
+    const { id: clipId } = await fetchStockClip(keyword, clipPath, { index, avoidIds, fallbackKeywords: [book.stockKeywords[index % book.stockKeywords.length], book.stockKeywords[(index + 1) % book.stockKeywords.length]] });
     avoidIds.add(clipId);
     newlyUsedIds.push(clipId);
 
@@ -1373,7 +1373,7 @@ async function main() {
         const s = shortScenes[i];
         const outPath = path.join(BUILD_DIR, `short_scene_${i}.mp4`);
         const portraitClipPath = path.join(BUILD_DIR, `short_native_clip_${i}.mp4`);
-        await fetchStockClip(s.visual?.trim() || book.stockKeywords[i % book.stockKeywords.length], portraitClipPath, { index: i, avoidIds, orientation: "vertical" });
+        await fetchStockClip(s.visual?.trim() || book.stockKeywords[i % book.stockKeywords.length], portraitClipPath, { index: i, avoidIds, orientation: "vertical", fallbackKeywords: [book.stockKeywords[i % book.stockKeywords.length], book.stockKeywords[(i + 1) % book.stockKeywords.length]] });
         const built_scene = await buildScene({
           clipPath: portraitClipPath,
           duration: s.duration,
