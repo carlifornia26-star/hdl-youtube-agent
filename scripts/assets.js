@@ -35,7 +35,7 @@ export async function fetchStockClip(keyword, outPath, { index = 0, avoidIds = n
   }
   const data = await res.json();
   const [minWidth, minHeight] = orientation === "vertical" ? [1080,1920] : [1920,1080];
-  const eligibleFiles = (v) => (v.video_files || []).filter((f) => f.file_type === "video/mp4" && f.width >= minWidth && f.height >= minHeight && Number(f.fps ?? v.fps) >= 60).sort((a,b) => a.width*a.height-b.width*b.height);
+  const eligibleFiles = (v) => (v.video_files || []).filter((f) => f.file_type === "video/mp4" && f.width >= minWidth && f.height >= minHeight && (Number(f.fps ?? v.fps) >= 60 || Math.abs(Number(f.fps ?? v.fps)-60000/1001) < 0.00001)).sort((a,b) => a.width*a.height-b.width*b.height);
   const results = (data.videos || []).filter((v) => eligibleFiles(v).length);
   if (!results.length) throw new Error(`No native ${minWidth}x${minHeight}@60 Pexels footage for ${keyword}; no low-quality fallback`);
   const unused = results.filter((v) => !avoidIds.has(String(v.id)));
