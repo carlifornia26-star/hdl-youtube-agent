@@ -47,15 +47,28 @@ export async function fetchStockClip(keyword, outPath, { index = 0, avoidIds = n
   if (!results.length) throw new Error(`No native ${minWidth}x${minHeight}@60 Pexels footage for ${keyword}; no low-quality fallback`);
   const unused = results.filter((v) => !avoidIds.has(String(v.id)));
   const pool = unused.length ? unused : results;
-  const video = pool[index % pool.length];
-  const file = eligibleFiles(video)[0];
-  const clip = await fetch(file.link);
-  if (!clip.ok) throw new Error(`Stock download failed: ${clip.status}`);
-  const buf = Buffer.from(await clip.arrayBuffer());
-  await fs.writeFile(outPath, buf);
-  await assertVideoQuality(outPath, { source: true, orientation });
-  console.log(JSON.stringify({nativeSource: true, pexelsId: video.id, sourceUrl: video.url, width: file.width, height: file.height, fps: file.fps ?? video.fps}));
-  return { outPath, id: String(video.id) };
+  let lastError;
+  for (let candidate = 0; candidate < Math.min(5, pool.length); candidate++) {
+    const video = pool[(index + candidate) % pool.length];
+    const file = eligibleFiles(video)[0];
+    try {
+      const clip = await fetch(file.link);
+      if (!clip.ok) throw new Error(`Stock download failed: ${clip.status}`);
+      const buf = Buffer.from(await clip.arrayBuffer());
+      await fs.writeFile(outPath, buf);
+      await assertVideoQuality(outPath, { source: true, orientation });
+      console.log(JSON.stringify({nativeSource: true, pexelsId: video.id, sourceUrl: video.url, width: file.width, height: file.height, fps: file.fps ?? video.fps}));
+      return { outPath, id: String(video.id) };
+    } catch (error) {
+      lastError = error;
+      console.warn(JSON.stringify({rejectedStockCandidate:true,pexelsId:video.id,sourceUrl:video.url,attempt:candidate+1,reason:error.message,qualityUnchanged:true}));
+    }
+  }
+  if (fallbackKeywords.length) {
+    const [next,...rest]=fallbackKeywords.filter(q=>q && q!==keyword);
+    if (next) return fetchStockClip(next,outPath,{index,avoidIds,orientation,fallbackKeywords:rest});
+  }
+  throw new Error(`No measured native60 stock candidate survived bounded attempts for ${keyword}: ${lastError?.message}`);
 }
 
 // Unsplash: free forever, 50 requests/hour on the demo tier — plenty for the ~1 call/day this
