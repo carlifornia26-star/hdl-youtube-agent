@@ -1,5 +1,6 @@
 import fetch from "node-fetch";
 import fs from "node:fs/promises";
+import { assertVideoQuality } from "./render.js";
 
 // Pexels license permits commercial use, including monetized YouTube videos, without attribution
 // (attribution appreciated but not required) — https://www.pexels.com/license/
@@ -16,7 +17,7 @@ import fs from "node:fs/promises";
 // recently used) pool, so multiple scenes sharing a keyword in the SAME video still tend to land
 // on different clips from each other, same as before.
 export async function fetchStockClip(keyword, outPath, { index = 0, avoidIds = new Set() } = {}) {
-  const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(keyword)}&orientation=landscape&size=medium&per_page=80`;
+  const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(keyword)}&orientation=landscape&size=large&per_page=80`;
   let res;
   for (let attempt = 1; attempt <= 4; attempt++) {
     res = await fetch(url, { headers: { Authorization: process.env.PEXELS_API_KEY } });
@@ -33,23 +34,19 @@ export async function fetchStockClip(keyword, outPath, { index = 0, avoidIds = n
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
   const data = await res.json();
-  const results = data.videos || [];
-  if (results.length === 0) throw new Error(`No Pexels results for "${keyword}"`);
-
+  const eligibleFiles = (v) => (v.video_files || []).filter((f) => f.file_type === "video/mp4" && f.width >= 1920 && f.height >= 1080 && Number(f.fps ?? v.fps) >= 60).sort((a,b) => a.width*a.height-b.width*b.height);
+  const results = (data.videos || []).filter((v) => eligibleFiles(v).length);
+  if (!results.length) throw new Error(`No native >=1920x1080@60 Pexels footage for ${keyword}; no low-quality fallback`);
   const unused = results.filter((v) => !avoidIds.has(String(v.id)));
-  // If every result for this keyword has been used recently (a narrow niche keyword with few
-  // Pexels matches), fall back to the full pool rather than fail the scene outright.
-  const pool = unused.length > 0 ? unused : results;
+  const pool = unused.length ? unused : results;
   const video = pool[index % pool.length];
-
-  // pick a moderate-resolution file (keeps ffmpeg + upload fast on a free GitHub runner)
-  const file =
-    video.video_files.find((f) => f.width && f.width <= 1280 && f.file_type === "video/mp4") ||
-    video.video_files[0];
-
+  const file = eligibleFiles(video)[0];
   const clip = await fetch(file.link);
+  if (!clip.ok) throw new Error(`Stock download failed: ${clip.status}`);
   const buf = Buffer.from(await clip.arrayBuffer());
   await fs.writeFile(outPath, buf);
+  await assertVideoQuality(outPath, { source: true, orientation: "landscape" });
+  console.log(JSON.stringify({nativeSource: true, pexelsId: video.id, sourceUrl: video.url, width: file.width, height: file.height, fps: file.fps ?? video.fps}));
   return { outPath, id: String(video.id) };
 }
 
