@@ -1,0 +1,55 @@
+name: Private wellness frozen script preparation
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  freeze-script:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install production dependencies
+        env:
+          npm_config_onnxruntime_node_install_cuda: skip
+        run: npm ci
+      - name: Make isolated script-only copy
+        run: |
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          p=Path('scripts/generate-video.js')
+          s=p.read_text()
+          for name in ['renderNewsCard','renderEvidenceCard']:
+              s=s.replace('await '+name+'({', 'await Promise.resolve({')
+          needle='  const recentlyUsedIds = await loadUsedClipIds();'
+          assert s.count(needle)==1
+          stop="""
+            const frozen={privatePreparation:true,noMediaRendered:true,createdAt:new Date().toISOString(),channel:CHANNEL_ID,book,format,storyMode,trend,newsInfo,evidenceInfo,grounding:todaysGrounding,scenes};
+            await fs.writeFile(path.join(BUILD_DIR,'frozen-script.json'),JSON.stringify(frozen,null,2));
+            console.log('FROZEN_SCRIPT_READY',scenes.length);
+            await exiftool.end();
+            return;
+          """
+          p.write_text(s.replace(needle,stop+needle))
+          PYCODE
+          node --check scripts/generate-video.js
+          test -z "$YT_REFRESH_TOKEN"
+      - name: Freeze exact wellness script without media
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CHANNEL_ID: '3'
+          SKIP_TRANSLATIONS: '1'
+        run: npm run generate
+      - name: Preserve frozen script
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frozen-wellness-script-${{ github.run_number }}
+          retention-days: 7
+          if-no-files-found: error
+          path: build/frozen-script.json
