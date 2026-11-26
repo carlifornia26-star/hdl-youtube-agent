@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-11-26",
+      "channel": "2",
+      "term": "M-pesa",
+      "headline": null
+    },
+    {
       "date": "2026-11-25",
       "channel": "3",
       "term": "Thanksgiving",
@@ -473,13 +479,7 @@
       "channel": "1",
       "term": "Lottery",
       "headline": null
-    },
-    {
-      "date": "2026-10-15",
-      "channel": "3",
-      "term": "Peacebuilding",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-25T18:03:08.411Z"
+  "updated_at": "2026-11-26T15:29:06.192Z"
 }
