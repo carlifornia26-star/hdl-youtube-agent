@@ -1,15 +1,15 @@
 {
   "channel": "3",
   "status": "failure",
-  "checkedAt": "2026-11-26T18:03:23.331Z",
-  "repositoryCommitSha": "4fd3f705146ae012c9f94892ca8dc53ae78563d9",
+  "checkedAt": "2026-11-27T17:37:16.447Z",
+  "repositoryCommitSha": "e6910b9b16f9e7e869cb4ecf40ec7b12fc09e21f",
   "captionTracks": null,
   "keywordFile": {
     "updatedAt": "2026-11-16T10:40:38.285Z",
     "week": null
   },
   "workflow": "HDL Daily YouTube Teaser",
-  "runId": "45870383307",
-  "runNumber": "438",
+  "runId": "46042237713",
+  "runNumber": "442",
   "eventName": "schedule"
 }
