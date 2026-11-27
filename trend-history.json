@@ -1,6 +1,12 @@
 {
   "picks": [
     {
+      "date": "2026-11-27",
+      "channel": "2",
+      "term": "Yeidep",
+      "headline": null
+    },
+    {
       "date": "2026-11-26",
       "channel": "2",
       "term": "M-pesa",
@@ -473,13 +479,7 @@
       "channel": "2",
       "term": "Ultra Processed Foods",
       "headline": null
-    },
-    {
-      "date": "2026-10-16",
-      "channel": "1",
-      "term": "Lottery",
-      "headline": null
     }
   ],
-  "updated_at": "2026-11-26T15:29:06.192Z"
+  "updated_at": "2026-11-27T15:16:58.479Z"
 }
